@@ -1,0 +1,56 @@
+[
+  {
+    "IndexName": "idx_account",
+    "MgoKeySchema": {
+      "MgoIndexKeys": [
+        {
+          "Name": "account_id",
+          "Direction": "1",
+          "Type": "varchar"
+        },
+        {
+          "Name": "deleted_at",
+          "Direction": "1",
+          "Type": "varchar"
+        }
+      ],
+      "MgoIsUnique": false
+    }
+  },
+  {
+    "IndexName": "idx_user_account",
+    "MgoKeySchema": {
+      "MgoIndexKeys": [
+        {
+          "Name": "user_id",
+          "Direction": "1",
+          "Type": "varchar"
+        },
+        {
+          "Name": "account_id",
+          "Direction": "1",
+          "Type": "varchar"
+        }
+      ],
+      "MgoIsUnique": false
+    }
+  },
+  {
+    "IndexName": "uk_account_name",
+    "MgoKeySchema": {
+      "MgoIndexKeys": [
+        {
+          "Name": "account_id",
+          "Direction": "1",
+          "Type": "varchar"
+        },
+        {
+          "Name": "name",
+          "Direction": "1",
+          "Type": "varchar"
+        }
+      ],
+      "MgoIsUnique": true
+    }
+  }
+]

@@ -1,0 +1,76 @@
+[
+  {
+    "IndexName": "idx_user_type",
+    "MgoKeySchema": {
+      "MgoIndexKeys": [
+        {
+          "Name": "user_id",
+          "Direction": "1",
+          "Type": "varchar"
+        },
+        {
+          "Name": "type",
+          "Direction": "1",
+          "Type": "varchar"
+        },
+        {
+          "Name": "deleted_at",
+          "Direction": "1",
+          "Type": "varchar"
+        },
+        {
+          "Name": "sort_order",
+          "Direction": "1",
+          "Type": "int"
+        }
+      ],
+      "MgoIsUnique": false
+    }
+  },
+  {
+    "IndexName": "idx_user_stock",
+    "MgoKeySchema": {
+      "MgoIndexKeys": [
+        {
+          "Name": "user_id",
+          "Direction": "1",
+          "Type": "varchar"
+        },
+        {
+          "Name": "type",
+          "Direction": "1",
+          "Type": "varchar"
+        },
+        {
+          "Name": "stock_qty",
+          "Direction": "1",
+          "Type": "int"
+        }
+      ],
+      "MgoIsUnique": false
+    }
+  },
+  {
+    "IndexName": "idx_user_last_used",
+    "MgoKeySchema": {
+      "MgoIndexKeys": [
+        {
+          "Name": "user_id",
+          "Direction": "1",
+          "Type": "varchar"
+        },
+        {
+          "Name": "type",
+          "Direction": "1",
+          "Type": "varchar"
+        },
+        {
+          "Name": "last_used_at",
+          "Direction": "1",
+          "Type": "varchar"
+        }
+      ],
+      "MgoIsUnique": false
+    }
+  }
+]

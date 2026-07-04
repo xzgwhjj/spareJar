@@ -1,0 +1,73 @@
+{
+  "bsonType": "object",
+  "required": [
+    "user_id",
+    "date_key",
+    "settlement_id",
+    "penalty_type",
+    "created_at"
+  ],
+  "permission": {
+    "read": "doc.user_id == auth.uid",
+    "create": false,
+    "update": false,
+    "delete": false
+  },
+  "properties": {
+    "_id": {
+      "description": "PK"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "FK→users.user_id",
+      "maxLength": 64,
+      "foreignKey": "users.user_id"
+    },
+    "date_key": {
+      "bsonType": "string",
+      "description": "惩罚日",
+      "maxLength": 10
+    },
+    "settlement_id": {
+      "bsonType": "string",
+      "description": "FK→daily_settlements._id",
+      "foreignKey": "daily_settlements._id"
+    },
+    "over_amount": {
+      "bsonType": "int",
+      "description": "超额(分)",
+      "minimum": 0
+    },
+    "penalty_type": {
+      "bsonType": "string",
+      "enum": [
+        "streak_deduct",
+        "badge_off",
+        "virtual_points"
+      ],
+      "description": "惩罚类型"
+    },
+    "penalty_value": {
+      "bsonType": "int",
+      "description": "扣减数值"
+    },
+    "streak_before": {
+      "bsonType": "int",
+      "description": "惩罚前连续天"
+    },
+    "streak_after": {
+      "bsonType": "int",
+      "description": "惩罚后连续天"
+    },
+    "achievement_codes_affected": {
+      "bsonType": "array",
+      "arrayType": "string",
+      "description": "熄灭徽章",
+      "defaultValue": []
+    },
+    "created_at": {
+      "bsonType": "timestamp",
+      "description": "创建时间"
+    }
+  }
+}

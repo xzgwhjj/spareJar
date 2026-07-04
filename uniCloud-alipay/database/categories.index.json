@@ -1,0 +1,53 @@
+[
+  {
+    "IndexName": "uk_user_type_name",
+    "MgoKeySchema": {
+      "MgoIndexKeys": [
+        {
+          "Name": "user_id",
+          "Direction": "1",
+          "Type": "varchar"
+        },
+        {
+          "Name": "type",
+          "Direction": "1",
+          "Type": "varchar"
+        },
+        {
+          "Name": "name",
+          "Direction": "1",
+          "Type": "varchar"
+        }
+      ],
+      "MgoIsUnique": true
+    }
+  },
+  {
+    "IndexName": "idx_user_type_hidden",
+    "MgoKeySchema": {
+      "MgoIndexKeys": [
+        {
+          "Name": "user_id",
+          "Direction": "1",
+          "Type": "varchar"
+        },
+        {
+          "Name": "type",
+          "Direction": "1",
+          "Type": "varchar"
+        },
+        {
+          "Name": "is_hidden",
+          "Direction": "1",
+          "Type": "bool"
+        },
+        {
+          "Name": "sort_order",
+          "Direction": "1",
+          "Type": "int"
+        }
+      ],
+      "MgoIsUnique": false
+    }
+  }
+]

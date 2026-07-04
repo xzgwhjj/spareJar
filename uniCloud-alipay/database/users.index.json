@@ -1,0 +1,28 @@
+[
+  {
+    "IndexName": "uk_user_id",
+    "MgoKeySchema": {
+      "MgoIndexKeys": [
+        {
+          "Name": "user_id",
+          "Direction": "1",
+          "Type": "varchar"
+        }
+      ],
+      "MgoIsUnique": true
+    }
+  },
+  {
+    "IndexName": "idx_deleted",
+    "MgoKeySchema": {
+      "MgoIndexKeys": [
+        {
+          "Name": "deleted_at",
+          "Direction": "1",
+          "Type": "varchar"
+        }
+      ],
+      "MgoIsUnique": false
+    }
+  }
+]

@@ -1,0 +1,77 @@
+{
+  "bsonType": "object",
+  "required": [
+    "user_id",
+    "transaction_id",
+    "meal_type",
+    "created_at",
+    "updated_at"
+  ],
+  "permission": {
+    "read": "doc.user_id == auth.uid",
+    "create": "doc.user_id == auth.uid",
+    "update": "doc.user_id == auth.uid",
+    "delete": "doc.user_id == auth.uid"
+  },
+  "properties": {
+    "_id": {
+      "description": "PK"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "FK→users.user_id",
+      "maxLength": 64,
+      "foreignKey": "users.user_id"
+    },
+    "transaction_id": {
+      "bsonType": "string",
+      "description": "FK→transactions._id",
+      "foreignKey": "transactions._id"
+    },
+    "meal_type": {
+      "bsonType": "string",
+      "enum": [
+        "breakfast",
+        "lunch",
+        "dinner",
+        "snack"
+      ],
+      "description": "餐次"
+    },
+    "calorie_mode": {
+      "bsonType": "string",
+      "enum": [
+        "whole",
+        "itemized",
+        "partial"
+      ],
+      "description": "录入模式",
+      "defaultValue": "itemized"
+    },
+    "itemized_sum": {
+      "bsonType": "int",
+      "description": "分项热量和",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "whole_override": {
+      "bsonType": "int",
+      "description": "整餐override",
+      "minimum": 0
+    },
+    "confirmed_calories": {
+      "bsonType": "int",
+      "description": "确认总热量",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "created_at": {
+      "bsonType": "timestamp",
+      "description": "创建时间"
+    },
+    "updated_at": {
+      "bsonType": "timestamp",
+      "description": "更新时间"
+    }
+  }
+}

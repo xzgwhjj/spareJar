@@ -1,0 +1,87 @@
+{
+  "bsonType": "object",
+  "required": [
+    "user_id",
+    "name",
+    "target_amount",
+    "created_at",
+    "updated_at"
+  ],
+  "permission": {
+    "read": "doc.user_id == auth.uid",
+    "create": "doc.user_id == auth.uid",
+    "update": "doc.user_id == auth.uid",
+    "delete": "doc.user_id == auth.uid"
+  },
+  "properties": {
+    "_id": {
+      "description": "PK"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "FK→users.user_id",
+      "maxLength": 64,
+      "foreignKey": "users.user_id"
+    },
+    "name": {
+      "bsonType": "string",
+      "description": "心愿名称",
+      "maxLength": 64
+    },
+    "target_amount": {
+      "bsonType": "int",
+      "description": "目标金额(分)",
+      "minimum": 1
+    },
+    "saved_amount": {
+      "bsonType": "int",
+      "description": "已存(分)",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "cover_image_url": {
+      "bsonType": "string",
+      "description": "封面",
+      "maxLength": 512
+    },
+    "deadline": {
+      "bsonType": "string",
+      "description": "截止日期",
+      "maxLength": 10
+    },
+    "status": {
+      "bsonType": "string",
+      "enum": [
+        "active",
+        "completed",
+        "archived"
+      ],
+      "description": "状态",
+      "defaultValue": "active"
+    },
+    "progress_pct": {
+      "bsonType": "double",
+      "description": "进度百分比",
+      "minimum": 0,
+      "maximum": 100,
+      "defaultValue": 0
+    },
+    "completed_at": {
+      "bsonType": "timestamp",
+      "description": "达成时间"
+    },
+    "sort_order": {
+      "bsonType": "int",
+      "description": "排序",
+      "defaultValue": 0
+    },
+    "created_at": {
+      "bsonType": "timestamp",
+      "description": "创建时间"
+    },
+    "updated_at": {
+      "bsonType": "timestamp",
+      "description": "更新时间"
+    }
+  }
+}

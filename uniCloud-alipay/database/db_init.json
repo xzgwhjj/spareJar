@@ -1,0 +1,163 @@
+{
+  "jar_skins": [
+    {
+      "_id": "skin_classic_glass",
+      "skin_id": "classic_glass",
+      "name": "经典玻璃罐",
+      "series": "default",
+      "preview_url": "https://cdn.example.com/sparejar/skins/classic_glass/preview.png",
+      "assets": {
+        "jar_body_url": "https://cdn.example.com/sparejar/skins/classic_glass/jar.svg",
+        "coin_style_url": "https://cdn.example.com/sparejar/skins/classic_glass/coin.svg",
+        "animation_pack_version": "1.0.0",
+        "particle_style": "coin_float"
+      },
+      "unlock_type": "default",
+      "unlock_condition": null,
+      "price": 0,
+      "sort_order": 0,
+      "is_active": true,
+      "created_at": 1700000000000
+    },
+    {
+      "_id": "skin_warm_gold",
+      "skin_id": "warm_gold",
+      "name": "暖金结余",
+      "series": "achievement",
+      "preview_url": "https://cdn.example.com/sparejar/skins/warm_gold/preview.png",
+      "assets": {
+        "jar_body_url": "https://cdn.example.com/sparejar/skins/warm_gold/jar.svg",
+        "coin_style_url": "https://cdn.example.com/sparejar/skins/warm_gold/coin.svg",
+        "animation_pack_version": "1.0.0",
+        "particle_style": "gold_sparkle"
+      },
+      "unlock_type": "achievement",
+      "unlock_condition": {
+        "achievement_code": "streak_7"
+      },
+      "price": 0,
+      "sort_order": 10,
+      "is_active": true,
+      "created_at": 1700000000000
+    },
+    {
+      "_id": "skin_celadon",
+      "skin_id": "celadon_jar",
+      "name": "青瓷罐",
+      "series": "achievement",
+      "preview_url": "https://cdn.example.com/sparejar/skins/celadon/preview.png",
+      "assets": {
+        "jar_body_url": "https://cdn.example.com/sparejar/skins/celadon/jar.svg",
+        "coin_style_url": "https://cdn.example.com/sparejar/skins/celadon/coin.svg",
+        "animation_pack_version": "1.0.0",
+        "particle_style": "celadon_glow"
+      },
+      "unlock_type": "achievement",
+      "unlock_condition": {
+        "achievement_code": "streak_30"
+      },
+      "price": 0,
+      "sort_order": 20,
+      "is_active": true,
+      "created_at": 1700000000000
+    }
+  ],
+  "achievements": [
+    {
+      "_id": "ach_streak_7",
+      "code": "streak_7",
+      "name": "连续记账7天",
+      "description": "连续7天完成日消费挑战",
+      "icon_url": "https://cdn.example.com/sparejar/achievements/streak_7.png",
+      "condition_type": "streak",
+      "condition_value": 7,
+      "condition_meta": {
+        "challenge_type": "daily"
+      },
+      "unlock_skin_id": "warm_gold",
+      "sort_order": 10,
+      "is_active": true,
+      "created_at": 1700000000000
+    },
+    {
+      "_id": "ach_streak_30",
+      "code": "streak_30",
+      "name": "连续记账30天",
+      "description": "连续30天完成日消费挑战",
+      "icon_url": "https://cdn.example.com/sparejar/achievements/streak_30.png",
+      "condition_type": "streak",
+      "condition_value": 30,
+      "condition_meta": {
+        "challenge_type": "daily"
+      },
+      "unlock_skin_id": "celadon_jar",
+      "sort_order": 20,
+      "is_active": true,
+      "created_at": 1700000000000
+    },
+    {
+      "_id": "ach_first_record",
+      "code": "first_record",
+      "name": "第一笔账",
+      "description": "完成第一笔记账",
+      "icon_url": "https://cdn.example.com/sparejar/achievements/first_record.png",
+      "condition_type": "record",
+      "condition_value": 1,
+      "condition_meta": {
+        "event": "transaction_create"
+      },
+      "unlock_skin_id": null,
+      "sort_order": 1,
+      "is_active": true,
+      "created_at": 1700000000000
+    },
+    {
+      "_id": "ach_first_wish",
+      "code": "first_wish",
+      "name": "第一个心愿",
+      "description": "创建第一个心愿目标",
+      "icon_url": "https://cdn.example.com/sparejar/achievements/first_wish.png",
+      "condition_type": "record",
+      "condition_value": 1,
+      "condition_meta": {
+        "event": "wish_create"
+      },
+      "unlock_skin_id": null,
+      "sort_order": 2,
+      "is_active": true,
+      "created_at": 1700000000000
+    },
+    {
+      "_id": "ach_limit_set",
+      "code": "limit_set",
+      "name": "限额达人",
+      "description": "首次设置日消费限额",
+      "icon_url": "https://cdn.example.com/sparejar/achievements/limit_set.png",
+      "condition_type": "limit",
+      "condition_value": 1,
+      "condition_meta": {
+        "event": "limit_set"
+      },
+      "unlock_skin_id": null,
+      "sort_order": 3,
+      "is_active": true,
+      "created_at": 1700000000000
+    },
+    {
+      "_id": "ach_monthly_success",
+      "code": "monthly_success",
+      "name": "月度挑战成功",
+      "description": "完成一次月度消费挑战",
+      "icon_url": "https://cdn.example.com/sparejar/achievements/monthly_success.png",
+      "condition_type": "challenge",
+      "condition_value": 1,
+      "condition_meta": {
+        "challenge_type": "monthly"
+      },
+      "unlock_skin_id": null,
+      "sort_order": 30,
+      "is_active": true,
+      "created_at": 1700000000000
+    }
+  ]
+}

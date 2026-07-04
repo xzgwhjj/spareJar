@@ -1,0 +1,80 @@
+{
+  "bsonType": "object",
+  "required": [
+    "user_id",
+    "date_key",
+    "settlement_id",
+    "total_amount",
+    "items",
+    "created_at"
+  ],
+  "permission": {
+    "read": "doc.user_id == auth.uid",
+    "create": false,
+    "update": false,
+    "delete": false
+  },
+  "properties": {
+    "_id": {
+      "description": "PK"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "FK→users.user_id",
+      "maxLength": 64,
+      "foreignKey": "users.user_id"
+    },
+    "date_key": {
+      "bsonType": "string",
+      "description": "结算日",
+      "maxLength": 10
+    },
+    "settlement_id": {
+      "bsonType": "string",
+      "description": "FK→daily_settlements._id",
+      "foreignKey": "daily_settlements._id"
+    },
+    "total_amount": {
+      "bsonType": "int",
+      "description": "分配总额(分)",
+      "minimum": 1
+    },
+    "items": {
+      "bsonType": "array",
+      "description": "拆分明细",
+      "items": {
+        "bsonType": "object",
+        "properties": {
+          "target_type": {
+            "bsonType": "string",
+            "enum": [
+              "roll_over",
+              "wish",
+              "savings_pool"
+            ],
+            "description": "去向"
+          },
+          "amount": {
+            "bsonType": "int",
+            "description": "金额(分)",
+            "minimum": 1
+          },
+          "wish_id": {
+            "bsonType": "string",
+            "description": "FK→wishes._id",
+            "foreignKey": "wishes._id"
+          }
+        }
+      }
+    },
+    "is_auto": {
+      "bsonType": "bool",
+      "description": "自动分配",
+      "defaultValue": false
+    },
+    "created_at": {
+      "bsonType": "timestamp",
+      "description": "创建时间"
+    }
+  }
+}

@@ -1,0 +1,87 @@
+{
+  "bsonType": "object",
+  "required": [
+    "user_id",
+    "challenge_type",
+    "period_key",
+    "created_at",
+    "updated_at"
+  ],
+  "permission": {
+    "read": "doc.user_id == auth.uid",
+    "create": false,
+    "update": false,
+    "delete": false
+  },
+  "properties": {
+    "_id": {
+      "description": "PK"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "FK→users.user_id",
+      "maxLength": 64,
+      "foreignKey": "users.user_id"
+    },
+    "challenge_type": {
+      "bsonType": "string",
+      "enum": [
+        "daily",
+        "monthly",
+        "yearly"
+      ],
+      "description": "挑战类型"
+    },
+    "period_key": {
+      "bsonType": "string",
+      "description": "周期键",
+      "maxLength": 10
+    },
+    "target_amount": {
+      "bsonType": "int",
+      "description": "目标消费(分)",
+      "minimum": 0
+    },
+    "consumed_amount": {
+      "bsonType": "int",
+      "description": "已消费(分)",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "base_limit_snapshot": {
+      "bsonType": "int",
+      "description": "日限额快照(分)"
+    },
+    "ledger_id": {
+      "bsonType": "string",
+      "description": "FK→ledgers._id",
+      "foreignKey": "ledgers._id"
+    },
+    "is_success": {
+      "bsonType": "bool",
+      "description": "是否达标"
+    },
+    "status": {
+      "bsonType": "string",
+      "enum": [
+        "active",
+        "completed",
+        "failed"
+      ],
+      "description": "状态",
+      "defaultValue": "active"
+    },
+    "completed_at": {
+      "bsonType": "timestamp",
+      "description": "完成时间"
+    },
+    "created_at": {
+      "bsonType": "timestamp",
+      "description": "创建时间"
+    },
+    "updated_at": {
+      "bsonType": "timestamp",
+      "description": "更新时间"
+    }
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "bsonType": "object",
+  "required": [
+    "code",
+    "name",
+    "icon_url",
+    "condition_type",
+    "created_at"
+  ],
+  "permission": {
+    "read": true,
+    "create": false,
+    "update": false,
+    "delete": false
+  },
+  "properties": {
+    "_id": {
+      "description": "PK"
+    },
+    "code": {
+      "bsonType": "string",
+      "description": "成就代码",
+      "maxLength": 32
+    },
+    "name": {
+      "bsonType": "string",
+      "description": "名称",
+      "maxLength": 64
+    },
+    "description": {
+      "bsonType": "string",
+      "description": "描述",
+      "maxLength": 200,
+      "defaultValue": ""
+    },
+    "icon_url": {
+      "bsonType": "string",
+      "description": "图标 URL",
+      "maxLength": 512
+    },
+    "condition_type": {
+      "bsonType": "string",
+      "enum": [
+        "streak",
+        "limit",
+        "challenge",
+        "record",
+        "custom"
+      ],
+      "description": "条件类型"
+    },
+    "condition_value": {
+      "bsonType": "int",
+      "description": "阈值"
+    },
+    "condition_meta": {
+      "bsonType": "object",
+      "description": "扩展条件"
+    },
+    "unlock_skin_id": {
+      "bsonType": "string",
+      "description": "FK→jar_skins.skin_id",
+      "maxLength": 32,
+      "foreignKey": "jar_skins.skin_id"
+    },
+    "sort_order": {
+      "bsonType": "int",
+      "description": "排序",
+      "defaultValue": 0
+    },
+    "is_active": {
+      "bsonType": "bool",
+      "description": "上架",
+      "defaultValue": true
+    },
+    "created_at": {
+      "bsonType": "timestamp",
+      "description": "创建时间"
+    }
+  }
+}

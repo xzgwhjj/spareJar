@@ -1,0 +1,45 @@
+{
+  "bsonType": "object",
+  "required": [
+    "user_id",
+    "achievement_code",
+    "unlocked_at"
+  ],
+  "permission": {
+    "read": "doc.user_id == auth.uid",
+    "create": false,
+    "update": "doc.user_id == auth.uid",
+    "delete": false
+  },
+  "properties": {
+    "_id": {
+      "description": "PK"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "FK→users.user_id",
+      "maxLength": 64,
+      "foreignKey": "users.user_id"
+    },
+    "achievement_code": {
+      "bsonType": "string",
+      "description": "成就代码",
+      "maxLength": 32,
+      "foreignKey": "achievements.code"
+    },
+    "unlocked_at": {
+      "bsonType": "timestamp",
+      "description": "解锁时间"
+    },
+    "is_seen": {
+      "bsonType": "bool",
+      "description": "已读",
+      "defaultValue": false
+    },
+    "share_poster_url": {
+      "bsonType": "string",
+      "description": "分享海报",
+      "maxLength": 512
+    }
+  }
+}

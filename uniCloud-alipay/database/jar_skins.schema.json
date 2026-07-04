@@ -1,0 +1,111 @@
+{
+  "bsonType": "object",
+  "required": [
+    "skin_id",
+    "name",
+    "series",
+    "preview_url",
+    "assets",
+    "created_at"
+  ],
+  "permission": {
+    "read": true,
+    "create": false,
+    "update": false,
+    "delete": false
+  },
+  "properties": {
+    "_id": {
+      "description": "PK"
+    },
+    "skin_id": {
+      "bsonType": "string",
+      "description": "皮肤 ID",
+      "maxLength": 32
+    },
+    "name": {
+      "bsonType": "string",
+      "description": "展示名",
+      "maxLength": 64
+    },
+    "series": {
+      "bsonType": "string",
+      "enum": [
+        "default",
+        "zodiac",
+        "constellation",
+        "festival",
+        "achievement",
+        "pixel"
+      ],
+      "description": "系列",
+      "defaultValue": "default"
+    },
+    "preview_url": {
+      "bsonType": "string",
+      "description": "预览图",
+      "maxLength": 512
+    },
+    "assets": {
+      "bsonType": "object",
+      "description": "资源包",
+      "properties": {
+        "jar_body_url": {
+          "bsonType": "string",
+          "description": "罐体资源",
+          "maxLength": 512
+        },
+        "coin_style_url": {
+          "bsonType": "string",
+          "description": "硬币样式",
+          "maxLength": 512
+        },
+        "animation_pack_version": {
+          "bsonType": "string",
+          "description": "动效包版本",
+          "maxLength": 16
+        },
+        "particle_style": {
+          "bsonType": "string",
+          "description": "粒子样式",
+          "maxLength": 64
+        }
+      }
+    },
+    "unlock_type": {
+      "bsonType": "string",
+      "enum": [
+        "default",
+        "achievement",
+        "purchase",
+        "event"
+      ],
+      "description": "获取方式",
+      "defaultValue": "default"
+    },
+    "unlock_condition": {
+      "bsonType": "object",
+      "description": "解锁条件"
+    },
+    "price": {
+      "bsonType": "int",
+      "description": "价格(分)",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "sort_order": {
+      "bsonType": "int",
+      "description": "排序",
+      "defaultValue": 0
+    },
+    "is_active": {
+      "bsonType": "bool",
+      "description": "上架",
+      "defaultValue": true
+    },
+    "created_at": {
+      "bsonType": "timestamp",
+      "description": "创建时间"
+    }
+  }
+}

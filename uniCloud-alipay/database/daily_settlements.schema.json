@@ -1,0 +1,115 @@
+{
+  "bsonType": "object",
+  "required": [
+    "user_id",
+    "date_key",
+    "base_limit",
+    "available_start",
+    "available_end",
+    "created_at"
+  ],
+  "permission": {
+    "read": "doc.user_id == auth.uid",
+    "create": false,
+    "update": false,
+    "delete": false
+  },
+  "properties": {
+    "_id": {
+      "description": "PK"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "FK→users.user_id",
+      "maxLength": 64,
+      "foreignKey": "users.user_id"
+    },
+    "date_key": {
+      "bsonType": "string",
+      "description": "结算日",
+      "maxLength": 10
+    },
+    "base_limit": {
+      "bsonType": "int",
+      "description": "基准限额(分)"
+    },
+    "surplus_pool_start": {
+      "bsonType": "int",
+      "description": "日初结余池(分)",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "consumed": {
+      "bsonType": "int",
+      "description": "当日消费(分)",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "consumed_from_base": {
+      "bsonType": "int",
+      "description": "从基准扣(分)",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "consumed_from_surplus": {
+      "bsonType": "int",
+      "description": "从结余池扣(分)",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "surplus": {
+      "bsonType": "int",
+      "description": "当日结余(分)",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "over_amount": {
+      "bsonType": "int",
+      "description": "超额(分)",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "available_start": {
+      "bsonType": "int",
+      "description": "日初可用(分)"
+    },
+    "available_end": {
+      "bsonType": "int",
+      "description": "日末可用(分)"
+    },
+    "is_over_limit": {
+      "bsonType": "bool",
+      "description": "超额",
+      "defaultValue": false
+    },
+    "allocation_status": {
+      "bsonType": "string",
+      "enum": [
+        "pending",
+        "allocated",
+        "auto_allocated",
+        "skipped"
+      ],
+      "description": "分配状态",
+      "defaultValue": "pending"
+    },
+    "allocation_id": {
+      "bsonType": "string",
+      "description": "FK→surplus_allocations._id",
+      "foreignKey": "surplus_allocations._id"
+    },
+    "penalty_applied": {
+      "bsonType": "bool",
+      "description": "已惩罚",
+      "defaultValue": false
+    },
+    "settled_at": {
+      "bsonType": "timestamp",
+      "description": "日切时间"
+    },
+    "created_at": {
+      "bsonType": "timestamp",
+      "description": "创建时间"
+    }
+  }
+}

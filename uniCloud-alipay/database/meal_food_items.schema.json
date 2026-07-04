@@ -1,0 +1,61 @@
+{
+  "bsonType": "object",
+  "required": [
+    "meal_id",
+    "user_id",
+    "name",
+    "sort_order",
+    "created_at"
+  ],
+  "permission": {
+    "read": "doc.user_id == auth.uid",
+    "create": "doc.user_id == auth.uid",
+    "update": "doc.user_id == auth.uid",
+    "delete": "doc.user_id == auth.uid"
+  },
+  "properties": {
+    "_id": {
+      "description": "PK"
+    },
+    "meal_id": {
+      "bsonType": "string",
+      "description": "FK→meals._id",
+      "foreignKey": "meals._id"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "FK→users.user_id",
+      "maxLength": 64,
+      "foreignKey": "users.user_id"
+    },
+    "name": {
+      "bsonType": "string",
+      "description": "食物名",
+      "maxLength": 64
+    },
+    "sticker_id": {
+      "bsonType": "string",
+      "description": "FK→stickers._id",
+      "foreignKey": "stickers._id"
+    },
+    "sticker_image_url": {
+      "bsonType": "string",
+      "description": "一次性图",
+      "maxLength": 512
+    },
+    "calories": {
+      "bsonType": "int",
+      "description": "热量 kcal",
+      "minimum": 0
+    },
+    "sort_order": {
+      "bsonType": "int",
+      "description": "排序",
+      "defaultValue": 0
+    },
+    "created_at": {
+      "bsonType": "timestamp",
+      "description": "创建时间"
+    }
+  }
+}

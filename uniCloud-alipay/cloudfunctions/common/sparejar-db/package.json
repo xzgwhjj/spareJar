@@ -1,0 +1,9 @@
+{
+  "name": "sparejar-db",
+  "version": "1.0.0",
+  "description": "余钱罐数据库业务逻辑公共模块",
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "Apache-2.0"
+}

@@ -1,0 +1,80 @@
+{
+  "bsonType": "object",
+  "required": [
+    "user_id",
+    "account_id",
+    "change_type",
+    "amount_delta",
+    "balance_after",
+    "created_at"
+  ],
+  "permission": {
+    "read": "doc.user_id == auth.uid",
+    "create": false,
+    "update": false,
+    "delete": false
+  },
+  "properties": {
+    "_id": {
+      "description": "PK"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "FK→users.user_id",
+      "maxLength": 64,
+      "foreignKey": "users.user_id"
+    },
+    "account_id": {
+      "bsonType": "string",
+      "description": "FK→asset_accounts._id",
+      "foreignKey": "asset_accounts._id"
+    },
+    "change_type": {
+      "bsonType": "string",
+      "enum": [
+        "transaction",
+        "adjust",
+        "transfer_in",
+        "transfer_out",
+        "buy",
+        "sell",
+        "dividend",
+        "refund"
+      ],
+      "description": "变动类型"
+    },
+    "amount_delta": {
+      "bsonType": "int",
+      "description": "变动(分)"
+    },
+    "balance_after": {
+      "bsonType": "int",
+      "description": "变动后余额(分)"
+    },
+    "transaction_id": {
+      "bsonType": "string",
+      "description": "FK→transactions._id",
+      "foreignKey": "transactions._id"
+    },
+    "counter_account_id": {
+      "bsonType": "string",
+      "description": "FK→asset_accounts._id",
+      "foreignKey": "asset_accounts._id"
+    },
+    "holding_id": {
+      "bsonType": "string",
+      "description": "FK→investment_holdings._id",
+      "foreignKey": "investment_holdings._id"
+    },
+    "note": {
+      "bsonType": "string",
+      "description": "备注",
+      "maxLength": 200,
+      "defaultValue": ""
+    },
+    "created_at": {
+      "bsonType": "timestamp",
+      "description": "创建时间"
+    }
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "bsonType": "object",
+  "required": [
+    "user_id",
+    "backup_date_key",
+    "payload_url",
+    "expires_at",
+    "created_at"
+  ],
+  "permission": {
+    "read": "doc.user_id == auth.uid",
+    "create": false,
+    "update": false,
+    "delete": false
+  },
+  "properties": {
+    "_id": {
+      "description": "PK"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "FK→users.user_id",
+      "maxLength": 64,
+      "foreignKey": "users.user_id"
+    },
+    "backup_date_key": {
+      "bsonType": "string",
+      "description": "备份日",
+      "maxLength": 10
+    },
+    "backup_type": {
+      "bsonType": "string",
+      "enum": [
+        "auto",
+        "manual"
+      ],
+      "description": "备份类型",
+      "defaultValue": "auto"
+    },
+    "payload_url": {
+      "bsonType": "string",
+      "description": "快照 URL",
+      "maxLength": 512
+    },
+    "payload_size": {
+      "bsonType": "int",
+      "description": "文件大小 bytes",
+      "minimum": 0
+    },
+    "record_count": {
+      "bsonType": "int",
+      "description": "记录数",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "checksum": {
+      "bsonType": "string",
+      "description": "校验和",
+      "maxLength": 64
+    },
+    "expires_at": {
+      "bsonType": "timestamp",
+      "description": "过期时间"
+    },
+    "created_at": {
+      "bsonType": "timestamp",
+      "description": "创建时间"
+    }
+  }
+}

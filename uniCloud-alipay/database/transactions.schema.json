@@ -1,0 +1,201 @@
+{
+  "bsonType": "object",
+  "required": [
+    "user_id",
+    "type",
+    "amount",
+    "ledger_id",
+    "date_key",
+    "month_key",
+    "transaction_at",
+    "recorded_at",
+    "created_by",
+    "created_at",
+    "updated_at"
+  ],
+  "permission": {
+    "read": "doc.user_id == auth.uid",
+    "create": false,
+    "update": false,
+    "delete": false
+  },
+  "properties": {
+    "_id": {
+      "description": "PK"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "FK→users.user_id",
+      "maxLength": 64,
+      "foreignKey": "users.user_id"
+    },
+    "type": {
+      "bsonType": "string",
+      "enum": [
+        "expense",
+        "income",
+        "transfer",
+        "balance_adjust",
+        "market_adjust",
+        "refund"
+      ],
+      "description": "流水类型"
+    },
+    "amount": {
+      "bsonType": "int",
+      "description": "金额(分)",
+      "minimum": 1
+    },
+    "category_id": {
+      "bsonType": "string",
+      "description": "FK→categories._id",
+      "foreignKey": "categories._id"
+    },
+    "ledger_id": {
+      "bsonType": "string",
+      "description": "FK→ledgers._id",
+      "foreignKey": "ledgers._id"
+    },
+    "account_id": {
+      "bsonType": "string",
+      "description": "FK→asset_accounts._id",
+      "foreignKey": "asset_accounts._id"
+    },
+    "to_account_id": {
+      "bsonType": "string",
+      "description": "FK→asset_accounts._id",
+      "foreignKey": "asset_accounts._id"
+    },
+    "holding_id": {
+      "bsonType": "string",
+      "description": "FK→investment_holdings._id",
+      "foreignKey": "investment_holdings._id"
+    },
+    "date_key": {
+      "bsonType": "string",
+      "description": "归属自然日",
+      "maxLength": 10
+    },
+    "month_key": {
+      "bsonType": "string",
+      "description": "归属月 YYYY-MM",
+      "maxLength": 7
+    },
+    "transaction_at": {
+      "bsonType": "timestamp",
+      "description": "消费/入账时刻"
+    },
+    "recorded_at": {
+      "bsonType": "timestamp",
+      "description": "录入时刻"
+    },
+    "note": {
+      "bsonType": "string",
+      "description": "备注",
+      "maxLength": 200,
+      "defaultValue": ""
+    },
+    "image_urls": {
+      "bsonType": "array",
+      "arrayType": "string",
+      "description": "图片 URL 列表",
+      "defaultValue": []
+    },
+    "sticker_id": {
+      "bsonType": "string",
+      "description": "FK→stickers._id",
+      "foreignKey": "stickers._id"
+    },
+    "sticker_image_url": {
+      "bsonType": "string",
+      "description": "一次性贴纸图",
+      "maxLength": 512
+    },
+    "tags": {
+      "bsonType": "array",
+      "arrayType": "string",
+      "description": "标签",
+      "defaultValue": []
+    },
+    "related_transaction_id": {
+      "bsonType": "string",
+      "description": "FK→transactions._id",
+      "foreignKey": "transactions._id"
+    },
+    "stock_consume_qty": {
+      "bsonType": "int",
+      "description": "囤货消耗数量",
+      "minimum": 1
+    },
+    "include_in_daily_limit": {
+      "bsonType": "bool",
+      "description": "计日限额",
+      "defaultValue": true
+    },
+    "include_in_challenge": {
+      "bsonType": "bool",
+      "description": "计挑战",
+      "defaultValue": true
+    },
+    "ocr_meta": {
+      "bsonType": "object",
+      "description": "OCR元数据",
+      "properties": {
+        "provider": {
+          "bsonType": "string",
+          "description": "OCR提供商",
+          "maxLength": 32
+        },
+        "raw_text": {
+          "bsonType": "string",
+          "description": "原始文本"
+        },
+        "merchant": {
+          "bsonType": "string",
+          "description": "商户",
+          "maxLength": 128
+        },
+        "recognized_amount": {
+          "bsonType": "int",
+          "description": "识别金额(分)"
+        },
+        "recognized_date": {
+          "bsonType": "string",
+          "description": "识别日期",
+          "maxLength": 10
+        },
+        "confidence": {
+          "bsonType": "double",
+          "description": "置信度"
+        },
+        "image_url": {
+          "bsonType": "string",
+          "description": "原图 URL",
+          "maxLength": 512
+        }
+      }
+    },
+    "meal_id": {
+      "bsonType": "string",
+      "description": "FK→meals._id",
+      "foreignKey": "meals._id"
+    },
+    "created_by": {
+      "bsonType": "string",
+      "description": "录入人 openid",
+      "maxLength": 64
+    },
+    "deleted_at": {
+      "bsonType": "timestamp",
+      "description": "软删"
+    },
+    "created_at": {
+      "bsonType": "timestamp",
+      "description": "创建时间"
+    },
+    "updated_at": {
+      "bsonType": "timestamp",
+      "description": "更新时间"
+    }
+  }
+}

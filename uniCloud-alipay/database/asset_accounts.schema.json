@@ -1,0 +1,117 @@
+{
+  "bsonType": "object",
+  "required": [
+    "user_id",
+    "account_class",
+    "account_subtype",
+    "name",
+    "created_at",
+    "updated_at"
+  ],
+  "permission": {
+    "read": "doc.user_id == auth.uid",
+    "create": "doc.user_id == auth.uid",
+    "update": "doc.user_id == auth.uid",
+    "delete": "doc.user_id == auth.uid"
+  },
+  "properties": {
+    "_id": {
+      "description": "PK"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "FK→users.user_id",
+      "maxLength": 64,
+      "foreignKey": "users.user_id"
+    },
+    "account_class": {
+      "bsonType": "string",
+      "enum": [
+        "daily",
+        "special",
+        "investment"
+      ],
+      "description": "账户大类"
+    },
+    "account_subtype": {
+      "bsonType": "string",
+      "enum": [
+        "wechat",
+        "alipay",
+        "bank",
+        "cash",
+        "provident_fund",
+        "insurance",
+        "fund",
+        "stock",
+        "bond",
+        "gold",
+        "other"
+      ],
+      "description": "子类型"
+    },
+    "name": {
+      "bsonType": "string",
+      "description": "账户名",
+      "maxLength": 64
+    },
+    "initial_balance": {
+      "bsonType": "int",
+      "description": "期初余额(分)",
+      "defaultValue": 0
+    },
+    "current_balance": {
+      "bsonType": "int",
+      "description": "当前余额(分)",
+      "defaultValue": 0
+    },
+    "include_in_disposable": {
+      "bsonType": "bool",
+      "description": "计可支配",
+      "defaultValue": false
+    },
+    "include_in_daily_limit": {
+      "bsonType": "bool",
+      "description": "计日限额",
+      "defaultValue": false
+    },
+    "include_in_total_asset": {
+      "bsonType": "bool",
+      "description": "计总资产",
+      "defaultValue": false
+    },
+    "annual_withdraw_quota": {
+      "bsonType": "int",
+      "description": "年度提取参考(分)",
+      "minimum": 0
+    },
+    "annual_withdrawn": {
+      "bsonType": "int",
+      "description": "本年已提取(分)",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "quota_year": {
+      "bsonType": "string",
+      "description": "额度统计年 YYYY",
+      "maxLength": 4
+    },
+    "sort_order": {
+      "bsonType": "int",
+      "description": "排序",
+      "defaultValue": 0
+    },
+    "deleted_at": {
+      "bsonType": "timestamp",
+      "description": "软删"
+    },
+    "created_at": {
+      "bsonType": "timestamp",
+      "description": "创建时间"
+    },
+    "updated_at": {
+      "bsonType": "timestamp",
+      "description": "更新时间"
+    }
+  }
+}

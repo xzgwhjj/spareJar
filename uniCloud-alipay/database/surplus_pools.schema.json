@@ -1,0 +1,46 @@
+{
+  "bsonType": "object",
+  "required": [
+    "user_id",
+    "updated_at"
+  ],
+  "permission": {
+    "read": "doc.user_id == auth.uid",
+    "create": false,
+    "update": false,
+    "delete": false
+  },
+  "properties": {
+    "_id": {
+      "description": "PK"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "FK→users.user_id",
+      "maxLength": 64,
+      "foreignKey": "users.user_id"
+    },
+    "balance": {
+      "bsonType": "int",
+      "description": "余额(分)",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "total_in": {
+      "bsonType": "int",
+      "description": "累计入账(分)",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "total_out": {
+      "bsonType": "int",
+      "description": "累计出账(分)",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "updated_at": {
+      "bsonType": "timestamp",
+      "description": "更新时间"
+    }
+  }
+}

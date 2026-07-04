@@ -1,0 +1,33 @@
+[
+  {
+    "IndexName": "uk_ledger_user",
+    "MgoKeySchema": {
+      "MgoIndexKeys": [
+        {
+          "Name": "ledger_id",
+          "Direction": "1",
+          "Type": "varchar"
+        },
+        {
+          "Name": "user_id",
+          "Direction": "1",
+          "Type": "varchar"
+        }
+      ],
+      "MgoIsUnique": true
+    }
+  },
+  {
+    "IndexName": "idx_user",
+    "MgoKeySchema": {
+      "MgoIndexKeys": [
+        {
+          "Name": "user_id",
+          "Direction": "1",
+          "Type": "varchar"
+        }
+      ],
+      "MgoIsUnique": false
+    }
+  }
+]

@@ -1,0 +1,69 @@
+{
+  "bsonType": "object",
+  "required": [
+    "user_id",
+    "date_key",
+    "updated_at"
+  ],
+  "permission": {
+    "read": "doc.user_id == auth.uid",
+    "create": "doc.user_id == auth.uid",
+    "update": "doc.user_id == auth.uid",
+    "delete": "doc.user_id == auth.uid"
+  },
+  "properties": {
+    "_id": {
+      "description": "PK"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "FK→users.user_id",
+      "maxLength": 64,
+      "foreignKey": "users.user_id"
+    },
+    "date_key": {
+      "bsonType": "string",
+      "description": "自然日 YYYY-MM-DD",
+      "maxLength": 10
+    },
+    "intake_total": {
+      "bsonType": "int",
+      "description": "已摄入 kcal",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "intake_target": {
+      "bsonType": "int",
+      "description": "摄入目标 kcal",
+      "minimum": 0
+    },
+    "intake_remaining": {
+      "bsonType": "int",
+      "description": "还可摄入 kcal"
+    },
+    "exercise_calories": {
+      "bsonType": "int",
+      "description": "运动消耗 kcal",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "total_burn": {
+      "bsonType": "int",
+      "description": "总消耗 kcal",
+      "minimum": 0
+    },
+    "calorie_gap": {
+      "bsonType": "int",
+      "description": "热量缺口 kcal"
+    },
+    "tdee_snapshot": {
+      "bsonType": "int",
+      "description": "TDEE快照 kcal",
+      "minimum": 0
+    },
+    "updated_at": {
+      "bsonType": "timestamp",
+      "description": "更新时间"
+    }
+  }
+}

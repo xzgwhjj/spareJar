@@ -1,0 +1,69 @@
+{
+  "bsonType": "object",
+  "required": [
+    "user_id",
+    "name",
+    "created_at"
+  ],
+  "permission": {
+    "read": "doc.user_id == auth.uid",
+    "create": "doc.user_id == auth.uid",
+    "update": "doc.user_id == auth.uid",
+    "delete": "doc.user_id == auth.uid"
+  },
+  "properties": {
+    "_id": {
+      "description": "PK"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "FK→users.user_id",
+      "maxLength": 64,
+      "foreignKey": "users.user_id"
+    },
+    "name": {
+      "bsonType": "string",
+      "description": "账本名称",
+      "maxLength": 32
+    },
+    "icon": {
+      "bsonType": "string",
+      "description": "图标",
+      "maxLength": 64,
+      "defaultValue": "📒"
+    },
+    "is_system": {
+      "bsonType": "bool",
+      "description": "总账本",
+      "defaultValue": false
+    },
+    "is_default": {
+      "bsonType": "bool",
+      "description": "默认选中",
+      "defaultValue": false
+    },
+    "is_shared": {
+      "bsonType": "bool",
+      "description": "共享账本",
+      "defaultValue": false
+    },
+    "share_code": {
+      "bsonType": "string",
+      "description": "邀请码",
+      "maxLength": 16
+    },
+    "sort_order": {
+      "bsonType": "int",
+      "description": "排序",
+      "defaultValue": 0
+    },
+    "deleted_at": {
+      "bsonType": "timestamp",
+      "description": "软删"
+    },
+    "created_at": {
+      "bsonType": "timestamp",
+      "description": "创建时间"
+    }
+  }
+}

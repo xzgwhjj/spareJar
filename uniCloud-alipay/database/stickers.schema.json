@@ -1,0 +1,114 @@
+{
+  "bsonType": "object",
+  "required": [
+    "user_id",
+    "type",
+    "name",
+    "image_url",
+    "created_at",
+    "updated_at"
+  ],
+  "permission": {
+    "read": "doc.user_id == auth.uid",
+    "create": "doc.user_id == auth.uid",
+    "update": "doc.user_id == auth.uid",
+    "delete": "doc.user_id == auth.uid"
+  },
+  "properties": {
+    "_id": {
+      "description": "PK"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "FK→users.user_id",
+      "maxLength": 64,
+      "foreignKey": "users.user_id"
+    },
+    "type": {
+      "bsonType": "string",
+      "enum": [
+        "stock",
+        "material"
+      ],
+      "description": "贴纸类型"
+    },
+    "name": {
+      "bsonType": "string",
+      "description": "名称",
+      "maxLength": 64
+    },
+    "image_url": {
+      "bsonType": "string",
+      "description": "图片 URL",
+      "maxLength": 512
+    },
+    "thumbnail_url": {
+      "bsonType": "string",
+      "description": "缩略图",
+      "maxLength": 512
+    },
+    "category_id": {
+      "bsonType": "string",
+      "description": "FK→categories._id",
+      "foreignKey": "categories._id"
+    },
+    "ledger_id": {
+      "bsonType": "string",
+      "description": "FK→ledgers._id",
+      "foreignKey": "ledgers._id"
+    },
+    "unit_price": {
+      "bsonType": "int",
+      "description": "单价(分)",
+      "minimum": 1
+    },
+    "stock_qty": {
+      "bsonType": "int",
+      "description": "库存",
+      "minimum": 0
+    },
+    "initial_stock_qty": {
+      "bsonType": "int",
+      "description": "初始库存",
+      "minimum": 0
+    },
+    "low_stock_threshold": {
+      "bsonType": "int",
+      "description": "低库存阈值",
+      "minimum": 0,
+      "defaultValue": 1
+    },
+    "purchase_transaction_id": {
+      "bsonType": "string",
+      "description": "FK→transactions._id",
+      "foreignKey": "transactions._id"
+    },
+    "use_count": {
+      "bsonType": "int",
+      "description": "使用次数",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "last_used_at": {
+      "bsonType": "timestamp",
+      "description": "最近使用"
+    },
+    "sort_order": {
+      "bsonType": "int",
+      "description": "排序",
+      "defaultValue": 0
+    },
+    "deleted_at": {
+      "bsonType": "timestamp",
+      "description": "软删"
+    },
+    "created_at": {
+      "bsonType": "timestamp",
+      "description": "创建时间"
+    },
+    "updated_at": {
+      "bsonType": "timestamp",
+      "description": "更新时间"
+    }
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "bsonType": "object",
+  "required": [
+    "user_id",
+    "wish_id",
+    "direction",
+    "amount",
+    "saved_after",
+    "source",
+    "created_at"
+  ],
+  "permission": {
+    "read": "doc.user_id == auth.uid",
+    "create": false,
+    "update": false,
+    "delete": false
+  },
+  "properties": {
+    "_id": {
+      "description": "PK"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "FK→users.user_id",
+      "maxLength": 64,
+      "foreignKey": "users.user_id"
+    },
+    "wish_id": {
+      "bsonType": "string",
+      "description": "FK→wishes._id",
+      "foreignKey": "wishes._id"
+    },
+    "direction": {
+      "bsonType": "string",
+      "enum": [
+        "in",
+        "out"
+      ],
+      "description": "方向"
+    },
+    "amount": {
+      "bsonType": "int",
+      "description": "金额(分)",
+      "minimum": 1
+    },
+    "saved_after": {
+      "bsonType": "int",
+      "description": "变动后已存(分)",
+      "minimum": 0
+    },
+    "source": {
+      "bsonType": "string",
+      "enum": [
+        "surplus_allocation",
+        "manual",
+        "savings_pool",
+        "withdraw_to_surplus",
+        "withdraw_to_savings"
+      ],
+      "description": "来源"
+    },
+    "ref_id": {
+      "bsonType": "string",
+      "description": "关联 ID"
+    },
+    "note": {
+      "bsonType": "string",
+      "description": "备注",
+      "maxLength": 200,
+      "defaultValue": ""
+    },
+    "created_at": {
+      "bsonType": "timestamp",
+      "description": "创建时间"
+    }
+  }
+}

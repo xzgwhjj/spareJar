@@ -1,0 +1,127 @@
+{
+  "bsonType": "object",
+  "required": [
+    "user_id",
+    "updated_at"
+  ],
+  "permission": {
+    "read": "doc.user_id == auth.uid",
+    "create": "doc.user_id == auth.uid",
+    "update": "doc.user_id == auth.uid",
+    "delete": "doc.user_id == auth.uid"
+  },
+  "properties": {
+    "_id": {
+      "description": "PK"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "FK→users.user_id",
+      "maxLength": 64,
+      "foreignKey": "users.user_id"
+    },
+    "daily_base_limit": {
+      "bsonType": "int",
+      "description": "日基准限额(分)",
+      "minimum": 100,
+      "defaultValue": 10000
+    },
+    "pending_base_limit": {
+      "bsonType": "int",
+      "description": "待生效限额(分)",
+      "minimum": 100
+    },
+    "limit_effective_date": {
+      "bsonType": "string",
+      "description": "限额生效日",
+      "maxLength": 10
+    },
+    "default_surplus_action": {
+      "bsonType": "string",
+      "enum": [
+        "roll_over",
+        "wish",
+        "savings_pool"
+      ],
+      "description": "默认结余去向",
+      "defaultValue": "roll_over"
+    },
+    "default_wish_id": {
+      "bsonType": "string",
+      "description": "FK→wishes._id",
+      "foreignKey": "wishes._id"
+    },
+    "refund_restore_limit": {
+      "bsonType": "bool",
+      "description": "退款恢复限额",
+      "defaultValue": true
+    },
+    "challenge_ledger_id": {
+      "bsonType": "string",
+      "description": "FK→ledgers._id",
+      "foreignKey": "ledgers._id"
+    },
+    "max_custom_ledgers": {
+      "bsonType": "int",
+      "description": "自定义账本上限",
+      "minimum": 0,
+      "defaultValue": 5
+    },
+    "notify_over_limit": {
+      "bsonType": "bool",
+      "description": "超额通知",
+      "defaultValue": true
+    },
+    "notify_daily_surplus": {
+      "bsonType": "bool",
+      "description": "日结通知",
+      "defaultValue": true
+    },
+    "notify_streak_risk": {
+      "bsonType": "bool",
+      "description": "挑战中断通知",
+      "defaultValue": true
+    },
+    "meal_tracking_enabled": {
+      "bsonType": "bool",
+      "description": "餐饮轻记录",
+      "defaultValue": false
+    },
+    "fat_loss_mode_enabled": {
+      "bsonType": "bool",
+      "description": "减脂模式",
+      "defaultValue": false
+    },
+    "savings_withdraw_limit_pct": {
+      "bsonType": "int",
+      "description": "月取出比例上限",
+      "minimum": 1,
+      "maximum": 100
+    },
+    "over_limit_penalty_enabled": {
+      "bsonType": "bool",
+      "description": "虚拟超额惩罚",
+      "defaultValue": false
+    },
+    "penalty_streak_deduct": {
+      "bsonType": "int",
+      "description": "惩罚扣连续天数",
+      "minimum": 0,
+      "defaultValue": 1
+    },
+    "asset_view_mode": {
+      "bsonType": "string",
+      "enum": [
+        "disposable",
+        "with_investment",
+        "full"
+      ],
+      "description": "总资产视图",
+      "defaultValue": "disposable"
+    },
+    "updated_at": {
+      "bsonType": "timestamp",
+      "description": "更新时间"
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "sparejar-finance",
+  "version": "1.0.0",
+  "description": "余钱罐财务业务云函数入口",
+  "main": "index.js",
+  "dependencies": {
+    "sparejar-db": "file:../common/sparejar-db"
+  },
+  "cloudfunction-config": {
+    "memorySize": 256,
+    "timeout": 60
+  }
+}

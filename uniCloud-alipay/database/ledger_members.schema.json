@@ -1,0 +1,44 @@
+{
+  "bsonType": "object",
+  "required": [
+    "ledger_id",
+    "user_id",
+    "joined_at"
+  ],
+  "permission": {
+    "read": "doc.user_id == auth.uid",
+    "create": false,
+    "update": false,
+    "delete": false
+  },
+  "properties": {
+    "_id": {
+      "description": "PK"
+    },
+    "ledger_id": {
+      "bsonType": "string",
+      "description": "FK→ledgers._id",
+      "foreignKey": "ledgers._id"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "FK→users.user_id",
+      "maxLength": 64,
+      "foreignKey": "users.user_id"
+    },
+    "role": {
+      "bsonType": "string",
+      "enum": [
+        "owner",
+        "member",
+        "viewer"
+      ],
+      "description": "角色",
+      "defaultValue": "member"
+    },
+    "joined_at": {
+      "bsonType": "timestamp",
+      "description": "加入时间"
+    }
+  }
+}

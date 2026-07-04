@@ -1,0 +1,33 @@
+[
+  {
+    "IndexName": "uk_code",
+    "MgoKeySchema": {
+      "MgoIndexKeys": [
+        {
+          "Name": "code",
+          "Direction": "1",
+          "Type": "varchar"
+        }
+      ],
+      "MgoIsUnique": true
+    }
+  },
+  {
+    "IndexName": "idx_active_sort",
+    "MgoKeySchema": {
+      "MgoIndexKeys": [
+        {
+          "Name": "is_active",
+          "Direction": "1",
+          "Type": "bool"
+        },
+        {
+          "Name": "sort_order",
+          "Direction": "1",
+          "Type": "int"
+        }
+      ],
+      "MgoIsUnique": false
+    }
+  }
+]

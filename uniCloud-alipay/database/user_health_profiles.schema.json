@@ -1,0 +1,109 @@
+{
+  "bsonType": "object",
+  "required": [
+    "user_id",
+    "updated_at"
+  ],
+  "permission": {
+    "read": "doc.user_id == auth.uid",
+    "create": "doc.user_id == auth.uid",
+    "update": "doc.user_id == auth.uid",
+    "delete": "doc.user_id == auth.uid"
+  },
+  "properties": {
+    "_id": {
+      "description": "PK"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "FK→users.user_id",
+      "maxLength": 64,
+      "foreignKey": "users.user_id"
+    },
+    "gender": {
+      "bsonType": "string",
+      "enum": [
+        "male",
+        "female",
+        "other"
+      ],
+      "description": "性别"
+    },
+    "age": {
+      "bsonType": "int",
+      "description": "年龄",
+      "minimum": 1,
+      "maximum": 120
+    },
+    "height_cm": {
+      "bsonType": "double",
+      "description": "身高 cm",
+      "minimum": 0
+    },
+    "weight_kg": {
+      "bsonType": "double",
+      "description": "体重 kg",
+      "minimum": 0
+    },
+    "activity_level": {
+      "bsonType": "string",
+      "enum": [
+        "sedentary",
+        "light",
+        "moderate",
+        "high"
+      ],
+      "description": "活动强度",
+      "defaultValue": "sedentary"
+    },
+    "bmr": {
+      "bsonType": "int",
+      "description": "基础代谢 kcal",
+      "minimum": 0
+    },
+    "activity_factor": {
+      "bsonType": "double",
+      "description": "活动系数",
+      "minimum": 0
+    },
+    "tdee": {
+      "bsonType": "int",
+      "description": "日总消耗 kcal",
+      "minimum": 0
+    },
+    "bmr_is_manual": {
+      "bsonType": "bool",
+      "description": "BMR手动覆盖",
+      "defaultValue": false
+    },
+    "tdee_is_manual": {
+      "bsonType": "bool",
+      "description": "TDEE手动覆盖",
+      "defaultValue": false
+    },
+    "daily_intake_target": {
+      "bsonType": "int",
+      "description": "日摄入目标 kcal",
+      "minimum": 0
+    },
+    "intake_target_is_manual": {
+      "bsonType": "bool",
+      "description": "摄入目标手动",
+      "defaultValue": false
+    },
+    "ai_activity_hint": {
+      "bsonType": "string",
+      "description": "AI活动档位提示",
+      "maxLength": 200
+    },
+    "disclaimer_accepted": {
+      "bsonType": "bool",
+      "description": "免责声明确认",
+      "defaultValue": false
+    },
+    "updated_at": {
+      "bsonType": "timestamp",
+      "description": "更新时间"
+    }
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "bsonType": "object",
+  "required": [
+    "user_id",
+    "timezone",
+    "created_at",
+    "updated_at"
+  ],
+  "permission": {
+    "read": "doc.user_id == auth.uid",
+    "create": "auth.uid != null",
+    "update": "doc.user_id == auth.uid",
+    "delete": false
+  },
+  "properties": {
+    "_id": {
+      "description": "PK"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "微信 openid，业务主键",
+      "maxLength": 64
+    },
+    "nickname": {
+      "bsonType": "string",
+      "description": "昵称",
+      "maxLength": 64,
+      "defaultValue": ""
+    },
+    "avatar_url": {
+      "bsonType": "string",
+      "description": "头像 URL",
+      "maxLength": 512,
+      "defaultValue": ""
+    },
+    "timezone": {
+      "bsonType": "string",
+      "description": "日切时区",
+      "maxLength": 64,
+      "defaultValue": "Asia/Shanghai"
+    },
+    "onboarding_done": {
+      "bsonType": "bool",
+      "description": "引导完成",
+      "defaultValue": false
+    },
+    "onboarding_step": {
+      "bsonType": "int",
+      "description": "引导步骤 0-4",
+      "minimum": 0,
+      "maximum": 4,
+      "defaultValue": 0
+    },
+    "is_guest": {
+      "bsonType": "bool",
+      "description": "游客模式",
+      "defaultValue": true
+    },
+    "jar_skin_id": {
+      "bsonType": "string",
+      "description": "FK→jar_skins.skin_id",
+      "maxLength": 32,
+      "defaultValue": "classic_glass",
+      "foreignKey": "jar_skins.skin_id"
+    },
+    "jar_skins_unlocked": {
+      "bsonType": "array",
+      "arrayType": "string",
+      "description": "已解锁皮肤",
+      "defaultValue": [
+        "classic_glass"
+      ]
+    },
+    "zodiac": {
+      "bsonType": "string",
+      "description": "生肖",
+      "maxLength": 16
+    },
+    "constellation": {
+      "bsonType": "string",
+      "description": "星座",
+      "maxLength": 16
+    },
+    "birthday": {
+      "bsonType": "string",
+      "description": "生日 YYYY-MM-DD",
+      "maxLength": 10
+    },
+    "created_at": {
+      "bsonType": "timestamp",
+      "description": "创建时间"
+    },
+    "updated_at": {
+      "bsonType": "timestamp",
+      "description": "更新时间"
+    },
+    "deleted_at": {
+      "bsonType": "timestamp",
+      "description": "软删时间"
+    }
+  }
+}

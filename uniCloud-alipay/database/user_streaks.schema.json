@@ -1,0 +1,56 @@
+{
+  "bsonType": "object",
+  "required": [
+    "user_id",
+    "updated_at"
+  ],
+  "permission": {
+    "read": "doc.user_id == auth.uid",
+    "create": false,
+    "update": false,
+    "delete": false
+  },
+  "properties": {
+    "_id": {
+      "description": "PK"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "FK→users.user_id",
+      "maxLength": 64,
+      "foreignKey": "users.user_id"
+    },
+    "daily_current_streak": {
+      "bsonType": "int",
+      "description": "当前连续天",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "daily_max_streak": {
+      "bsonType": "int",
+      "description": "历史最高",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "last_success_date_key": {
+      "bsonType": "string",
+      "description": "最近成功日",
+      "maxLength": 10
+    },
+    "last_fail_date_key": {
+      "bsonType": "string",
+      "description": "最近失败日",
+      "maxLength": 10
+    },
+    "penalty_streak_deducted": {
+      "bsonType": "int",
+      "description": "累计惩罚扣天",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "updated_at": {
+      "bsonType": "timestamp",
+      "description": "更新时间"
+    }
+  }
+}

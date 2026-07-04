@@ -1,0 +1,20 @@
+{
+  "name": "sparejar-daily-cron",
+  "version": "1.0.0",
+  "description": "余钱罐日切定时任务",
+  "main": "index.js",
+  "dependencies": {
+    "sparejar-db": "file:../common/sparejar-db"
+  },
+  "cloudfunction-config": {
+    "memorySize": 512,
+    "timeout": 300,
+    "triggers": [
+      {
+        "name": "dailySettlement",
+        "type": "timer",
+        "config": "0 0 16 * * * *"
+      }
+    ]
+  }
+}
