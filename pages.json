@@ -1,0 +1,123 @@
+{
+  "pages": [
+    {
+      "path": "pages/index/index",
+      "style": {
+        "navigationBarTitleText": "余钱罐",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/ledger/ledger",
+      "style": {
+        "navigationBarTitleText": "账本",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/challenge/challenge",
+      "style": {
+        "navigationBarTitleText": "挑战",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/wish/wish",
+      "style": {
+        "navigationBarTitleText": "心愿",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/profile/profile",
+      "style": {
+        "navigationBarTitleText": "我的",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/add-record/add-record",
+      "style": {
+        "navigationBarTitleText": "记一笔",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/limit-setting/limit-setting",
+      "style": {
+        "navigationBarTitleText": "限额设置",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/surplus-alloc/surplus-alloc",
+      "style": {
+        "navigationBarTitleText": "盈余分配",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/surplus-history/surplus-history",
+      "style": {
+        "navigationBarTitleText": "盈余历史",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/ledger-detail/ledger-detail",
+      "style": {
+        "navigationBarTitleText": "账本详情",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/sticker-lib/sticker-lib",
+      "style": {
+        "navigationBarTitleText": "贴纸库",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/asset-mgr/asset-mgr",
+      "style": {
+        "navigationBarTitleText": "资产管理",
+        "navigationStyle": "custom"
+      }
+    }
+  ],
+  "tabBar": {
+    "custom": true,
+    "color": "#b0c8bc",
+    "selectedColor": "#25cc5d",
+    "backgroundColor": "rgba(255,255,255,0.92)",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/ledger/ledger",
+        "text": "账本"
+      },
+      {
+        "pagePath": "pages/challenge/challenge",
+        "text": "挑战"
+      },
+      {
+        "pagePath": "pages/wish/wish",
+        "text": "心愿"
+      },
+      {
+        "pagePath": "pages/profile/profile",
+        "text": "我的"
+      }
+    ]
+  },
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "余钱罐",
+    "navigationBarBackgroundColor": "#F2FCF2",
+    "backgroundColor": "#F2FCF2"
+  },
+  "uniIdRouter": {}
+}
