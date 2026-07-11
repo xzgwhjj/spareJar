@@ -1,0 +1,14 @@
+{
+  "name": "sparejar-auth",
+  "version": "1.0.0",
+  "description": "余钱罐微信登录与 token 签发",
+  "main": "index.js",
+  "dependencies": {
+    "uni-config-center": "file:../../../uni_modules/uni-config-center/uniCloud/cloudfunctions/common/uni-config-center",
+    "uni-id-common": "file:../../../uni_modules/uni-id-common/uniCloud/cloudfunctions/common/uni-id-common"
+  },
+  "cloudfunction-config": {
+    "memorySize": 256,
+    "timeout": 15
+  }
+}

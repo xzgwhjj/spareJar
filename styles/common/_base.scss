@@ -1,0 +1,27 @@
+/* 全局基础（微信小程序 WXSS 不支持 * 选择器） */
+page,
+view,
+text,
+image,
+button,
+input,
+textarea,
+scroll-view {
+  box-sizing: border-box;
+}
+
+page {
+  -webkit-tap-highlight-color: transparent;
+  font-family: $sj-font-family;
+  background-color: $sj-g0;
+}
+
+.page-scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.page-scroll::-webkit-scrollbar {
+  display: none;
+}

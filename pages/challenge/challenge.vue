@@ -107,13 +107,12 @@
     </scroll-view>
 
     <!-- TabBar -->
-    <TabBar current-tab="challenge" />
+    <TabBar :current="3" />
   </view>
 </template>
 
 <script setup>
-import TabBar from '@/components/TabBar.vue';
-
+import TabBar from '@/components/tabbar/tabbar.vue';
 const DAILY = {
   streak: 23,
   todaySpent: 134.5,

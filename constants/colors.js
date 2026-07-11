@@ -1,6 +1,7 @@
-/* ============================================================
-   余钱罐 — 品牌色彩系统
-   ============================================================ */
+/**
+ * JS 侧颜色常量（与 styles/theme/_palette-default.scss 保持同步）
+ * 换肤时优先改 SCSS 色板，再同步更新本文件供 inline style / Canvas 使用
+ */
 export const G0 = '#f2fcf2';
 export const G1 = '#e1fae3';
 export const G2 = '#c2f2c8';
@@ -16,7 +17,14 @@ export const RED_BG = '#fff0f0';
 export const AMBER = '#f59e0b';
 export const AMBER_BG = '#fffbeb';
 
-/* 玻璃卡片渐变 */
+/** CSS 变量名映射，便于 JS 读取当前主题 */
+export const CSS_VAR = {
+  g0: '--g0',
+  g5: '--g5',
+  ink: '--ink',
+  red: '--red-soft',
+};
+
 export const GLASS_HERO = {
   background: 'linear-gradient(145deg, rgba(255,255,255,0.84) 0%, rgba(250,255,252,0.78) 45%, rgba(237,250,240,0.68) 100%)',
   backdropFilter: 'blur(28px) saturate(1.6)',

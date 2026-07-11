@@ -1,0 +1,17 @@
+{
+  "passwordSecret": "sparejar-password-secret-change-me",
+  "tokenSecret": "sparejar-token-secret-change-in-production",
+  "tokenExpiresIn": 604800,
+  "tokenExpiresThreshold": 86400,
+  "passwordErrorLimit": 6,
+  "passwordErrorRetryTime": 3600,
+  "dcloudAppid": "__UNI__4A13F4C",
+  "mp-weixin": {
+    "oauth": {
+      "weixin": {
+        "appid": "wxa6368add00b2cab1",
+        "appsecret": "77da72de92db91815eedf506616bf2b6"
+      }
+    }
+  }
+}

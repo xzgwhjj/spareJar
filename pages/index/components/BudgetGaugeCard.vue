@@ -21,7 +21,7 @@
     <view class="jar-hud-area">
       <!-- 存钱罐 SVG -->
       <view class="jar-wrapper">
-        <SavingsJar :pct="pct" :is-over="isOver" />
+        <SavingsJar :pct="pct" :is-over="isOver" :left-pct="pct" />
         <text class="jar-limit-text">满额 ¥{{ DAILY_LIMIT }}</text>
       </view>
 
@@ -91,18 +91,18 @@ const goLimitSetting = () => uni.navigateTo({ url: '/pages/limit-setting/limit-s
 
 <style scoped>
 .budget-gauge-card {
-  margin: 16px 16px 0;
-  padding: 18px 14px 16px 14px;
+  margin: 32rpx 32rpx 0;
+  padding: 36rpx 28rpx 32rpx;
   position: relative;
   overflow: hidden;
 }
 
 .bg-glow {
   position: absolute;
-  top: -50px;
-  right: -50px;
-  width: 200px;
-  height: 200px;
+  top: -100rpx;
+  right: -100rpx;
+  width: 400rpx;
+  height: 400rpx;
   border-radius: 50%;
   background: radial-gradient(circle, rgba(79, 217, 116, 0.08), transparent 65%);
   pointer-events: none;
@@ -114,35 +114,35 @@ const goLimitSetting = () => uni.navigateTo({ url: '/pages/limit-setting/limit-s
 .gauge-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 14px;
+  gap: 12rpx;
+  margin-bottom: 28rpx;
 }
-.gauge-header-icon { font-size: 14px; color: #25cc5d; }
-.gauge-header-title { font-size: 13px; font-weight: 700; color: #3a5244; }
+.gauge-header-icon { font-size: 28rpx; color: #25cc5d; }
+.gauge-header-title { font-size: 26rpx; font-weight: 700; color: #3a5244; }
 
 .limit-btn {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8rpx;
   background: rgba(37, 204, 93, 0.09);
-  border-radius: 10px;
-  padding: 4px 10px;
+  border-radius: 20rpx;
+  padding: 8rpx 20rpx;
   cursor: pointer;
 }
-.limit-btn-icon { font-size: 11px; color: #25cc5d; }
-.limit-btn-text { font-size: 11px; color: #25cc5d; font-weight: 600; }
-.limit-btn-arrow { font-size: 14px; color: #89e59c; }
+.limit-btn-icon { font-size: 22rpx; color: #25cc5d; }
+.limit-btn-text { font-size: 22rpx; color: #25cc5d; font-weight: 600; }
+.limit-btn-arrow { font-size: 28rpx; color: #89e59c; }
 
 .over-badge {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 6rpx;
   background: rgba(255, 107, 107, 0.12);
-  border-radius: 10px;
-  padding: 4px 9px;
+  border-radius: 20rpx;
+  padding: 8rpx 18rpx;
 }
-.over-badge-text { font-size: 11px; color: #ff6b6b; font-weight: 600; }
+.over-badge-text { font-size: 22rpx; color: #ff6b6b; font-weight: 600; }
 
 /* 罐体 + HUD */
 .jar-hud-area {
@@ -150,15 +150,15 @@ const goLimitSetting = () => uni.navigateTo({ url: '/pages/limit-setting/limit-s
   display: flex;
   justify-content: center;
   align-items: flex-end;
-  min-height: 290px;
+  min-height: 387rpx;
 }
 .jar-wrapper {
   position: relative;
   z-index: 1;
 }
 .jar-limit-text {
-  margin-top: 2px;
-  font-size: 10px;
+  margin-top: 4rpx;
+  font-size: 20rpx;
   color: #9bb8a8;
   text-align: center;
   display: block;
@@ -167,57 +167,84 @@ const goLimitSetting = () => uni.navigateTo({ url: '/pages/limit-setting/limit-s
 .panel-float {
   position: absolute;
   right: 0;
-  bottom: 36px;
+  bottom: 72rpx;
   z-index: 10;
-  width: 148px;
-  padding: 12px 14px 10px;
-  border-radius: 18px;
+  width: 296rpx;
+  padding: 24rpx 28rpx 20rpx;
+  border-radius: 36rpx;
   background: rgba(255, 255, 255, 0.75);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
-  border: 1px solid rgba(255, 255, 255, 0.9);
-  box-shadow: 0 8px 28px rgba(37, 204, 93, 0.14), 0 2px 8px rgba(0, 0, 0, 0.05), inset 0 1.5px 0 rgba(255, 255, 255, 0.98);
+  border: 2rpx solid rgba(255, 255, 255, 0.9);
+  box-shadow:
+    0 16rpx 56rpx rgba(37, 204, 93, 0.14),
+    0 4rpx 16rpx rgba(0, 0, 0, 0.05),
+    inset 0 3rpx 0 rgba(255, 255, 255, 0.98);
 }
-.hud-label { font-size: 10px; color: #9bb8a8; font-weight: 500; margin-bottom: 2px; display: block; }
+.hud-label {
+  font-size: 20rpx;
+  color: #9bb8a8;
+  font-weight: 500;
+  margin-bottom: 4rpx;
+  display: block;
+}
 .hud-amount {
-  font-size: 30px;
+  font-size: 60rpx;
   font-weight: 900;
   color: #25cc5d;
-  letter-spacing: -1.5;
+  letter-spacing: -3rpx;
   line-height: 1;
 }
 .hud-amount.over-amount { color: #ff6b6b; }
-.hud-spent { font-size: 10.5px; color: #828a99; font-weight: 500; display: block; margin-bottom: 8px; }
+.hud-spent {
+  font-size: 21rpx;
+  color: #828a99;
+  font-weight: 500;
+  display: block;
+  margin-bottom: 16rpx;
+}
 .hud-bar {
-  height: 5px;
-  border-radius: 3px;
+  height: 10rpx;
+  border-radius: 6rpx;
   background: rgba(37, 204, 93, 0.14);
   overflow: hidden;
 }
 .hud-bar.over-bar { background: rgba(255, 107, 107, 0.14); }
 .bar-grow-inner {
   height: 100%;
-  border-radius: 3px;
+  border-radius: 6rpx;
   transition: width 0.8s cubic-bezier(0.34, 1.2, 0.64, 1);
 }
 
 /* 今日消费 */
 .stats-panel {
-  margin-top: 12px;
+  margin-top: 24rpx;
 }
-.stats-title { font-size: 11px; color: #9bb8a8; font-weight: 600; display: block; margin-bottom: 8px; }
-.stats-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.stats-title {
+  font-size: 22rpx;
+  color: #9bb8a8;
+  font-weight: 600;
+  display: block;
+  margin-bottom: 16rpx;
+}
+.stats-chips { display: flex; flex-wrap: wrap; gap: 12rpx; }
 .stat-chip {
   display: flex;
   align-items: center;
-  gap: 3px;
-  padding: 4px 9px;
-  border-radius: 20px;
-  font-size: 11px;
+  gap: 6rpx;
+  padding: 8rpx 18rpx;
+  border-radius: 40rpx;
+  font-size: 22rpx;
   font-weight: 600;
   color: #3a5244;
 }
-.stats-total { margin-top: 8px; margin-bottom: 4px; font-size: 11px; color: #9bb8a8; display: block; }
+.stats-total {
+  margin-top: 16rpx;
+  margin-bottom: 8rpx;
+  font-size: 22rpx;
+  color: #9bb8a8;
+  display: block;
+}
 .stats-total .strong { font-weight: 700; color: #3a5244; }
 .stats-total .over-total { color: #ff6b6b; }
 </style>

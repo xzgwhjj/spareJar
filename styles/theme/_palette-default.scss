@@ -1,0 +1,42 @@
+/**
+ * 余钱罐默认主题色板（经典绿）
+ * 换肤：复制本文件为 _palette-xxx.scss，改色值后在 _skins.scss 注册即可
+ */
+
+/* 品牌绿阶 */
+$sj-g0: #f2fcf2 !default;
+$sj-g1: #e1fae3 !default;
+$sj-g2: #c2f2c8 !default;
+$sj-g3: #89e59c !default;
+$sj-g4: #4fd974 !default;
+$sj-g5: #25cc5d !default;
+
+/* 文字 */
+$sj-ink: #0f1c14 !default;
+$sj-ink2: #3a5244 !default;
+$sj-ink3: #6b8c7a !default;
+$sj-ink4: #9bb8a8 !default;
+
+/* 语义色 */
+$sj-red: #ff6b6b !default;
+$sj-red-bg: rgba(255, 107, 107, 0.1) !default;
+$sj-amber: #f59e0b !default;
+$sj-amber-bg: rgba(245, 158, 11, 0.1) !default;
+
+/* 极光 / 背景辅助色 */
+$sj-aurora-top: #c8f4d0 !default;
+$sj-aurora-halo: #a8efc0 !default;
+$sj-blob-light: #b8f0c2 !default;
+
+/* 品牌主色（用于 rgba($sj-brand, 0.x)） */
+$sj-brand: $sj-g5 !default;
+
+/* 品牌 RGB 字符串（仅用于 CSS 变量 --brand-rgb，勿用于 Sass rgba()） */
+$sj-brand-rgb: 37, 204, 93 !default;
+
+/* 字体与圆角 */
+$sj-font-family: 'Inter', -apple-system, 'PingFang SC', 'Helvetica Neue', sans-serif !default;
+$sj-radius-xl: 20px !default;
+$sj-radius-lg: 16px !default;
+$sj-radius-md: 14px !default;
+$sj-radius-pill: 999px !default;

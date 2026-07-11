@@ -74,3 +74,60 @@ $uni-color-subtitle: #555555; // 二级标题颜色
 $uni-font-size-subtitle:26px;
 $uni-color-paragraph: #3F536E; // 文章段落颜色
 $uni-font-size-paragraph:15px;
+
+/* ========== 余钱罐主题（与 styles/theme/_palette-default.scss 保持同步）========== */
+$sj-g0: #f2fcf2 !default;
+$sj-g1: #e1fae3 !default;
+$sj-g2: #c2f2c8 !default;
+$sj-g3: #89e59c !default;
+$sj-g4: #4fd974 !default;
+$sj-g5: #25cc5d !default;
+$sj-ink: #0f1c14 !default;
+$sj-ink2: #3a5244 !default;
+$sj-ink3: #6b8c7a !default;
+$sj-ink4: #9bb8a8 !default;
+$sj-red: #ff6b6b !default;
+$sj-red-bg: rgba(255, 107, 107, 0.1) !default;
+$sj-amber: #f59e0b !default;
+$sj-amber-bg: rgba(245, 158, 11, 0.1) !default;
+$sj-aurora-top: #c8f4d0 !default;
+$sj-aurora-halo: #a8efc0 !default;
+$sj-blob-light: #b8f0c2 !default;
+$sj-brand: $sj-g5 !default;
+$sj-brand-rgb: 37, 204, 93 !default;
+$sj-font-family: 'Inter', -apple-system, 'PingFang SC', 'Helvetica Neue', sans-serif !default;
+$sj-radius-xl: 20px !default;
+$sj-radius-lg: 16px !default;
+$sj-radius-md: 14px !default;
+$sj-radius-pill: 999px !default;
+
+
+@mixin sj-theme-css-vars {
+  --g0: #{$sj-g0};
+  --g1: #{$sj-g1};
+  --g2: #{$sj-g2};
+  --g3: #{$sj-g3};
+  --g4: #{$sj-g4};
+  --g5: #{$sj-g5};
+  --ink: #{$sj-ink};
+  --ink2: #{$sj-ink2};
+  --ink3: #{$sj-ink3};
+  --ink4: #{$sj-ink4};
+  --red-soft: #{$sj-red};
+  --red-bg: #{$sj-red-bg};
+  --amber: #{$sj-amber};
+  --amber-bg: #{$sj-amber-bg};
+  --brand-rgb: #{$sj-brand-rgb};
+}
+@mixin sj-brand-gradient($deg: 135deg) {
+  background: linear-gradient($deg, $sj-g4, $sj-g5);
+}
+@mixin sj-brand-gradient-h($deg: 90deg) {
+  background: linear-gradient($deg, $sj-g3, $sj-g5);
+}
+@mixin sj-text-primary { color: $sj-ink; }
+@mixin sj-text-secondary { color: $sj-ink2; }
+@mixin sj-text-muted { color: $sj-ink3; }
+@mixin sj-text-hint { color: $sj-ink4; }
+@mixin sj-brand-text { color: $sj-g5; }
+@mixin sj-danger-text { color: $sj-red; }

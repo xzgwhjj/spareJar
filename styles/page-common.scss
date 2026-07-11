@@ -1,0 +1,15 @@
+/**
+ * 页面级公共样式（按需引入，不要放进 uni.scss，否则会打进每个页面包）
+ *
+ * 用法（在 pages/xxx/xxx.vue 的 style 中）：
+ * @import '../../styles/page-common.scss';
+ *
+ * 若只需玻璃卡片：
+ * @import '../../styles/common/glass.scss';
+ * （glass 依赖色板，需先引入 palette 或本文件的 page-common）
+ */
+@import './theme/palette-default.scss';
+@import './theme/mixins.scss';
+@import './common/glass.scss';
+@import './common/aurora.scss';
+@import './common/animations.scss';

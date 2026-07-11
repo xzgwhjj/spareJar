@@ -1,4 +1,5 @@
 <template>
+  <view class="index-root">
   <view class="index-page" data-cmp="Index">
     <!-- 极光背景 -->
     <view class="aurora-bg-wrap">
@@ -72,15 +73,15 @@
 
       <view style="height:24px;" />
     </scroll-view>
+  </view>
 
-    <!-- 底部导航栏 -->
-    <TabBar current-tab="home" />
+  <TabBar :current="0" />
   </view>
 </template>
 
 <script setup>
 import { ref } from 'vue';
-import TabBar from '@/components/TabBar.vue';
+import TabBar from '@/components/tabbar/tabbar.vue';
 import TopBar from './components/TopBar.vue';
 import BudgetGaugeCard from './components/BudgetGaugeCard.vue';
 import SurplusBanner from './components/SurplusBanner.vue';
@@ -108,6 +109,11 @@ const goSurplusHistory = () => {
 </script>
 
 <style scoped>
+.index-root {
+  position: relative;
+  min-height: 100vh;
+}
+
 .index-page {
   max-width: 375px;
   min-height: 812px;
@@ -116,7 +122,6 @@ const goSurplusHistory = () => {
   position: relative;
   background: #f2fcf2;
   font-family: 'Inter', -apple-system, 'PingFang SC', 'Helvetica Neue', sans-serif;
-  transform: translateX(0);
 }
 
 /* 刷新指示器 */

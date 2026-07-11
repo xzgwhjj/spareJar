@@ -13,14 +13,17 @@
       <view class="profile-hero">
         <view class="avatar-ring">
           <view class="avatar-inner">
-            <text class="avatar-emoji">🐶</text>
+            <text class="avatar-emoji">{{ isGuest ? '👤' : '🐶' }}</text>
           </view>
         </view>
-        <text class="profile-name">余钱罐用户</text>
-        <text class="profile-meta">已坚持记账 128 天 · 连续 23 天</text>
+        <text class="profile-name">{{ isGuest ? '游客' : displayName }}</text>
+        <text class="profile-meta">{{ isGuest ? '登录后同步你的记账数据' : profileMeta }}</text>
+        <view v-if="isGuest" class="profile-login-btn" @click="goLogin">
+          <text>微信登录</text>
+        </view>
       </view>
 
-      <!-- 统计卡片 -->
+      <view v-if="!isGuest">
       <view class="glass-mid" style="margin:0 16px 16px;padding:16px;">
         <view class="stats-row">
           <view v-for="s in userStats" :key="s.label" class="stat-block">
@@ -37,6 +40,13 @@
           <view class="menu-left">
             <text class="menu-icon">{{ m.icon }}</text>
             <text class="menu-label">{{ m.label }}</text>
+          </view>
+          <text class="menu-arrow">›</text>
+        </view>
+        <view class="menu-item glass-thin menu-item-logout" style="margin:0 16px 0;border-radius:0;" @click="handleLogout">
+          <view class="menu-left">
+            <text class="menu-icon">🚪</text>
+            <text class="menu-label logout-label">退出登录</text>
           </view>
           <text class="menu-arrow">›</text>
         </view>
@@ -67,6 +77,7 @@
       </view>
 
       <view style="height:40px;" />
+      </view>
     </scroll-view>
 
     <!-- 规则设置弹窗 -->
@@ -134,20 +145,31 @@
       </view>
     </view>
 
-    <!-- TabBar -->
-    <TabBar current-tab="profile" />
   </view>
 </template>
 
 <script setup>
-import { ref } from 'vue';
-import TabBar from '@/components/TabBar.vue';
+import { ref, computed } from 'vue';
+import { useUserStore } from '@/stores/user.js';
+
+const { isGuest, state, currentStreak, logout } = useUserStore();
 
 const activeSheet = ref(null);
 const dailyLimit = ref('200');
 const surplusRule = ref('pool');
 const penaltyRule = ref('reduce');
 const feedbackText = ref('');
+
+const displayName = computed(() => {
+  const user = state.user;
+  if (user && user.nickname) return user.nickname;
+  return '余钱罐用户';
+});
+
+const profileMeta = computed(() => {
+  const streak = currentStreak.value;
+  return streak > 0 ? `连续记账 ${streak} 天` : '开始你的记账之旅';
+});
 
 const userStats = [
   { label: '总记账', value: '1,248', color: '#25cc5d' },
@@ -162,7 +184,29 @@ const menuItems = [
   { icon: '🗑️', label: '清理数据', action: () => {} },
 ];
 
-const goLimitSetting = () => uni.navigateTo({ url: '/pages/limit-setting/limit-setting' });
+const goLimitSetting = () => {
+  if (isGuest.value) {
+    goLogin();
+    return;
+  }
+  uni.navigateTo({ url: '/pages/limit-setting/limit-setting' });
+};
+
+const goLogin = () => uni.navigateTo({ url: '/pages/login/login' });
+
+function handleLogout() {
+  uni.showModal({
+    title: '退出登录',
+    content: '退出后将回到游客模式，本地登录信息会被清除，下次启动不会自动登录。',
+    confirmText: '退出',
+    confirmColor: '#ff6b6b',
+    success(res) {
+      if (!res.confirm) return;
+      logout();
+      uni.showToast({ title: '已退出登录', icon: 'none' });
+    },
+  });
+}
 </script>
 
 <style scoped>
@@ -173,6 +217,15 @@ const goLimitSetting = () => uni.navigateTo({ url: '/pages/limit-setting/limit-s
 .avatar-emoji { font-size: 36px; }
 .profile-name { font-size: 18px; font-weight: 800; color: #0f1c14; margin-top: 12px; }
 .profile-meta { font-size: 12px; color: #9bb8a8; margin-top: 4px; }
+.profile-login-btn {
+  margin-top: 16px;
+  padding: 10px 28px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #4fd974, #25cc5d);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+}
 
 .stats-row { display: flex; }
 .stat-block { flex: 1; text-align: center; }
@@ -187,6 +240,8 @@ const goLimitSetting = () => uni.navigateTo({ url: '/pages/limit-setting/limit-s
 .menu-left { display: flex; align-items: center; gap: 10px; }
 .menu-icon { font-size: 16px; }
 .menu-label { font-size: 14px; font-weight: 600; color: #0f1c14; }
+.logout-label { color: #ff6b6b; }
+.menu-item-logout { margin-top: 8px !important; border-radius: 14px !important; }
 .menu-arrow { font-size: 18px; color: #c2f2c8; }
 
 /* Sheet */

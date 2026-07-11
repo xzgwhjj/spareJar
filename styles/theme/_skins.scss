@@ -1,0 +1,9 @@
+/**
+ * 主题皮肤注册
+ * 默认：page 即经典绿
+ * 后续换肤：page.theme-xxx { @import palette-xxx; @include sj-theme-css-vars; }
+ */
+
+page {
+  @include sj-theme-css-vars;
+}

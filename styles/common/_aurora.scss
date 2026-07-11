@@ -1,0 +1,114 @@
+.aurora-bg-wrap {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.aurora-bg-base {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    $sj-aurora-top 0%,
+    #d8f8e0 6%,
+    #eafbec 14%,
+    #f7fef8 24%,
+    #ffffff 38%,
+    #fdfffd 60%,
+    #f8fef9 80%,
+    #edfbf0 100%
+  );
+}
+
+.aurora-top-halo {
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 380px;
+  height: 220px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 30%, $sj-aurora-halo 0%, $sj-g2 28%, $sj-g1 55%, transparent 75%);
+  opacity: 0.72;
+  filter: blur(38px);
+}
+
+.aurora-band-1 {
+  position: absolute;
+  top: -30px;
+  left: -60px;
+  width: 300px;
+  height: 110px;
+  background: linear-gradient(90deg, transparent, $sj-g2 40%, $sj-g3 65%, transparent);
+  border-radius: 70px;
+  opacity: 0.55;
+  filter: blur(22px);
+  animation: aurora-drift-1 9s ease-in-out infinite alternate;
+}
+
+.aurora-band-2 {
+  position: absolute;
+  top: 60px;
+  right: -60px;
+  width: 250px;
+  height: 80px;
+  background: linear-gradient(90deg, transparent, #a6eec0 40%, $sj-g2 65%, transparent);
+  border-radius: 60px;
+  opacity: 0.42;
+  filter: blur(26px);
+  animation: aurora-drift-2 12s ease-in-out infinite alternate;
+}
+
+.blob-top-l {
+  position: absolute;
+  top: -20px;
+  left: -15px;
+  width: 210px;
+  height: 210px;
+  border-radius: 60% 40% 70% 30% / 42% 58% 42% 58%;
+  background: radial-gradient(circle, $sj-g2, transparent 68%);
+  opacity: 0.28;
+  filter: blur(42px);
+  animation: blob-float-a 14s ease-in-out infinite alternate;
+}
+
+.blob-top-r {
+  position: absolute;
+  top: 50px;
+  right: -20px;
+  width: 180px;
+  height: 180px;
+  border-radius: 42% 58% 30% 70% / 60% 40% 60% 40%;
+  background: radial-gradient(circle, $sj-blob-light, transparent 66%);
+  opacity: 0.22;
+  filter: blur(40px);
+  animation: blob-float-b 11s ease-in-out infinite alternate;
+}
+
+.blob-mid {
+  position: absolute;
+  top: 42%;
+  left: -40px;
+  width: 200px;
+  height: 200px;
+  border-radius: 55% 45% 40% 60% / 55% 45% 55% 45%;
+  background: radial-gradient(circle, rgba($sj-brand, 0.2), transparent 65%);
+  opacity: 0.4;
+  filter: blur(50px);
+  animation: blob-float-a 18s ease-in-out infinite alternate-reverse;
+}
+
+.blob-bot {
+  position: absolute;
+  bottom: 60px;
+  right: -20px;
+  width: 200px;
+  height: 200px;
+  border-radius: 45% 55% 60% 40% / 58% 42% 58% 42%;
+  background: radial-gradient(circle, rgba($sj-brand, 0.15), transparent 65%);
+  opacity: 0.35;
+  filter: blur(45px);
+  animation: blob-float-b 16s ease-in-out infinite alternate;
+}

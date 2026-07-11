@@ -1,0 +1,10 @@
+/**
+ * App.vue 全局样式（仅 App 引入一次，避免打进每个页面）
+ */
+@import './theme/palette-default.scss';
+@import './theme/mixins.scss';
+@import './theme/skins.scss';
+@import './common/base.scss';
+@import './common/glass.scss';
+@import './common/aurora.scss';
+@import './common/animations.scss';

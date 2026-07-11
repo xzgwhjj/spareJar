@@ -1,9 +1,11 @@
 <template>
-  <view class="topbar" data-cmp="TopBar">
+  <view class="topbar" :style="topbarStyle" data-cmp="TopBar">
     <view class="topbar-left">
       <view class="topbar-greeting">
+        <!-- 待：替换成小狗版天气图，根据天气情况显示不同图标 -->
+      <!-- 待：替换成小狗版连续打卡图标，根据连续打卡天数显示不同图标 -->
         <text class="greeting-icon">☀️</text>
-        <text class="greeting-text">早上好</text>
+        <text class="greeting-text">第7天</text>
       </view>
       <view class="topbar-date">
         <view class="date-bar" />
@@ -12,26 +14,50 @@
       </view>
     </view>
 
-    <view class="streak-badge badge-pulse">
-      <text class="streak-icon">🔥</text>
-      <text class="streak-num">第7天</text>
-      <text class="streak-star">★</text>
-    </view>
 
     <view class="topbar-right">
-      <view class="refresh-btn" @click="$emit('refresh')">
-        <text class="refresh-icon">⟳</text>
-      </view>
-      <view class="avatar-btn" @click="goProfile">
-        <text class="avatar-icon">👤</text>
+      <view class="avatar-btn" :class="{ guest: isGuest }" @click="onAvatarClick">
+        <!-- 待：替换成小狗版头像图标，根据是否登录显示不同图标 -->
+        <text class="avatar-icon">{{ isGuest ? '👤' : '✓' }}</text>
       </view>
     </view>
   </view>
 </template>
 
 <script setup>
+import { useUserStore } from '@/stores/user.js';
+import { onMounted, ref } from 'vue';
+
 defineEmits(['refresh']);
-const goProfile = () => uni.switchTab({ url: '/pages/profile/profile' });
+
+const { isLoggedIn, isGuest } = useUserStore();
+
+function resolveTopPadding() {
+  try {
+    const menuButton = uni.getMenuButtonBoundingClientRect();
+    if (menuButton?.bottom > 0) {
+      const gap = uni.upx2px(16);
+      return `${menuButton.bottom + gap}px`;
+    }
+  } catch (_) { }
+
+  const { statusBarHeight = 0 } = uni.getSystemInfoSync();
+  return `${statusBarHeight + uni.upx2px(88)}px`;
+}
+
+const topbarStyle = ref({ paddingTop: resolveTopPadding() });
+
+onMounted(() => {
+  topbarStyle.value = { paddingTop: resolveTopPadding() };
+});
+
+function onAvatarClick() {
+  if (isLoggedIn.value) {
+    uni.switchTab({ url: '/pages/profile/profile' });
+  } else {
+    uni.navigateTo({ url: '/pages/login/login' });
+  }
+}
 </script>
 
 <style scoped>
@@ -41,57 +67,98 @@ const goProfile = () => uni.switchTab({ url: '/pages/profile/profile' });
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 52px 18px 0;
+  padding: 0 36rpx 0;
 }
-.topbar-left {}
+
+.topbar-left {
+  min-width: 0;
+}
+
 .topbar-greeting {
   display: flex;
   align-items: center;
-  gap: 7px;
-  margin-bottom: 2px;
+  gap: 14rpx;
+  margin-bottom: 4rpx;
 }
-.greeting-icon { font-size: 13px; color: #25cc5d; }
-.greeting-text { font-size: 12px; color: #6b8c7a; font-weight: 500; }
+
+.greeting-icon {
+  font-size: 26rpx;
+  color: var(--g5);
+}
+
+.greeting-text {
+  font-size: 24rpx;
+  color: var(--ink3);
+  font-weight: 500;
+}
+
 .topbar-date {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 12rpx;
 }
+
 .date-bar {
-  width: 3px;
-  height: 16px;
-  border-radius: 3px;
-  background: linear-gradient(180deg, #4fd974, #25cc5d);
+  width: 6rpx;
+  height: 32rpx;
+  border-radius: 6rpx;
+  background: linear-gradient(180deg, var(--g4), var(--g5));
   flex-shrink: 0;
 }
-.date-text { font-size: 15px; font-weight: 700; color: #0f1c14; }
-.weekday-text { font-size: 12px; color: #9bb8a8; font-weight: 400; }
 
-.topbar-right { display: flex; align-items: center; gap: 8px; }
-.refresh-btn {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(37, 204, 93, 0.22);
+.date-text {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.weekday-text {
+  font-size: 24rpx;
+  color: var(--ink4);
+  font-weight: 400;
+}
+
+.topbar-right {
   display: flex;
   align-items: center;
-  justify-content: center;
-  cursor: pointer;
+  gap: 16rpx;
 }
-.refresh-icon { font-size: 14px; color: #25cc5d; }
+
+.refresh-btn {
+  width: 60rpx;
+  height: 60rpx;
+}
+
+.refresh-icon {
+  font-size: 28rpx;
+  color: var(--g5);
+}
+
 .avatar-btn {
-  width: 38px;
-  height: 38px;
+  width: 76rpx;
+  height: 76rpx;
   border-radius: 50%;
   overflow: hidden;
-  border: 1.5px solid rgba(37, 204, 93, 0.4);
-  background: linear-gradient(135deg, #89e59c, #4fd974);
+  border: 3rpx solid rgba(37, 204, 93, 0.4);
+  background: linear-gradient(135deg, var(--g3), var(--g4));
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 10px rgba(37, 204, 93, 0.2);
-  cursor: pointer;
+  box-shadow: 0 4rpx 20rpx rgba(37, 204, 93, 0.2);
 }
-.avatar-icon { font-size: 12px; color: #fff; }
+
+.avatar-icon {
+  font-size: 24rpx;
+  color: #fff;
+}
+
+.avatar-btn.guest {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(155, 184, 168, 0.5);
+  box-shadow: none;
+}
+
+.avatar-btn.guest .avatar-icon {
+  color: var(--ink4);
+}
 </style>

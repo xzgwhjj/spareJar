@@ -169,13 +169,13 @@
     </view>
 
     <!-- TabBar -->
-    <TabBar current-tab="book" />
+    <TabBar :current="1" />
   </view>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue';
-import TabBar from '@/components/TabBar.vue';
+import TabBar from '@/components/tabbar/tabbar.vue';
 
 const PAGE_TABS = [
   { key: 'ledger', label: '账本', icon: '📖' },

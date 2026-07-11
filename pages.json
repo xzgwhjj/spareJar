@@ -8,6 +8,13 @@
       }
     },
     {
+      "path": "pages/login/login",
+      "style": {
+        "navigationBarTitleText": "登录",
+        "navigationStyle": "custom"
+      }
+    },
+    {
       "path": "pages/ledger/ledger",
       "style": {
         "navigationBarTitleText": "账本",
@@ -87,9 +94,6 @@
   ],
   "tabBar": {
     "custom": true,
-    "color": "#b0c8bc",
-    "selectedColor": "#25cc5d",
-    "backgroundColor": "rgba(255,255,255,0.92)",
     "list": [
       {
         "pagePath": "pages/index/index",
@@ -100,22 +104,22 @@
         "text": "账本"
       },
       {
+        "pagePath": "pages/add-record/add-record",
+        "text": "记一笔"
+      },
+      {
         "pagePath": "pages/challenge/challenge",
         "text": "挑战"
       },
       {
         "pagePath": "pages/wish/wish",
         "text": "心愿"
-      },
-      {
-        "pagePath": "pages/profile/profile",
-        "text": "我的"
       }
     ]
   },
   "globalStyle": {
     "navigationBarTextStyle": "black",
-    "navigationBarTitleText": "余钱罐",
+    "navigationBarTitleText": "余钱贯",
     "navigationBarBackgroundColor": "#F2FCF2",
     "backgroundColor": "#F2FCF2"
   },

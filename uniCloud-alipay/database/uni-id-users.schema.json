@@ -1,0 +1,54 @@
+{
+  "bsonType": "object",
+  "required": [],
+  "permission": {
+    "read": "doc._id == auth.uid",
+    "create": false,
+    "update": "doc._id == auth.uid",
+    "delete": false
+  },
+  "properties": {
+    "_id": {
+      "description": "用户 ID，微信小程序为 openid"
+    },
+    "wx_openid": {
+      "bsonType": "string",
+      "description": "微信 openid",
+      "maxLength": 64
+    },
+    "wx_unionid": {
+      "bsonType": "string",
+      "description": "微信 unionid",
+      "maxLength": 64
+    },
+    "nickname": {
+      "bsonType": "string",
+      "maxLength": 64
+    },
+    "avatar": {
+      "bsonType": "string",
+      "maxLength": 512
+    },
+    "register_date": {
+      "bsonType": "timestamp",
+      "description": "注册时间"
+    },
+    "last_login_date": {
+      "bsonType": "timestamp",
+      "description": "最后登录时间"
+    },
+    "last_login_ip": {
+      "bsonType": "string",
+      "maxLength": 64
+    },
+    "token": {
+      "bsonType": "array",
+      "description": "有效 token 列表"
+    },
+    "status": {
+      "bsonType": "int",
+      "description": "0 正常",
+      "defaultValue": 0
+    }
+  }
+}

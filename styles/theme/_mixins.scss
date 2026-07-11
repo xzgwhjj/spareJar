@@ -1,0 +1,53 @@
+/**
+ * 主题 mixin：CSS 变量注入 + 常用样式片段
+ */
+
+@mixin sj-theme-css-vars {
+  --g0: #{$sj-g0};
+  --g1: #{$sj-g1};
+  --g2: #{$sj-g2};
+  --g3: #{$sj-g3};
+  --g4: #{$sj-g4};
+  --g5: #{$sj-g5};
+  --ink: #{$sj-ink};
+  --ink2: #{$sj-ink2};
+  --ink3: #{$sj-ink3};
+  --ink4: #{$sj-ink4};
+  --red-soft: #{$sj-red};
+  --red-bg: #{$sj-red-bg};
+  --amber: #{$sj-amber};
+  --amber-bg: #{$sj-amber-bg};
+  --brand-rgb: #{$sj-brand-rgb};
+}
+
+@mixin sj-brand-gradient($deg: 135deg) {
+  background: linear-gradient($deg, $sj-g4, $sj-g5);
+}
+
+@mixin sj-brand-gradient-h($deg: 90deg) {
+  background: linear-gradient($deg, $sj-g3, $sj-g5);
+}
+
+@mixin sj-text-primary {
+  color: $sj-ink;
+}
+
+@mixin sj-text-secondary {
+  color: $sj-ink2;
+}
+
+@mixin sj-text-muted {
+  color: $sj-ink3;
+}
+
+@mixin sj-text-hint {
+  color: $sj-ink4;
+}
+
+@mixin sj-brand-text {
+  color: $sj-g5;
+}
+
+@mixin sj-danger-text {
+  color: $sj-red;
+}

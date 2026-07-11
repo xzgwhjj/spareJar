@@ -1,0 +1,6 @@
+/**
+ * 供 uni.scss 注入：各页面可直接使用 $sj-* 变量与 @include mixin
+ * 注意：此处只用相对路径 + .scss 后缀，不要用 @/ 别名（Vite 下 scss @import 可能解析失败）
+ */
+@import './palette-default.scss';
+@import './mixins.scss';

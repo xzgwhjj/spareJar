@@ -114,13 +114,13 @@
     </view>
 
     <!-- TabBar -->
-    <TabBar current-tab="wish" />
+    <TabBar :current="4" />
   </view>
 </template>
 
 <script setup>
 import { ref, reactive } from 'vue';
-import TabBar from '@/components/TabBar.vue';
+import TabBar from '@/components/tabbar/tabbar.vue';
 
 const poolBalance = 3240;
 
