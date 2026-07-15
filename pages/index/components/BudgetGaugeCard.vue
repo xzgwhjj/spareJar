@@ -5,9 +5,11 @@
 
     <!-- 标题行 -->
     <view class="gauge-header">
+      <!-- 待：符合风格的余钱罐图标 -->
       <text class="gauge-header-icon">💰</text>
       <text class="gauge-header-title">今日余钱罐</text>
       <view class="limit-btn" @click="goLimitSetting">
+        <!-- 待：符合风格的限额图标 -->
         <text class="limit-btn-icon">🎯</text>
         <text class="limit-btn-text">限额 ¥{{ DAILY_LIMIT }}</text>
         <text class="limit-btn-arrow">›</text>
@@ -26,7 +28,7 @@
       </view>
 
       <!-- 悬浮面板 -->
-      <view class="panel-float">
+      <view class="panel-float" :style="{ outline: isOver ? ' 2rpx solid rgba(255,107,107,0.18)' : '2rpx solid rgba(37,204,93,0.18)', boxShadow: isOver ? '0 16rpx 56rpx rgba(255,107,107,0.14),0 2px 8px rgba(0,0,0,0.05), inset 0 1.5px 0 rgba(255,255,255,0.98)' : '0 16rpx 56rpx rgba(37,204,93,0.2),0 2px 8px rgba(0,0,0,0.07), inset 0 1.5px 0 rgba(255,255,255,0.98)' }">
         <view class="hud-inner">
           <text class="hud-label">还可花</text>
           <text class="hud-amount" :class="{ 'over-amount': isOver }">¥{{ LEFT_TODAY }}</text>
@@ -74,6 +76,7 @@ defineProps({
 const DAILY_LIMIT = 200;
 const SPENT_TODAY = 81;
 const LEFT_TODAY = DAILY_LIMIT - SPENT_TODAY;
+// 待：符合风格的消费图标（餐饮、交通、饮品、日用等）
 const BILLS = [
   { id: 'b1', icon: '🍜', bg: '#FFF3E0', name: '午饭拉面', cat: '餐饮', time: '12:30', amount: -28 },
   { id: 'b2', icon: '🚇', bg: '#E3F2FD', name: '地铁通勤', cat: '交通', time: '08:15', amount: -6 },
@@ -151,10 +154,12 @@ const goLimitSetting = () => uni.navigateTo({ url: '/pages/limit-setting/limit-s
   justify-content: center;
   align-items: flex-end;
   min-height: 387rpx;
+  padding-left: 16rpx;
 }
 .jar-wrapper {
   position: relative;
   z-index: 1;
+  margin-left: -48rpx;
 }
 .jar-limit-text {
   margin-top: 4rpx;
@@ -169,17 +174,22 @@ const goLimitSetting = () => uni.navigateTo({ url: '/pages/limit-setting/limit-s
   right: 0;
   bottom: 72rpx;
   z-index: 10;
-  width: 296rpx;
-  padding: 24rpx 28rpx 20rpx;
+  width: 260rpx;
+  padding: 20rpx 22rpx 16rpx;
   border-radius: 36rpx;
   background: rgba(255, 255, 255, 0.75);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   border: 2rpx solid rgba(255, 255, 255, 0.9);
-  box-shadow:
-    0 16rpx 56rpx rgba(37, 204, 93, 0.14),
-    0 4rpx 16rpx rgba(0, 0, 0, 0.05),
-    inset 0 3rpx 0 rgba(255, 255, 255, 0.98);
+  outline-offset: -1;
+  animation: panel-float-kf 4.5s ease-in-out infinite;
+}
+
+/* 悬浮面板弹跳动画 */
+@keyframes panel-float-kf {
+  0%   { transform: rotate(2.5deg) translateY(0); }
+  50%  { transform: rotate(2.5deg) translateY(-6rpx); }
+  100% { transform: rotate(2.5deg) translateY(0); }
 }
 .hud-label {
   font-size: 20rpx;

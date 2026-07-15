@@ -3,8 +3,7 @@
     <view class="topbar-left">
       <view class="topbar-greeting">
         <!-- 待：替换成小狗版天气图，根据天气情况显示不同图标 -->
-      <!-- 待：替换成小狗版连续打卡图标，根据连续打卡天数显示不同图标 -->
-        <text class="greeting-icon">☀️</text>
+        <image src="/static/images/icon_sunny.png" class="greeting-icon"></image>
         <text class="greeting-text">第7天</text>
       </view>
       <view class="topbar-date">
@@ -82,8 +81,8 @@ function onAvatarClick() {
 }
 
 .greeting-icon {
-  font-size: 26rpx;
-  color: var(--g5);
+  width: 26rpx;
+  height: 26rpx;
 }
 
 .greeting-text {

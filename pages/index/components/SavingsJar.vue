@@ -181,7 +181,7 @@ onUnmounted(() => {
 
 <style scoped>
 .savings-jar {
-  width: 480rpx;
+  width: 540rpx;
   filter: drop-shadow(0 36rpx 80rpx rgba(37, 204, 93, 0.2))
     drop-shadow(0 8rpx 20rpx rgba(0, 0, 0, 0.07));
 }
@@ -193,8 +193,8 @@ onUnmounted(() => {
 
 .jar-stage {
   position: relative;
-  width: 480rpx;
-  height: 420rpx;
+  width: 540rpx;
+  height: 473rpx;
 }
 
 .lottie-canvas {
