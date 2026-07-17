@@ -1,6 +1,7 @@
 'use strict'
 
 const dbApi = require('sparejar-db')
+const uniID = require('uni-id-common')
 
 function getUid(event, context) {
   return event.user_id || context.CLIENTINFO && context.CLIENTINFO.uid || context.auth && context.auth.uid
@@ -16,6 +17,18 @@ function fail(message, code = 400) {
 
 exports.main = async (event, context) => {
   const { action, data = {} } = event
+
+  // 定时任务走内部调度，跳过 token 鉴权
+  if (action !== 'cronDailySettlement') {
+    const uniIdIns = uniID.createInstance({ context })
+    const tokenRes = await uniIdIns.checkToken(event.uniIdToken)
+    if (tokenRes.errCode !== 0) {
+      return fail('unauthorized', 401)
+    }
+    // 将校验出的 uid（即 openid）注入 event，供 getUid 使用
+    event.user_id = tokenRes.uid
+  }
+
   const userId = getUid(event, context)
 
   if (!userId && action !== 'cronDailySettlement') {

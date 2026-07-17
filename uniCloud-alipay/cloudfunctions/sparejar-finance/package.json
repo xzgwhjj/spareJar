@@ -4,7 +4,9 @@
   "description": "余钱罐财务业务云函数入口",
   "main": "index.js",
   "dependencies": {
-    "sparejar-db": "file:../common/sparejar-db"
+    "sparejar-db": "file:../common/sparejar-db",
+    "uni-config-center": "file:../../../uni_modules/uni-config-center/uniCloud/cloudfunctions/common/uni-config-center",
+    "uni-id-common": "file:../../../uni_modules/uni-id-common/uniCloud/cloudfunctions/common/uni-id-common"
   },
   "cloudfunction-config": {
     "memorySize": 256,

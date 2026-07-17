@@ -15,9 +15,10 @@
 
 
     <view class="topbar-right">
-      <view class="avatar-btn" :class="{ guest: isGuest }" @click="onAvatarClick">
+      <view class="avatar-btn" :class="{ guest: isGuest }" @tap="onAvatarClick">
         <!-- 待：替换成小狗版头像图标，根据是否登录显示不同图标 -->
-        <text class="avatar-icon">{{ isGuest ? '👤' : '✓' }}</text>
+        <image :src="isGuest ? '/static/images/icon_avatar.png' : '/static/images/icon_avatar.png'" class="avatar-icon" mode="aspectFit">
+        </image>
       </view>
     </view>
   </view>
@@ -52,7 +53,7 @@ onMounted(() => {
 
 function onAvatarClick() {
   if (isLoggedIn.value) {
-    uni.switchTab({ url: '/pages/profile/profile' });
+    uni.navigateTo({ url: '/pages/profile/profile' });
   } else {
     uni.navigateTo({ url: '/pages/login/login' });
   }
@@ -139,7 +140,7 @@ function onAvatarClick() {
   border-radius: 50%;
   overflow: hidden;
   border: 3rpx solid rgba(37, 204, 93, 0.4);
-  background: linear-gradient(135deg, var(--g3), var(--g4));
+  /* background: linear-gradient(135deg, var(--g3), var(--g4)); */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -147,12 +148,12 @@ function onAvatarClick() {
 }
 
 .avatar-icon {
-  font-size: 24rpx;
-  color: #fff;
+  width: 50rpx;
+  height: 30rpx;
 }
 
 .avatar-btn.guest {
-  background: rgba(255, 255, 255, 0.92);
+  /* background: rgba(255, 255, 255, 0.92); */
   border-color: rgba(155, 184, 168, 0.5);
   box-shadow: none;
 }

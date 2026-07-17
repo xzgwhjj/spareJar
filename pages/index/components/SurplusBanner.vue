@@ -85,6 +85,7 @@ const goAlloc = () => uni.navigateTo({ url: '/pages/surplus-alloc/surplus-alloc'
 </script>
 
 <style scoped lang="scss">
+
 /* ===== SCSS 变量 ===== */
 $radius-card: 48rpx;
 
@@ -160,10 +161,10 @@ $radius-card: 48rpx;
   width: 144rpx;
   height: 72rpx;
   border-radius: 20rpx;
-  @include flex-center(column);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 2rpx;
   padding: 8rpx 12rpx;
-  @include glass(32rpx, rgba(255, 255, 255, 0.72));
+  background: rgba(255, 255, 255, 0.72); backdrop-filter: blur(32rpx); -webkit-backdrop-filter: blur(32rpx); border: 2rpx solid rgba(255, 255, 255, 0.7);
   border: 3rpx solid rgba(37, 204, 93, 0.15);
   border-bottom: none;
   box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.04), inset 0 2rpx 0 rgba(255, 255, 255, 0.88);
@@ -245,7 +246,7 @@ $radius-card: 48rpx;
   flex-wrap: wrap;
   align-items: center;
   gap: 16rpx 20rpx;
-  @include glass(44rpx, rgba(255, 255, 255, 0.46));
+  background: rgba(255, 255, 255, 0.46); backdrop-filter: blur(44rpx); -webkit-backdrop-filter: blur(44rpx); border: 2rpx solid rgba(255, 255, 255, 0.7);
   border: 2rpx solid rgba(255, 255, 255, 0.68);
   box-shadow:
     0 8rpx 48rpx rgba(var(--g5), 0.1),
