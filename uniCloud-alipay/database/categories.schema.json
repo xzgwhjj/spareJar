@@ -28,7 +28,12 @@
         "expense",
         "income"
       ],
-      "description": "分类类型"
+      "description": "一级大类：支出/收入"
+    },
+    "group": {
+      "bsonType": "string",
+      "description": "二级分组码(中层)，按 type 隔离，如 fixed/variable/lifestyle/leisure/medical/education/social/unexpected 或 active/passive/transfer/occasional",
+      "maxLength": 32
     },
     "name": {
       "bsonType": "string",

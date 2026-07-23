@@ -1,25 +1,106 @@
 'use strict'
 
+// 二级分组码（中层），按 type 隔离；前端用 code→{名称,图标} 不可变 map 展示
 const PRESET_EXPENSE_CATEGORIES = [
-  { name: '餐饮', icon: '🍜', sort_order: 1 },
-  { name: '交通', icon: '🚌', sort_order: 2 },
-  { name: '购物', icon: '🛒', sort_order: 3 },
-  { name: '居住', icon: '🏠', sort_order: 4 },
-  { name: '娱乐', icon: '🎮', sort_order: 5 },
-  { name: '医疗', icon: '💊', sort_order: 6 },
-  { name: '教育', icon: '📚', sort_order: 7 },
-  { name: '人情', icon: '🎁', sort_order: 8 },
-  { name: '其他', icon: '📦', sort_order: 9 }
+  // 日常固定开销 fixed
+  { group: 'fixed', name: '房租', icon: '🏠', sort_order: 1 },
+  { group: 'fixed', name: '房贷', icon: '🏦', sort_order: 2 },
+  { group: 'fixed', name: '车贷', icon: '🚗', sort_order: 3 },
+  { group: 'fixed', name: '水费', icon: '💧', sort_order: 4 },
+  { group: 'fixed', name: '电费', icon: '💡', sort_order: 5 },
+  { group: 'fixed', name: '燃气费', icon: '🔥', sort_order: 6 },
+  { group: 'fixed', name: '物业费', icon: '🏢', sort_order: 7 },
+  { group: 'fixed', name: '宽带网络', icon: '🌐', sort_order: 8 },
+  { group: 'fixed', name: '固定话费', icon: '📱', sort_order: 9 },
+  { group: 'fixed', name: '长期保险', icon: '🛡️', sort_order: 10 },
+  { group: 'fixed', name: '订阅会员', icon: '📺', sort_order: 11 },
+  // 日常变动开销 variable
+  { group: 'variable', name: '餐饮', icon: '🍜', sort_order: 1 },
+  { group: 'variable', name: '外卖', icon: '🥡', sort_order: 2 },
+  { group: 'variable', name: '咖啡奶茶', icon: '🧋', sort_order: 3 },
+  { group: 'variable', name: '生鲜超市', icon: '🛒', sort_order: 4 },
+  { group: 'variable', name: '便利店', icon: '🏪', sort_order: 5 },
+  { group: 'variable', name: '交通', icon: '🚌', sort_order: 6 },
+  { group: 'variable', name: '打车', icon: '🚕', sort_order: 7 },
+  { group: 'variable', name: '加油', icon: '⛽', sort_order: 8 },
+  { group: 'variable', name: '停车费', icon: '🅿️', sort_order: 9 },
+  { group: 'variable', name: '通讯费', icon: '📞', sort_order: 10 },
+  { group: 'variable', name: '快递', icon: '📦', sort_order: 11 },
+  // 生活改善类 lifestyle
+  { group: 'lifestyle', name: '服饰', icon: '👕', sort_order: 1 },
+  { group: 'lifestyle', name: '鞋包', icon: '👟', sort_order: 2 },
+  { group: 'lifestyle', name: '美容美发', icon: '💇', sort_order: 3 },
+  { group: 'lifestyle', name: '护肤化妆', icon: '💄', sort_order: 4 },
+  { group: 'lifestyle', name: '家居用品', icon: '🛋️', sort_order: 5 },
+  { group: 'lifestyle', name: '厨具', icon: '🍳', sort_order: 6 },
+  { group: 'lifestyle', name: '数码电器', icon: '📱', sort_order: 7 },
+  // 休闲娱乐类 leisure
+  { group: 'leisure', name: '旅游', icon: '✈️', sort_order: 1 },
+  { group: 'leisure', name: '酒店住宿', icon: '🏨', sort_order: 2 },
+  { group: 'leisure', name: '电影演出', icon: '🎬', sort_order: 3 },
+  { group: 'leisure', name: '游戏', icon: '🎮', sort_order: 4 },
+  { group: 'leisure', name: '运动健身', icon: '🏋️', sort_order: 5 },
+  { group: 'leisure', name: '爱好手工', icon: '🎨', sort_order: 6 },
+  { group: 'leisure', name: '宠物用品', icon: '🐱', sort_order: 7 },
+  { group: 'leisure', name: '书籍杂志', icon: '📚', sort_order: 8 },
+  // 医疗健康类 medical
+  { group: 'medical', name: '门诊', icon: '🏥', sort_order: 1 },
+  { group: 'medical', name: '药品', icon: '💊', sort_order: 2 },
+  { group: 'medical', name: '体检', icon: '🩺', sort_order: 3 },
+  { group: 'medical', name: '医疗险', icon: '🛡️', sort_order: 4 },
+  { group: 'medical', name: '牙科', icon: '🦷', sort_order: 5 },
+  // 教育成长类 education
+  { group: 'education', name: '学费', icon: '🎓', sort_order: 1 },
+  { group: 'education', name: '培训课程', icon: '📖', sort_order: 2 },
+  { group: 'education', name: '网课', icon: '💻', sort_order: 3 },
+  { group: 'education', name: '考试报名', icon: '📝', sort_order: 4 },
+  { group: 'education', name: '育儿早教', icon: '👶', sort_order: 5 },
+  // 人情社交类 social
+  { group: 'social', name: '礼金份子', icon: '🧧', sort_order: 1 },
+  { group: 'social', name: '聚会请客', icon: '🍻', sort_order: 2 },
+  { group: 'social', name: '人情往来', icon: '🎁', sort_order: 3 },
+  { group: 'social', name: '捐赠公益', icon: '❤️', sort_order: 4 },
+  // 意外损失 unexpected
+  { group: 'unexpected', name: '维修费', icon: '🔧', sort_order: 1 },
+  { group: 'unexpected', name: '罚款', icon: '💸', sort_order: 2 },
+  { group: 'unexpected', name: '遗失损坏', icon: '💔', sort_order: 3 },
+  { group: 'unexpected', name: '其他', icon: '📦', sort_order: 4 }
 ]
 
 const PRESET_INCOME_CATEGORIES = [
-  { name: '工资', icon: '💰', sort_order: 1 },
-  { name: '兼职', icon: '💼', sort_order: 2 },
-  { name: '理财收益', icon: '📈', sort_order: 3 },
-  { name: '红包', icon: '🧧', sort_order: 4 },
-  { name: '退款', icon: '↩️', sort_order: 5 },
-  { name: '其他', icon: '📦', sort_order: 6 }
+  // 主动收入 active
+  { group: 'active', name: '工资薪资', icon: '💰', sort_order: 1 },
+  { group: 'active', name: '奖金', icon: '🏆', sort_order: 2 },
+  { group: 'active', name: '绩效', icon: '📊', sort_order: 3 },
+  { group: 'active', name: '兼职', icon: '💼', sort_order: 4 },
+  { group: 'active', name: '劳务报酬', icon: '🤝', sort_order: 5 },
+  { group: 'active', name: '稿费', icon: '🖊️', sort_order: 6 },
+  { group: 'active', name: '经营收入', icon: '🏪', sort_order: 7 },
+  // 被动收入 passive
+  { group: 'passive', name: '房租收入', icon: '🏠', sort_order: 1 },
+  { group: 'passive', name: '理财收益', icon: '📈', sort_order: 2 },
+  { group: 'passive', name: '股息分红', icon: '💹', sort_order: 3 },
+  { group: 'passive', name: '利息', icon: '🏦', sort_order: 4 },
+  { group: 'passive', name: '版权版税', icon: '📜', sort_order: 5 },
+  { group: 'passive', name: '投资回报', icon: '💎', sort_order: 6 },
+  // 转移性收入 transfer
+  { group: 'transfer', name: '退款', icon: '↩️', sort_order: 1 },
+  { group: 'transfer', name: '报销', icon: '🧾', sort_order: 2 },
+  { group: 'transfer', name: '礼金收受', icon: '🧧', sort_order: 3 },
+  { group: 'transfer', name: '政府补贴', icon: '🏛️', sort_order: 4 },
+  { group: 'transfer', name: '赔偿金', icon: '💼', sort_order: 5 },
+  { group: 'transfer', name: '赡养资助', icon: '🤲', sort_order: 6 },
+  // 其他偶然收入 occasional
+  { group: 'occasional', name: '中奖', icon: '🎰', sort_order: 1 },
+  { group: 'occasional', name: '二手转卖', icon: '🔄', sort_order: 2 },
+  { group: 'occasional', name: '红包', icon: '🧧', sort_order: 3 },
+  { group: 'occasional', name: '其他', icon: '📦', sort_order: 4 }
 ]
+
+// name→group 查表，供老数据回填（历史预置分类缺 group 时补齐）
+const PRESET_CATEGORY_GROUP = {}
+for (const c of PRESET_EXPENSE_CATEGORIES) PRESET_CATEGORY_GROUP[`expense:${c.name}`] = c.group
+for (const c of PRESET_INCOME_CATEGORIES) PRESET_CATEGORY_GROUP[`income:${c.name}`] = c.group
 
 const DEFAULT_LEDGER = {
   name: '总账本',
@@ -513,32 +594,50 @@ async function applyOverLimitPenalty(userId, dateKey, settlement) {
   await db.collection('daily_settlements').doc(settlement._id).update({ penalty_applied: true })
 }
 
+/**
+ * 幂等确保某集合存在一条 user_id 归属的文档；已存在则直接返回，避免重复插入。
+ * @returns {Promise<object>} 已存在文档或新建文档（含 _id）
+ */
+async function ensureDoc(collection, userId, buildDoc) {
+  const existing = await getDocByUser(collection, userId)
+  if (existing) return existing
+  const doc = buildDoc()
+  const res = await getDb().collection(collection).add(doc)
+  return { _id: res.id, ...doc }
+}
+
 async function initUser(userId, profile = {}) {
-  const db = getDb()
-  const existing = await getDocByUser('users', userId)
-  if (existing) return { created: false, user: existing }
-
   const ts = nowTs()
-  const userDoc = {
-    user_id: userId,
-    nickname: profile.nickname || '',
-    avatar_url: profile.avatar_url || '',
-    timezone: profile.timezone || 'Asia/Shanghai',
-    onboarding_done: false,
-    onboarding_step: 0,
-    is_guest: false,
-    jar_skin_id: 'classic_glass',
-    jar_skins_unlocked: ['classic_glass'],
-    zodiac: profile.zodiac || null,
-    constellation: profile.constellation || null,
-    birthday: profile.birthday || null,
-    created_at: ts,
-    updated_at: ts,
-    deleted_at: null
-  }
-  await db.collection('users').add(userDoc)
 
-  await db.collection('user_settings').add({
+  // users 档案：独立幂等，created 标记仅用于返回语义
+  const existingUser = await getDocByUser('users', userId)
+  let userDoc = existingUser
+  let isNew = false
+  if (!existingUser) {
+    userDoc = {
+      user_id: userId,
+      nickname: profile.nickname || '',
+      avatar_url: profile.avatar_url || '',
+      timezone: profile.timezone || 'Asia/Shanghai',
+      onboarding_done: false,
+      onboarding_step: 0,
+      is_guest: false,
+      jar_skin_id: 'classic_glass',
+      jar_skins_unlocked: ['classic_glass'],
+      zodiac: profile.zodiac || null,
+      constellation: profile.constellation || null,
+      birthday: profile.birthday || null,
+      created_at: ts,
+      updated_at: ts,
+      deleted_at: null
+    }
+    const res = await getDb().collection('users').add(userDoc)
+    userDoc = { _id: res.id, ...userDoc }
+    isNew = true
+  }
+
+  // 以下各实体独立幂等创建，任意一步中途失败都不影响其余，重试可补齐
+  await ensureDoc('user_settings', userId, () => ({
     user_id: userId,
     daily_base_limit: 10000,
     pending_base_limit: null,
@@ -558,19 +657,18 @@ async function initUser(userId, profile = {}) {
     penalty_streak_deduct: 1,
     asset_view_mode: 'disposable',
     updated_at: ts
-  })
+  }))
 
-  await db.collection('surplus_pools').add({ user_id: userId, balance: 0, total_in: 0, total_out: 0, updated_at: ts })
-  await db.collection('savings_pools').add({
-    user_id: userId,
-    balance: 0,
-    total_in: 0,
-    total_out: 0,
-    month_withdrawn: 0,
-    withdraw_month_key: null,
-    updated_at: ts
-  })
-  await db.collection('user_streaks').add({
+  await ensureDoc('surplus_pools', userId, () => ({
+    user_id: userId, balance: 0, total_in: 0, total_out: 0, updated_at: ts
+  }))
+
+  await ensureDoc('savings_pools', userId, () => ({
+    user_id: userId, balance: 0, total_in: 0, total_out: 0,
+    month_withdrawn: 0, withdraw_month_key: null, updated_at: ts
+  }))
+
+  await ensureDoc('user_streaks', userId, () => ({
     user_id: userId,
     daily_current_streak: 0,
     daily_max_streak: 0,
@@ -578,46 +676,52 @@ async function initUser(userId, profile = {}) {
     last_fail_date_key: null,
     penalty_streak_deducted: 0,
     updated_at: ts
-  })
+  }))
 
-  const ledgerRes = await db.collection('ledgers').add({
+  const ledger = await ensureDoc('ledgers', userId, () => ({
     user_id: userId,
     ...DEFAULT_LEDGER,
     created_at: ts
-  })
+  }))
 
+  // 预置分类：按 type+name 去重，重复登录不会插入重复分类
+  const existingCats = await getDb().collection('categories')
+    .where({ user_id: userId })
+    .field({ name: true, type: true, group: true, is_system: true, _id: true })
+    .get()
+  const have = new Set()
+  const backfillUpdates = []
+  for (const c of (existingCats.data || [])) {
+    have.add(`${c.type}:${c.name}`)
+    // 老数据回填：系统预置分类若缺 group，按 name→group 查表补上
+    if (c.is_system && !c.group) {
+      const g = PRESET_CATEGORY_GROUP[`${c.type}:${c.name}`]
+      if (g) backfillUpdates.push({ _id: c._id, group: g })
+    }
+  }
+  for (const u of backfillUpdates) {
+    await getDb().collection('categories').doc(u._id).update({ group: u.group })
+  }
   const categoryDocs = []
   for (const c of PRESET_EXPENSE_CATEGORIES) {
+    if (have.has(`expense:${c.name}`)) continue
     categoryDocs.push({
-      user_id: userId,
-      type: 'expense',
-      name: c.name,
-      icon: c.icon,
-      is_system: true,
-      is_hidden: false,
-      sort_order: c.sort_order,
-      merged_to_id: null,
-      created_at: ts
+      user_id: userId, type: 'expense', group: c.group, name: c.name, icon: c.icon,
+      is_system: true, is_hidden: false, sort_order: c.sort_order, merged_to_id: null, created_at: ts
     })
   }
   for (const c of PRESET_INCOME_CATEGORIES) {
+    if (have.has(`income:${c.name}`)) continue
     categoryDocs.push({
-      user_id: userId,
-      type: 'income',
-      name: c.name,
-      icon: c.icon,
-      is_system: true,
-      is_hidden: false,
-      sort_order: c.sort_order,
-      merged_to_id: null,
-      created_at: ts
+      user_id: userId, type: 'income', group: c.group, name: c.name, icon: c.icon,
+      is_system: true, is_hidden: false, sort_order: c.sort_order, merged_to_id: null, created_at: ts
     })
   }
   for (const doc of categoryDocs) {
-    await db.collection('categories').add(doc)
+    await getDb().collection('categories').add(doc)
   }
 
-  return { created: true, user: userDoc, default_ledger_id: ledgerRes.id }
+  return { created: isNew, user: userDoc, default_ledger_id: ledger._id }
 }
 
 async function createTransaction(userId, data) {

@@ -33,3 +33,15 @@
     0 1px 4px rgba(0, 0, 0, 0.03),
     inset 0 1px 0 rgba(255, 255, 255, 0.94);
 }
+
+.glass-thin-2 {
+  border-radius: $sj-radius-lg;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(36rpx) saturate(1.3);
+  -webkit-backdrop-filter: blur(36rpx) saturate(1.3);
+  border: 2rpx solid rgba(255, 255, 255, 0.5);
+  box-shadow:
+    0 6rpx 40rpx rgba($sj-brand, 0.1),
+    0 10rpx 16rpx rgba(0, 0, 0, 0.10),
+    inset 0 2rpx 0 rgba(255, 255, 255, 0.94);
+}

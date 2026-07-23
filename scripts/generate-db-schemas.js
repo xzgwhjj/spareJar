@@ -198,7 +198,8 @@ writeSchema('categories', {
   properties: {
     _id: { description: 'PK' },
     user_id: { ...strField(64, '用户 openid'), ...fk('users', 'user_id') },
-    type: enumField(['expense', 'income'], '分类类型'),
+    type: enumField(['expense', 'income'], '一级大类：支出/收入'),
+    group: strField(32, '二级分组码(中层)，按 type 隔离，如 fixed/variable 或 active/passive'),
     name: strField(32, '分类名'),
     icon: { ...strField(64, '图标'), defaultValue: '📦' },
     is_system: { ...boolField('系统预置'), defaultValue: false },
@@ -210,7 +211,7 @@ writeSchema('categories', {
 })
 writeIndex('categories', [
   idx('uk_user_type_name', [{ name: 'user_id', type: 'varchar' }, { name: 'type', type: 'varchar' }, { name: 'name', type: 'varchar' }], true),
-  idx('idx_user_type_hidden', [{ name: 'user_id', type: 'varchar' }, { name: 'type', type: 'varchar' }, { name: 'is_hidden', type: 'bool' }, { name: 'sort_order', type: 'int' }])
+  idx('idx_user_type_group', [{ name: 'user_id', type: 'varchar' }, { name: 'type', type: 'varchar' }, { name: 'group', type: 'varchar' }, { name: 'is_hidden', type: 'bool' }, { name: 'sort_order', type: 'int' }])
 ])
 
 // ========== ledgers ==========

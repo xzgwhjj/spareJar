@@ -23,7 +23,7 @@
     }
   },
   {
-    "IndexName": "idx_user_type_hidden",
+    "IndexName": "idx_user_type_group",
     "MgoKeySchema": {
       "MgoIndexKeys": [
         {
@@ -33,6 +33,11 @@
         },
         {
           "Name": "type",
+          "Direction": "1",
+          "Type": "varchar"
+        },
+        {
+          "Name": "group",
           "Direction": "1",
           "Type": "varchar"
         },

@@ -90,17 +90,20 @@ $sj-ink4: #9bb8a8 !default;
 $sj-red: #ff6b6b !default;
 $sj-red-bg: rgba(255, 107, 107, 0.1) !default;
 $sj-amber: #f59e0b !default;
+$sj-amber2: #fcd34d !default;
 $sj-amber-bg: rgba(245, 158, 11, 0.1) !default;
+$sj-blue: #93c5fd !default;
 $sj-aurora-top: #c8f4d0 !default;
 $sj-aurora-halo: #a8efc0 !default;
 $sj-blob-light: #b8f0c2 !default;
 $sj-brand: $sj-g5 !default;
 $sj-brand-rgb: 37, 204, 93 !default;
 $sj-font-family: 'Inter', -apple-system, 'PingFang SC', 'Helvetica Neue', sans-serif !default;
-$sj-radius-xl: 20px !default;
-$sj-radius-lg: 16px !default;
-$sj-radius-md: 14px !default;
+$sj-radius-xl: 40rpx !default;
+$sj-radius-lg: 32rpx !default;
+$sj-radius-md: 28rpx !default;
 $sj-radius-pill: 999px !default;
+
 
 @mixin sj-theme-css-vars {
   --g0: #{$sj-g0};
@@ -117,8 +120,12 @@ $sj-radius-pill: 999px !default;
   --red-soft: #{$sj-red};
   --red-bg: #{$sj-red-bg};
   --amber: #{$sj-amber};
+  --amber2: #{$sj-amber2};
   --amber-bg: #{$sj-amber-bg};
+  --blue: #{$sj-blue};
   --brand-rgb: #{$sj-brand-rgb};
+  --radius-xl: #{$sj-radius-xl};
+  --radius-lg: #{$sj-radius-lg};
 }
 @mixin sj-brand-gradient($deg: 135deg) {
   background: linear-gradient($deg, $sj-g4, $sj-g5);
@@ -142,9 +149,9 @@ $sj-radius-pill: 999px !default;
   justify-content: center;
 }
 
-@mixin sj-glass($blur: 32rpx, $tint: rgba(255, 255, 255, 0.72)) {
+@mixin sj-glass($blur: 32rpx, $tint: rgba(255, 255, 255, 0.72), $border: rgba(255, 255, 255, 0.3)) {
   background: $tint;
   backdrop-filter: blur($blur);
   -webkit-backdrop-filter: blur($blur);
-  border: 2rpx solid rgba(255, 255, 255, 0.7);
+  border: 2rpx solid $border;
 }
