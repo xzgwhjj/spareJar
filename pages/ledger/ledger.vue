@@ -1,5 +1,8 @@
 <template>
   <view class="ledger-page" data-cmp="LedgerPage" :style="{ paddingTop: pagePaddingTop }">
+    <!-- 离屏画布：仅供封面主色提取使用（不可见） -->
+    <canvas type="2d" id="coverColorCanvas" class="cover-color-canvas"></canvas>
+
     <!-- 极光背景 -->
     <view class="aurora-bg-wrap">
       <view class="aurora-bg-base" />
@@ -133,7 +136,7 @@
         <!-- 账本列表标题 -->
         <view class="section-header">
           <view class="section-title-grp">
-            <!-- 待：图标替换 -->
+            <!-- 待：图标替换，叠起来的书本图标 -->
             <text class="section-icon">📚</text>
             <text class="section-title">{{ multiSelect ? '选择账本' : '我的账本' }}</text>
           </view>
@@ -142,7 +145,7 @@
               <text>{{ multiSelect ? '完成' : '删除' }}</text>
             </view>
             <template v-if="!multiSelect">
-              <view class="add-btn" @click="showNewLedger = true">
+              <view class="add-btn" @click="openNewLedger">
                 <text>+ 新增账本</text>
               </view>
               <view class="list-toggle" :class="{ active: listGrid }" @click="listGrid = !listGrid">
@@ -154,19 +157,25 @@
           </view>
         </view>
 
-        <!-- 账本列表：列表 / 田字格 两种布局，随 listGrid 互斥切换 -->
-        <view class="ledger-list" :class="listGrid ? 'is-grid' : 'is-list'">
+        <!-- 账本列表：列表 / 田字格 两种布局，随 listGrid 互斥切换。
+             外层 scroll-view 在账本数量超出可视区时独立纵向滚动（性能优化：enhanced + 隐藏滚动条）；
+             数据较少时 max-height 不触发，高度自适应，不出现多余空白滚动区 -->
+        <scroll-view class="ledger-list-scroll" scroll-y enhanced :show-scrollbar="false" enable-flex>
+          <view class="ledger-list" :class="listGrid ? 'is-grid' : 'is-list'">
           <view v-for="l in ledgerViews" :key="l._id" class="ledger-card-wrap">
             <view class="ledger-card-bg"></view>
-            <view class="ledger-card card-item" @click="multiSelect ? toggleSelect(l) : openLedgerSheet(l)">
-              <!-- 多选模式：卡片左侧复选框（总账本不可选） -->
-              <view v-if="multiSelect && !l.is_system" class="ledger-check"
+            <view class="ledger-card card-item" @click="onCardClick(l)" @longpress="onCardLongPress(l)">
+              <!-- 多选模式：卡片左侧复选框（仿 Uiverse radio-button，总账本不可选） -->
+              <label v-if="multiSelect && !l.is_system" class="ledger-check"
                 :class="{ checked: selectedIds.includes(l._id) }" @click.stop="toggleSelect(l)">
-                <text v-if="selectedIds.includes(l._id)" class="ledger-check-mark">✓</text>
-              </view>
+                <input class="ledger-check-input" type="checkbox" :id="'chk-' + l._id"
+                  :checked="selectedIds.includes(l._id)">
+                <span class="ledger-check-custom"></span>
+              </label>
+              <!-- 底层内容：封面 + 信息 + 操作入口（始终渲染，正常态显示） -->
               <!-- 封面图：田字格时铺满卡片背景，列表时作左侧封面块 -->
-              <image src="/static/images/icon_cover.png" mode="aspectFill" class="ledger-cover"></image>
-              <!-- 右侧内容栏：名称+类型 与 收支/操作 同处一行（左名右收支），进度条在下方 -->
+              <image :src="l.cover || '/static/images/icon_cover.png'" mode="aspectFill" class="ledger-cover"></image>
+              <!-- 右侧内容栏：名称+类型 与 收支同处一行（左名右收支），进度条在下方 -->
               <view class="ledger-body">
                 <!-- 田字格下：该面板作为毛玻璃容器收纳除 badge 外的全部字段，框体随内容收缩 -->
                 <view class="ledger-panel">
@@ -174,7 +183,9 @@
                     <view class="ledger-info">
                       <view class="ledger-name-row">
                         <text class="ledger-name">{{ l.name }}</text>
-                        <text class="ledger-type" :class="l.type">{{ l.type === 'master' ? '主账本' : '子账本' }}</text>
+                        <!-- 类型徽标：主账本用原 CSS 绿；子账本改用封面提取的主题色（背景 12% 透明 + 同色文字） -->
+                        <text class="ledger-type" :class="l.type"
+                          :style="coverTheme(l) ? { background: hexToRgba(coverTheme(l), 0.12), color: coverTheme(l) } : null">{{ l.type === 'master' ? '主账本' : '子账本' }}</text>
                       </view>
                       <text class="ledger-meta">{{ l.records }}笔</text>
                     </view>
@@ -182,26 +193,35 @@
                       <text class="balance-num inc">+¥{{ fmt(l.income) }}</text>
                       <text class="balance-sub exp">-¥{{ fmt(l.expense) }}</text>
                     </view>
-                    <view v-if="!l.is_system && !multiSelect" class="ledger-actions">
-                      <view class="ledger-act" @click.stop="openEdit(l)" hover-class="ledger-act-hover"><text>✏️</text>
-                      </view>
-                      <view class="ledger-act" @click.stop="openDelete(l)" hover-class="ledger-act-hover"><text>🗑️</text>
-                      </view>
-                    </view>
+                    <!-- 待：图标替换 -->
                   </view>
                   <view class="ledger-bar-wrap">
                     <text class="ledger-bar-label">
                       <text class="bar-dim">{{ dimWord(l.dim) }}</text>用 ¥{{ fmt(l.spent) }} / 限 ¥{{ fmt(l.limit) }}
                     </text>
-                    <view class="ledger-bar" :style="{ '--base': l.color }">
+                    <view class="ledger-bar" :style="{ '--base': coverTheme(l) || l.color }">
                       <view class="ledger-bar-fill" :style="{ width: l.pct + '%' }" />
                     </view>
                   </view>
                 </view>
               </view>
+              <!-- 操作入口：右上角「⋯」更多按钮（点击或长按卡片均可就地切换操作形态） -->
+              <view v-if="!multiSelect" class="ledger-more-float" @click.stop="toggleMenu(l)"
+                hover-class="ledger-more-hover">
+                <text class="ledger-more-dot">⋯</text>
+              </view>
+              <!-- 操作形态：覆盖账本内容的遮罩层，正中居中 tabs 操作按钮（仿 Uiverse tabs+glider） -->
+              <view v-if="!multiSelect && openMenuId === l._id" class="ledger-action" @click.stop="cancelAction">
+                <view class="tabs" @click.stop>
+                  <view v-if="l.type !== 'master'" class="tab" :class="{ active: actionTab === 'delete' }" @click.stop="onMenuDelete(l)">删除</view>
+                  <view class="tab" :class="{ active: actionTab === 'edit' }" @click.stop="onMenuEdit(l)">编辑</view>
+                  <view class="glider" :class="l.type === 'master' ? 'gl-left' : (actionTab === 'delete' ? 'gl-left' : 'gl-right')"></view>
+                </view>
+              </view>
             </view>
           </view>
         </view>
+        </scroll-view>
       </view>
 
       <!-- TAB: 资产 -->
@@ -268,18 +288,21 @@
             style="padding:24rpx 20rpx;text-align:center;">
             <text style="font-size:56rpx;display:block;">{{ s.emoji }}</text>
             <text style="font-size:20rpx;color:var(--ink2);font-weight:600;display:block;margin-top:8rpx;">{{ s.name
-              }}</text>
+            }}</text>
             <text style="font-size:18rpx;color:var(--ink4);">已用 {{ s.used }} 次</text>
           </view>
         </view>
       </view>
+
+      <!-- 底部留白：避免列表最后一项被固定 TabBar 遮挡 -->
+      <view class="list-bottom-gap" />
     </scroll-view>
 
     <!-- 多选批量操作栏 -->
     <view v-if="multiSelect" class="batch-bar">
       <view class="batch-info">
         <text class="batch-count">已选 {{ selectedIds.length }} 个</text>
-        <text v-if="selectedIds.length === 0" class="batch-hint">点击卡片勾选要删除的账本</text>
+        <text v-if="selectedIds.length === 0" class="batch-hint">勾选要删除的账本</text>
       </view>
       <view class="batch-actions">
         <view class="batch-btn batch-cancel" @click="exitMultiSelect"><text>取消</text></view>
@@ -316,22 +339,155 @@
       </view>
     </view>
 
-    <!-- 新增账本弹窗 -->
+    <!-- 新增账本弹窗：四模块表单（封面 / 名称 / 简介 / 系统默认图） -->
     <view v-if="showNewLedger" class="sheet-overlay" @click="showNewLedger = false">
       <view class="sheet-panel" @click.stop>
         <view class="sheet-handle">
           <view class="handle-bar" />
         </view>
         <text class="sheet-title">新建账本</text>
-        <input class="sheet-input" v-model="newLedgerName" placeholder="输入账本名称" />
-        <view class="icon-grid">
-          <view v-for="ic in LEDGER_ICONS" :key="ic" class="icon-cell" :class="{ active: newLedgerIcon === ic }"
-            @click="newLedgerIcon = ic"><text>{{ ic }}</text></view>
+
+        <!-- 2. 名称 -->
+        <view class="form-label">名称</view>
+        <input class="sheet-input" :class="{ focused: nameFocused }" v-model="newLedgerName" placeholder="输入账本名称"
+          maxlength="32" @focus="nameFocused = true" @blur="nameFocused = false" />
+
+        <!-- 封面 + 系统默认图：左右横向布局（左 3:4 封面 / 右 图标网格） -->
+        <view class="cover-icon-row">
+          <!-- 左：封面（3:4） -->
+          <view class="cover-col">
+            <view class="form-label">封面</view>
+            <view class="cover-upload" :class="{ pressed: coverPressed }" @click="chooseCover('new')"
+              @touchstart="coverPressed = true" @touchend="coverPressed = false" @touchcancel="coverPressed = false">
+              <image v-if="newLedgerCover" class="cover-img" :src="newLedgerCover" mode="aspectFill" />
+              <view v-else class="cover-placeholder">
+                <image class="cover-default" :src="COVER_PLACEHOLDER" mode="aspectFill" />
+                <text class="cover-tip">点击从相册选择</text>
+              </view>
+              <view v-if="newLedgerCover" class="cover-remove" @click.stop="removeCover('new')">×</view>
+            </view>
+          </view>
+          <!-- 右：系统默认图网格 -->
+          <view class="icon-col">
+            <view class="form-label">选择图标</view>
+            <view class="icon-grid">
+              <view v-for="ic in LEDGER_ICONS" :key="ic" class="icon-cell" :class="{ active: newLedgerIcon === ic }"
+                @click="pickSystemIcon(ic, 'new')">
+                <image v-if="isImg(ic)" class="icon-img" :src="ic" mode="aspectFill" />
+                <text v-else>{{ ic }}</text>
+              </view>
+            </view>
+          </view>
         </view>
-        <view class="sheet-btn" @click="createLedger">
-          <text>创建账本</text>
+
+        <!-- 4. 主题色：1）封面自动取色 2）自定义 -->
+        <view class="form-label">主题色</view>
+        <view class="color-opts">
+          <!-- 选项1：根据封面自动提取主题色 -->
+          <view class="color-opt" :class="{ active: newLedgerColorMode === 'auto' }"
+            @click="newLedgerColorMode = 'auto'">
+            <view class="color-opt-ico">
+              <image v-if="newLedgerCover" :src="newLedgerCover" mode="aspectFill" class="color-opt-img" />
+              <text v-else class="color-opt-auto">封</text>
+            </view>
+            <text class="color-opt-label">封面取色</text>
+          </view>
+
+          <!-- 选项2：自定义颜色选择器 -->
+          <view class="color-opt" :class="{ active: newLedgerColorMode === 'custom' }"
+            @click="openCustomColor">
+            <view class="color-opt-ico" :style="{ background: newLedgerColor }">
+            </view>
+            <text class="color-opt-label">自定义</text>
+          </view>
+        </view>
+
+        <!-- 封面取色色卡：提取真实配色，用户直接点选所需颜色 -->
+        <view v-if="newLedgerColorMode === 'auto'" class="color-preview">
+          <text v-if="newLedgerCover && coverPalette.length" class="color-preview-tip">从封面提取的配色中选取主题色：</text>
+          <view v-if="newLedgerCover && coverPalette.length" class="swatch-row">
+            <view v-for="c in coverPalette" :key="c" class="swatch"
+              :class="{ active: selectedAutoColor === c }"
+              :style="{ background: c, '--sel': c, '--sel-glow': hexToRgba(c, 0.3) }"
+              @click="selectedAutoColor = c"></view>
+          </view>
+          <text v-if="newLedgerCover && coverPalette.length" class="color-preview-text">已选：{{ selectedAutoColor }}</text>
+          <text v-else class="color-preview-tip">选择封面后将自动提取配色，可点击色卡选取主题色</text>
+        </view>
+
+        <!-- 3. 简介（多行文本） -->
+        <view class="form-label">简介</view>
+        <textarea class="sheet-textarea" :class="{ focused: descFocused }" v-model="newLedgerDesc"
+          placeholder="添加一段描述，方便日后回忆" maxlength="200" @focus="descFocused = true" @blur="descFocused = false" />
+
+        <view class="sheet-btn" :style="{ '--fill': fillRatio }" @click="onSubmit">
+          <text class="sheet-btn__base">创建账本</text>
+          <view class="sheet-btn__fill">
+            <view class="sheet-btn__fill-txt">创建账本</view>
+          </view>
         </view>
       </view>
+    </view>
+
+    <!-- 自定义颜色选择器弹窗（HSV 拖动取色，跨端通用） -->
+    <view v-if="showColorPicker" class="cp-overlay" @click="showColorPicker = false">
+      <view class="cp-panel" @click.stop>
+        <text class="cp-title">自定义颜色</text>
+        <!-- 饱和度/明度方块 -->
+        <view class="cp-sv" @touchstart="onSvStart" @touchmove="onSvMove" :style="svStyle">
+          <view class="cp-sv-cursor" :style="svCursorStyle"></view>
+        </view>
+        <!-- 色相滑块 -->
+        <view class="cp-hue" @touchstart="onHueStart" @touchmove="onHueMove" :style="hueStyle">
+          <view class="cp-hue-cursor" :style="hueCursorStyle"></view>
+        </view>
+        <!-- 预览 + hex -->
+        <view class="cp-preview">
+          <view class="cp-preview-dot" :style="{ background: cpHex }"></view>
+          <text class="cp-hex">{{ cpHex }}</text>
+        </view>
+        <view class="cp-actions">
+          <view class="cp-cancel" @click="showColorPicker = false">取消</view>
+          <view class="cp-confirm" @click="confirmCustomColor">确定</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 图片裁剪弹窗：非 3:4 图片交互式裁剪为 3:4 -->
+    <view v-if="showCropper" class="crop-overlay" @click.stop>
+      <view class="crop-panel" @click.stop>
+        <view class="crop-head">裁剪为 3:4</view>
+
+        <!-- 舞台：图片居中显示，3:4 裁剪框可拖动 -->
+        <view class="crop-stage" :style="stageStyle" @touchstart="onCropTouchStart" @touchmove="onCropTouchMove"
+          @touchend="onCropTouchEnd">
+          <image class="crop-img" :src="cropSrc" :style="imgStyle" />
+          <view class="crop-box" :style="boxStyle">
+            <view class="crop-grid" />
+          </view>
+        </view>
+
+        <!-- 缩放 -->
+        <view class="crop-row">
+          <text class="crop-row-label">缩放</text>
+          <slider class="crop-slider" :value="zoom" min="0" max="100" block-size="20" @changing="onCropZoom"
+            @change="onCropZoom" />
+        </view>
+
+        <!-- 预览 -->
+        <view class="crop-row">
+          <text class="crop-row-label">预览</text>
+          <view class="crop-prev">
+            <image class="crop-prev-img" :src="cropSrc" :style="previewStyle" />
+          </view>
+        </view>
+
+        <view class="crop-actions">
+          <view class="crop-btn crop-cancel" @click="cancelCrop"><text>取消</text></view>
+          <view class="crop-btn crop-ok" @click="confirmCrop"><text>确认裁剪</text></view>
+        </view>
+      </view>
+      <canvas type="2d" id="cropExport" class="crop-export-canvas" />
     </view>
 
     <!-- 编辑账本弹窗 -->
@@ -341,11 +497,39 @@
           <view class="handle-bar" />
         </view>
         <text class="sheet-title">编辑账本</text>
-        <input class="sheet-input" v-model="editName" placeholder="账本名称" />
-        <view class="icon-grid">
-          <view v-for="ic in LEDGER_ICONS" :key="ic" class="icon-cell" :class="{ active: editIcon === ic }"
-            @click="editIcon = ic"><text>{{ ic }}</text></view>
+
+        <!-- 名称 -->
+        <view class="form-label">名称</view>
+        <input class="sheet-input" :class="{ focused: nameFocused }" v-model="editName" placeholder="账本名称"
+          maxlength="32" @focus="nameFocused = true" @blur="nameFocused = false" />
+
+        <!-- 封面 + 系统默认图：左右横向布局（复用新建弹窗样式） -->
+        <view class="cover-icon-row">
+          <view class="cover-col">
+            <view class="form-label">封面（可选）</view>
+            <view class="cover-upload" :class="{ pressed: coverPressed }" @click="chooseCover('edit')"
+              @touchstart="coverPressed = true" @touchend="coverPressed = false" @touchcancel="coverPressed = false">
+              <image v-if="editLedgerCover" class="cover-img" :src="editLedgerCover" mode="aspectFill" />
+              <view v-else class="cover-placeholder">
+                <image class="cover-default" :src="COVER_PLACEHOLDER" mode="aspectFill" />
+                <!-- 待：加一个小狗拿着照相机的图标 -->
+                <text class="cover-tip">点击从相册选择</text>
+              </view>
+              <view v-if="editLedgerCover" class="cover-remove" @click.stop="removeCover('edit')">×</view>
+            </view>
+          </view>
+          <view class="icon-col">
+            <view class="form-label">选择图标</view>
+            <view class="icon-grid">
+              <view v-for="ic in LEDGER_ICONS" :key="ic" class="icon-cell" :class="{ active: editIcon === ic }"
+                @click="pickSystemIcon(ic, 'edit')">
+                <image v-if="isImg(ic)" class="icon-img" :src="ic" mode="aspectFill" />
+                <text v-else>{{ ic }}</text>
+              </view>
+            </view>
+          </view>
         </view>
+
         <view class="sheet-btn" @click="saveEdit">
           <text>保存</text>
         </view>
@@ -358,11 +542,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { extractCoverPalette, hexToRgba, hsvToHex, hexToHsv } from '@/utils/coverColor.js';
 import { onShow } from '@dcloudio/uni-app';
 import TabBar from '@/components/tabbar/tabbar.vue';
 import { useUserStore, checkLoggedIn } from '@/stores/user.js';
-import { deleteLedger, ensureMasterLedger } from '@/api/sparejar.js';
+import { createLedger as apiCreateLedger, updateLedger as apiUpdateLedger, deleteLedger, ensureMasterLedger, listLedgers, listTransactions } from '@/api/sparejar.js';
 import { formatDateKey, formatMonthKey } from '@/utils/date.js';
 
 const PAGE_TABS = [
@@ -386,36 +571,380 @@ const assetMode = ref('disposable');
 
 // 新建账本
 const showNewLedger = ref(false);
+// 打开新建弹窗：复位填充动画状态，避免上次成功后按钮卡在满格
+function openNewLedger() {
+  fillComplete.value = false;
+  newLedgerColorMode.value = 'auto';
+  newLedgerColor.value = '#16a34a';
+  coverPalette.value = [];
+  selectedAutoColor.value = '';
+  showNewLedger.value = true;
+}
 
 // 账本列表的「列表 / 田字格」视图切换（图标按钮动画状态）
 const listGrid = ref(false);
 const newLedgerName = ref('');
-const newLedgerIcon = ref('📒');
-const LEDGER_ICONS = ['📒', '🏠', '💼', '✈️', '🎓', '🍜', '🛒', '💰', '🐱', '🚗', '🏥', '🎮', '☕', '🏀'];
+// 名称输入框聚焦态（小程序 input 不支持 :focus 伪类，用事件切换 class）
+const nameFocused = ref(false);
+// 简介输入框聚焦态
+const descFocused = ref(false);
+// 封面上传区按下态（小程序 view 的 :active 不生效，用 touch 事件切换 class）
+const coverPressed = ref(false);
+
+// 创建按钮：随填写进度的填充动画（三个字段：名称/封面/简介）
+const fillComplete = ref(false);
+const createProgress = computed(() => {
+  let n = 0;
+  if (newLedgerName.value.trim()) n++;        // 名称（必填）
+  if (newLedgerCover.value) n++;              // 封面
+  if (newLedgerDesc.value.trim()) n++;        // 简介
+  return n / 3;
+});
+// 当前填充比例：点击提交时强制 3/3，否则跟随实际进度
+const fillRatio = computed(() => (fillComplete.value ? 1 : createProgress.value));
+
+// 点击创建：先校验必填，未通过则直接提示并停留在当前进度（不播放填满动画），
+// 避免「按钮先填满又退回 + 失败提示」的割裂体验
+async function onSubmit() {
+  if (fillComplete.value) return;   // 防止连点重复触发
+  if (!newLedgerName.value.trim()) {
+    uni.showToast({ title: '请输入账本名称', icon: 'none' });
+    return;
+  }
+  fillComplete.value = true;
+  await new Promise(r => setTimeout(r, 500));  // 让填充动画可见
+  await createLedger();
+  fillComplete.value = false;       // 复位（失败/关闭后）
+}
+const newLedgerIcon = ref('');
+const newLedgerCover = ref('');
+const newLedgerDesc = ref('');
+// 系统默认图：预设图片图标库（3:4 网格），icon_cover.png 为默认/占位项
+const LEDGER_ICONS = [
+  '/static/images/icon_cover.png',
+  '/static/images/icon_book.png',
+  '/static/images/icon_coin.png',
+  '/static/images/icon_sunny.png',
+  '/static/images/icon_surplus.png',
+  '/static/images/icon_wish.png'
+];
+
+// 判断是否为图片路径（与 emoji 图标区分），兼容旧 emoji 数据
+function isImg(v) {
+  return typeof v === 'string' && (v.startsWith('/') || v.startsWith('http') || v.startsWith('data:'));
+}
+
+// cropTarget：裁剪结果写入目标，'new'=新建账本封面 / 'edit'=编辑账本封面
+const cropTarget = ref('new');
+
+// 封面默认占位图（3:4），封面为空时优先展示
+const COVER_PLACEHOLDER = '/static/images/icon_cover.png';
+
+// 封面：从本地相册选取；非 3:4 比例则进入交互式裁剪。target: 'new' | 'edit'
+function chooseCover(target = 'new') {
+  uni.chooseImage({
+    count: 1,
+    sourceType: ['album', 'camera'],
+    success: (res) => {
+      const path = res.tempFilePaths[0];
+      uni.getImageInfo({
+        src: path,
+        success: (info) => {
+          // 已是 3:4（宽高比≈0.75，容差 2%）直接采用，跳过裁剪
+          if (Math.abs(info.width / info.height - CROP_RATIO) < 0.02) {
+            applyCover(target, path);
+            return;
+          }
+          cropTarget.value = target;
+          initCropper(path, info);
+        },
+        fail: () => { applyCover(target, path); }
+      });
+    }
+  });
+}
+function removeCover(target = 'new') {
+  applyCover(target, '');
+}
+function applyCover(target, path) {
+  if (target === 'edit') editLedgerCover.value = path;
+  else newLedgerCover.value = path;
+}
+// 选择系统默认图：设为图标，并回显到左侧封面区（target: 'new' | 'edit'）
+function pickSystemIcon(ic, target) {
+  if (target === 'edit') {
+    editIcon.value = ic;
+    editLedgerCover.value = ic;
+  } else {
+    newLedgerIcon.value = ic;
+    newLedgerCover.value = ic;
+  }
+}
+
+// —— 主题色选择（创建账本）：1) 封面自动取色 2) 预设 3) 自定义 ——
+// newLedgerColorMode: 'auto' | 'custom'；newLedgerColor 为自定义选中的 hex
+const newLedgerColorMode = ref('auto');
+const newLedgerColor = ref('#16a34a');
+// 封面取色色卡：选中“封面取色”且有封面时，提取真实配色色板供用户点选（落库用所选色）
+const coverPalette = ref([]);
+const selectedAutoColor = ref('');
+function updateAutoPreview() {
+  if (newLedgerColorMode.value === 'auto' && newLedgerCover.value) {
+    extractCoverPalette(newLedgerCover.value).then((pal) => {
+      coverPalette.value = pal || [];
+      if (coverPalette.value.length) {
+        // 保留先前选择（若仍在新色板中），否则默认最突出的首色
+        if (!selectedAutoColor.value || !coverPalette.value.includes(selectedAutoColor.value)) {
+          selectedAutoColor.value = coverPalette.value[0];
+        }
+      } else {
+        selectedAutoColor.value = '';
+      }
+    }).catch(() => { coverPalette.value = []; selectedAutoColor.value = ''; });
+  } else {
+    coverPalette.value = [];
+    selectedAutoColor.value = '';
+  }
+}
+watch([newLedgerColorMode, newLedgerCover], updateAutoPreview, { immediate: true });
+
+// 自定义颜色选择器弹窗状态（HSV 拖动）
+const showColorPicker = ref(false);
+const pickerHue = ref(200);
+const pickerSat = ref(80);
+const pickerVal = ref(90);
+// 当前取色结果（由 HSV 实时换算）
+const cpHex = computed(() => hsvToHex(pickerHue.value, pickerSat.value, pickerVal.value));
+
+// 打开自定义：用当前已选色初始化 HSV，避免每次从头开始
+function openCustomColor() {
+  newLedgerColorMode.value = 'custom';
+  const hsv = hexToHsv(newLedgerColor.value);
+  pickerHue.value = hsv.h;
+  pickerSat.value = hsv.s;
+  pickerVal.value = hsv.v;
+  showColorPicker.value = true;
+}
+function confirmCustomColor() {
+  newLedgerColor.value = cpHex.value;
+  showColorPicker.value = false;
+}
+
+// 选择器视觉样式（背景随时钟更新）
+const svStyle = computed(() => ({
+  background: `linear-gradient(to top, #000, rgba(0,0,0,0)), linear-gradient(to right, #fff, rgba(255,255,255,0)), hsl(${pickerHue.value}, 100%, 50%)`
+}));
+const svCursorStyle = computed(() => ({
+  left: pickerSat.value + '%',
+  top: (100 - pickerVal.value) + '%',
+  background: cpHex.value
+}));
+const hueStyle = computed(() => ({
+  background: 'linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%)'
+}));
+const hueCursorStyle = computed(() => ({
+  left: (pickerHue.value / 360 * 100) + '%'
+}));
+
+// 拖动取坐标（小程序触摸事件在 touchstart 的元素上持续派发 touchmove）
+let _svRect = null;
+let _hueRect = null;
+function getRect(sel) {
+  return new Promise((resolve) => {
+    uni.createSelectorQuery().select(sel).boundingClientRect((r) => resolve(r || null)).exec();
+  });
+}
+async function onSvStart(e) { _svRect = await getRect('.cp-sv'); onSvMove(e); }
+function onSvMove(e) {
+  if (!_svRect) return;
+  const t = e.touches[0];
+  let x = (t.clientX - _svRect.left) / _svRect.width;
+  let y = (t.clientY - _svRect.top) / _svRect.height;
+  x = Math.max(0, Math.min(1, x));
+  y = Math.max(0, Math.min(1, y));
+  pickerSat.value = Math.round(x * 100);
+  pickerVal.value = Math.round((1 - y) * 100);
+}
+async function onHueStart(e) { _hueRect = await getRect('.cp-hue'); onHueMove(e); }
+function onHueMove(e) {
+  if (!_hueRect) return;
+  const t = e.touches[0];
+  let x = (t.clientX - _hueRect.left) / _hueRect.width;
+  x = Math.max(0, Math.min(1, x));
+  pickerHue.value = Math.round(x * 360);
+}
+
+// ===== 图片裁剪（3:4）=====
+const CROP_RATIO = 0.75;            // 目标宽高比 宽/高 = 3/4
+const OUT_W = 600, OUT_H = 800;     // 导出分辨率（固定 3:4）
+
+const showCropper = ref(false);
+const cropSrc = ref('');
+const stageW = ref(300);
+const stageH = ref(300);
+const imgW = ref(0);
+const imgH = ref(0);
+const dispScale = ref(1);          // 自然尺寸 → 显示尺寸 比例
+const imgX = ref(0);               // 显示图中左上角在舞台中的坐标
+const imgY = ref(0);
+const boxW = ref(0);               // 裁剪框（显示坐标）
+const boxH = ref(0);
+const boxX = ref(0);
+const boxY = ref(0);
+const zoom = ref(50);              // 0~100，越大裁剪框越小（越“放大”）
+
+const stageStyle = computed(() => ({ width: stageW.value + 'px', height: stageH.value + 'px' }));
+const imgStyle = computed(() => ({
+  width: imgW.value * dispScale.value + 'px',
+  height: imgH.value * dispScale.value + 'px',
+  left: imgX.value + 'px',
+  top: imgY.value + 'px'
+}));
+const boxStyle = computed(() => ({
+  width: boxW.value + 'px',
+  height: boxH.value + 'px',
+  left: boxX.value + 'px',
+  top: boxY.value + 'px'
+}));
+// 预览：用 CSS 把当前裁剪区域映射到固定 96x128 的 3:4 预览框
+const previewStyle = computed(() => {
+  const PW = 96;
+  const k = PW / boxW.value;
+  return {
+    width: imgW.value * dispScale.value * k + 'px',
+    height: imgH.value * dispScale.value * k + 'px',
+    left: -((boxX.value - imgX.value) * k) + 'px',
+    top: -((boxY.value - imgY.value) * k) + 'px'
+  };
+});
+
+function initCropper(path, info) {
+  const sys = uni.getSystemInfoSync();
+  // 舞台宽度严格受面板内容区约束（面板 width:100% / max-width:680rpx，左右 padding 32rpx），避免超出弹窗右侧
+  const rpxPx = sys.windowWidth / 750;
+  const panelMax = Math.min(sys.windowWidth, 680 * rpxPx);
+  const w = Math.min(panelMax - 64 * rpxPx, 320);
+  stageW.value = w;
+  stageH.value = w;
+  imgW.value = info.width;
+  imgH.value = info.height;
+  const s = Math.min(stageW.value / imgW.value, stageH.value / imgH.value);
+  dispScale.value = s;
+  const dw = imgW.value * s, dh = imgH.value * s;
+  imgX.value = (stageW.value - dw) / 2;
+  imgY.value = (stageH.value - dh) / 2;
+  const bw = Math.min(dw, dh * CROP_RATIO);   // 裁剪框最大可容纳尺寸
+  boxW.value = bw;
+  boxH.value = bw / CROP_RATIO;
+  boxX.value = imgX.value + (dw - bw) / 2;
+  boxY.value = imgY.value + (dh - boxH.value) / 2;
+  zoom.value = 50;
+  cropSrc.value = path;
+  showCropper.value = true;
+}
+
+// 将裁剪框约束在图片显示范围内
+function clampBox(nx, ny) {
+  const minX = imgX.value;
+  const minY = imgY.value;
+  const maxX = imgX.value + imgW.value * dispScale.value - boxW.value;
+  const maxY = imgY.value + imgH.value * dispScale.value - boxH.value;
+  boxX.value = Math.max(minX, Math.min(maxX, nx));
+  boxY.value = Math.max(minY, Math.min(maxY, ny));
+}
+
+let cropDrag = null;
+function onCropTouchStart(e) {
+  const t = e.touches[0];
+  cropDrag = { x: t.clientX, y: t.clientY, bx: boxX.value, by: boxY.value };
+}
+function onCropTouchMove(e) {
+  if (!cropDrag) return;
+  const t = e.touches[0];
+  clampBox(cropDrag.bx + (t.clientX - cropDrag.x), cropDrag.by + (t.clientY - cropDrag.y));
+}
+function onCropTouchEnd() { cropDrag = null; }
+
+// 缩放：调整裁剪框显示尺寸（保持 3:4），中心不变
+function onCropZoom(e) {
+  zoom.value = e.detail.value;
+  const dw = imgW.value * dispScale.value, dh = imgH.value * dispScale.value;
+  const maxBw = Math.min(dw, dh * CROP_RATIO);
+  const minBw = Math.min(50, maxBw);
+  const bw = minBw + (maxBw - minBw) * (zoom.value / 100);
+  const cx = boxX.value + boxW.value / 2;
+  const cy = boxY.value + boxH.value / 2;
+  boxW.value = bw;
+  boxH.value = bw / CROP_RATIO;
+  clampBox(cx - bw / 2, cy - boxH.value / 2);
+}
+
+function cancelCrop() {
+  showCropper.value = false;
+  cropSrc.value = '';
+}
+
+// 确认裁剪：用 Canvas 2D 把裁剪区域绘制到 600x800 画布并导出
+function confirmCrop() {
+  const sx = (boxX.value - imgX.value) / dispScale.value;
+  const sy = (boxY.value - imgY.value) / dispScale.value;
+  const sw = boxW.value / dispScale.value;
+  const sh = boxH.value / dispScale.value;
+  uni.createSelectorQuery().select('#cropExport').node().exec((res) => {
+    const canvas = res[0] && res[0].node;
+    if (!canvas) { uni.showToast({ title: '裁剪失败', icon: 'none' }); return; }
+    const ctx = canvas.getContext('2d');
+    const img = canvas.createImage();
+    img.onload = () => {
+      canvas.width = OUT_W;
+      canvas.height = OUT_H;
+      ctx.clearRect(0, 0, OUT_W, OUT_H);
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, OUT_W, OUT_H);
+      uni.canvasToTempFilePath({
+        canvas,
+        x: 0, y: 0, width: OUT_W, height: OUT_H,
+        destWidth: OUT_W, destHeight: OUT_H,
+        fileType: 'png',
+        success: (r) => {
+          applyCover(cropTarget.value, r.tempFilePath);
+          showCropper.value = false;
+          cropSrc.value = '';
+        },
+        fail: () => uni.showToast({ title: '裁剪失败', icon: 'none' })
+      });
+    };
+    img.onerror = () => uni.showToast({ title: '裁剪失败', icon: 'none' });
+    img.src = cropSrc.value;
+  });
+}
 
 // 编辑账本
 const showEdit = ref(false);
 const editTarget = ref(null);
 const editName = ref('');
 const editIcon = ref('');
+const editLedgerCover = ref('');
 
 // 多选删除：模式开关、已选账本 id、删除确认弹窗目标
 const multiSelect = ref(false);
 const selectedIds = ref([]);
 const delTargets = ref([]);
 const showDelConfirm = ref(false);
+// 就地操作菜单：记录当前展开菜单的账本 _id（仅一个，其他账本不受影响）
+const openMenuId = ref(null);
 
 // 真实账本 + 交易（用于聚合）
 const ledgers = ref([]);
 const transactions = ref([]);
 
+// 调色板（无封面取色/旧账本回退）：与封面取色锚点一致，更深、更高饱和、对比更高
 const PALETTE = [
-  { color: '#25cc5d', colorBg: '#e1fae3' },
-  { color: '#7c6cf8', colorBg: '#f3f0ff' },
-  { color: '#f59e0b', colorBg: '#fffbeb' },
-  { color: '#ec4899', colorBg: '#fff0f6' },
-  { color: '#06b6d4', colorBg: '#e0f7fb' },
-  { color: '#ef4444', colorBg: '#fff0f0' }
+  { color: '#16a34a', colorBg: '#e1fae3' },
+  { color: '#5b3fc4', colorBg: '#f3f0ff' },
+  { color: '#d99a00', colorBg: '#fffbeb' },
+  { color: '#cf1f82', colorBg: '#fff0f6' },
+  { color: '#0a86a0', colorBg: '#e0f7fb' },
+  { color: '#cf2b2b', colorBg: '#fff0f0' }
 ];
 
 const monthKey = (() => {
@@ -623,13 +1152,22 @@ const ledgerViews = computed(() =>
       dim,
       records: periodTxs.length,
       color: pal.color,
-      colorBg: pal.colorBg
+      colorBg: pal.colorBg,
+      cover: l.cover || '',
+      theme_color: l.theme_color || ''
     };
   })
 );
 
 // 维度中文前缀：用于进度条“使用/限额”标签
 const dimWord = (dim) => (dim === 'day' ? '日' : dim === 'year' ? '年' : '月');
+
+// 主题色：列表直接读取数据库持久化的 theme_color，不在进入时自动提取。
+// 主账本恒返回 null（沿用原 CSS 绿）；其余账本返回 theme_color，无则回退到调色板 l.color。
+function coverTheme(l) {
+  if (l.type === 'master') return null;
+  return l.theme_color || null;
+}
 
 // —— 资产 Tab：接入真实资产账户（阶段 10） ——
 const ASSET_SUBTYPE_ICON = {
@@ -691,26 +1229,13 @@ async function loadData() {
     return;
   }
   try {
-    const db = uniCloud.database();
-    // 不在 where 里用 deleted_at: cmd.eq(null)，改为查询后 JS 过滤，
-    // 避免客户端 JQL 对 cmd.eq(null) 的序列化差异导致返回 0 行。
-    const ledgerWhere = { user_id: uid };
-    console.log('[ledger][loadData] 查询账本请求参数 ledgerWhere =', JSON.stringify(ledgerWhere));
-    const [ledgerRes, txRes] = await Promise.all([
-      db.collection('ledgers').where(ledgerWhere).orderBy('sort_order', 'asc').get(),
-      db.collection('transactions').where({ user_id: uid }).get()
+    // 走云函数读取，禁止前端直连数据库
+    const [ledgerData, txData] = await Promise.all([
+      listLedgers(),
+      listTransactions({})
     ]);
-    // 客户端 JQL 的 get() 响应可能被包在 result 字段下（{ result: { data } }），
-    // 也可能直接返回 { data }；两种结构都兼容，否则会误判「无总账本」而重复兜底创建。
-    const ledgerData = (ledgerRes && ledgerRes.result && Array.isArray(ledgerRes.result.data))
-      ? ledgerRes.result.data
-      : (Array.isArray(ledgerRes && ledgerRes.data) ? ledgerRes.data : [])
-    const txData = (txRes && txRes.result && Array.isArray(txRes.result.data))
-      ? txRes.result.data
-      : (Array.isArray(txRes && txRes.data) ? txRes.data : [])
-    console.log('[ledger][loadData] 账本接口响应 result =', JSON.stringify(ledgerRes));
-    console.log('[ledger][loadData] 账本原始 data 长度 =', ledgerData.length);
-    console.log('[ledger][loadData] 交易接口响应 data 长度 =', txData.length);
+    console.log('[ledger][loadData] 账本接口响应长度 =', ledgerData.length);
+    console.log('[ledger][loadData] 交易接口响应长度 =', txData.length);
 
     // JS 端过滤软删（deleted_at 为空/未设置的才是有效账本）
     let list = ledgerData.filter(l => !l.deleted_at);
@@ -726,23 +1251,8 @@ async function loadData() {
         console.log('[ledger][loadData] ensureMasterLedger 返回 =', JSON.stringify(master));
         list.unshift(master);
       } catch (err) {
-        console.error('[ledger][loadData] ensure master ledger failed, fallback to direct create', err);
-        try {
-          const addRes = await db.collection('ledgers').add({
-            user_id: uid,
-            name: '总账本',
-            icon: '📒',
-            is_system: true,
-            is_default: false,
-            is_shared: false,
-            sort_order: 0,
-            created_at: Date.now()
-          });
-          console.log('[ledger][loadData] 前端直写总账本成功, id =', addRes.id);
-          list.unshift({ _id: addRes.id, name: '总账本', icon: '📒', is_system: true, sort_order: 0 });
-        } catch (err2) {
-          console.error('[ledger][loadData] direct create master ledger failed', err2);
-        }
+        // 总账本统一由 ensureMasterLedger 云函数创建，前端不再直写数据库
+        console.error('[ledger][loadData] ensure master ledger failed', err);
       }
     } else {
       console.log('[ledger][loadData] 总账本已存在，无需创建');
@@ -823,6 +1333,12 @@ function switchTab(key) {
   pageTab.value = key
 }
 
+// 未选择封面时，从系统默认图库均匀随机分配一张（排除占位项 icon_cover.png）
+function pickRandomCover() {
+  const pool = LEDGER_ICONS.filter(ic => ic !== COVER_PLACEHOLDER);
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 // 新建账本
 async function createLedger() {
   const name = newLedgerName.value.trim();
@@ -830,44 +1346,111 @@ async function createLedger() {
   const customCount = ledgers.value.filter(l => !l.is_system).length;
   const max = (state.settings && state.settings.max_custom_ledgers) || 5;
   if (customCount >= max) { uni.showToast({ title: `最多创建 ${max} 个账本`, icon: 'none' }); return; }
+  // 封面：未选择时从系统默认图库均匀随机分配一张；已手动选择则保留
+  let finalCover = newLedgerCover.value;
+  let finalIcon = newLedgerIcon.value;
+  if (!finalCover) {
+    finalCover = pickRandomCover();
+    if (!finalIcon) finalIcon = finalCover;  // 未选图标则同步用随机封面，保持视觉统一
+  }
+  // 主题色：按所选模式落库为具体 hex（封面取色/预设/自定义三种来源统一），
+  // 后续访问直接读取该字段，不再重复提取或要求用户重选
+  let themeColor = null;
+  if (newLedgerColorMode.value === 'auto') {
+    // 优先采用用户在色卡中点选的颜色；无封面时（随机封面）回退提取主色
+    if (selectedAutoColor.value) {
+      themeColor = selectedAutoColor.value;
+    } else if (finalCover) {
+      try {
+        const pal = await extractCoverPalette(finalCover);
+        themeColor = (pal && pal[0]) || null;
+      } catch (e) { themeColor = null; }
+    }
+  } else {
+    themeColor = newLedgerColor.value;
+  }
   try {
-    const db = uniCloud.database();
-    await db.collection('ledgers').add({
-      user_id: state.uid,
+    // 走云函数：created_at/updated_at 由服务端自动填充（字符串），前端不传时间字段
+    await apiCreateLedger({
       name,
-      icon: newLedgerIcon.value,
-      is_system: false,
-      is_default: false,
-      is_shared: false,
+      icon: finalIcon || LEDGER_ICONS[0],
+      cover: finalCover,
+      desc: newLedgerDesc.value,
       monthly_budget: 0,
       sort_order: ledgers.value.length,
-      created_at: Date.now()
+      theme_color: themeColor
     });
     showNewLedger.value = false;
     newLedgerName.value = '';
-    newLedgerIcon.value = '📒';
+    newLedgerIcon.value = '';
+    newLedgerCover.value = '';
+    newLedgerDesc.value = '';
+    newLedgerColorMode.value = 'auto';
+    newLedgerColor.value = '#16a34a';
+    coverPalette.value = [];
+    selectedAutoColor.value = '';
     uni.showToast({ title: '已创建', icon: 'success' });
     await loadData();
   } catch (err) {
+    console.error('[ledger][createLedger] 创建账本失败:', err);
     const msg = (err && (err.message || err.errMsg)) || '创建失败';
-    uni.showToast({ title: /uk_user_name|重复|duplicate/i.test(msg) ? '账本名称已存在' : '创建失败', icon: 'none' });
+    uni.showToast({ title: /already exists/i.test(msg) ? '创建冲突，请重试' : '创建失败', icon: 'none' });
   }
 }
 
-// 编辑账本
+// 编辑账本（主账本仅允许改名/图标，不可删除）
 function openEdit(l) {
-  if (l.is_system) { uni.showToast({ title: '总账本不可编辑', icon: 'none' }); return; }
   editTarget.value = l;
   editName.value = l.name;
-  editIcon.value = l.icon || '📒';
+  // 仅当现有图标在图片库中才选中，否则不预选（避免强制选中首项）
+  editIcon.value = (l.icon && LEDGER_ICONS.includes(l.icon)) ? l.icon : '';
+  editLedgerCover.value = l.cover || '';
   showEdit.value = true;
+}
+
+// 卡片点击：多选态为勾选，否则进账本；若菜单已展开则先收起菜单；长按后抑制紧随的点击以免误开
+let justLongPressed = false
+function onCardClick(l) {
+  if (justLongPressed) { justLongPressed = false; return }
+  if (openMenuId.value === l._id) { openMenuId.value = null; return }
+  if (multiSelect.value) toggleSelect(l)
+  else openLedgerSheet(l)
+}
+
+// 切换就地操作菜单（绑定账本 _id；再次点击同一卡片的 ⋯ 收起）
+function toggleMenu(l) {
+  if (multiSelect.value) return
+  const willOpen = openMenuId.value !== l._id
+  openMenuId.value = willOpen ? l._id : null
+  if (willOpen) actionTab.value = 'edit' // 打开时滑块复位到「编辑」
+}
+// tabs 当前高亮项（控制 glider 滑块位置；默认“编辑”为安全高亮）
+const actionTab = ref('edit')
+function onMenuDelete(l) {
+  actionTab.value = 'delete'
+  // 先让滑块滑到“删除”，再弹出删除确认，使 tabs 高亮可见
+  setTimeout(() => { openMenuId.value = null; openDelete(l) }, 180)
+}
+function onMenuEdit(l) {
+  actionTab.value = 'edit'
+  setTimeout(() => { openMenuId.value = null; openEdit(l) }, 180)
+}
+// 操作形态下点击卡片空白处（非按钮区域）收起，恢复常规形态
+function cancelAction() {
+  openMenuId.value = null
+}
+function onCardLongPress(l) {
+  justLongPressed = true
+  setTimeout(() => { justLongPressed = false }, 400)
+  if (multiSelect.value) return
+  openMenuId.value = l._id
 }
 async function saveEdit() {
   const name = editName.value.trim();
   if (!name) { uni.showToast({ title: '请输入账本名称', icon: 'none' }); return; }
   try {
-    const db = uniCloud.database();
-    await db.collection('ledgers').doc(editTarget.value._id).update({ name, icon: editIcon.value, updated_at: Date.now() });
+    // 走云函数：updated_at 由服务端自动刷新（字符串），前端不传时间字段
+    await apiUpdateLedger(editTarget.value._id, { name, icon: editIcon.value || LEDGER_ICONS[0], cover: editLedgerCover.value });
     showEdit.value = false;
     uni.showToast({ title: '已保存', icon: 'success' });
     await loadData();
@@ -940,6 +1523,17 @@ onUnmounted(() => {
 </script>
 
 <style scoped lang="scss">
+/* 离屏取色画布：移出可视区但保留真实尺寸，供封面主色提取 */
+.cover-color-canvas {
+  position: fixed;
+  left: -9999rpx;
+  top: -9999rpx;
+  width: 32rpx;
+  height: 32rpx;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .ledger-page {
   width: 750rpx;
   height: 1624rpx;
@@ -1229,7 +1823,7 @@ onUnmounted(() => {
     top: -46rpx;
     left: 44rpx;
     width: 80%;
-    height: 59%;
+    height: 45%;
     background: radial-gradient(120% 90% at 0% 0%, rgba(169, 253, 186, 0.534) 0%, rgba(194, 242, 200, 0) 55%),
       radial-gradient(120% 90% at 100% 0%, rgba(149, 238, 167, 0.14) 0%, rgba(159, 236, 174, 0) 55%),
       radial-gradient(140% 120% at 100% 100%, rgba(37, 204, 93, 0.119) 0%, rgba(37, 204, 93, 0) 60%),
@@ -1363,6 +1957,8 @@ onUnmounted(() => {
 }
 
 .section-header {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1651,12 +2247,13 @@ onUnmounted(() => {
 
 /* 列表态：封面图固定在最左，作为不被压缩的左侧缩略图（尺寸同上） */
 
-/* 列表态：行内元素两端对齐——账本名居左、收支/操作靠右 */
+/* 列表态：行内元素两端对齐——账本名居左、收支靠右（右侧留出空间以免被⋯按钮遮挡） */
 .ledger-list.is-list .ledger-row {
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
+  padding-top: 16rpx;
 }
 
 /* 列表态：info 不占满整行，并用 margin-right:auto 把名称顶到最左、收支/操作推到最右 */
@@ -1672,8 +2269,9 @@ onUnmounted(() => {
   margin-top: 16rpx;
 }
 
-/* 网格态不显示层叠背景 */
-.ledger-list.is-grid .ledger-card-wrap::before {
+/* 网格态不显示层叠背景（含真实元素与伪元素） */
+.ledger-list.is-grid .ledger-card-wrap::before,
+.ledger-list.is-grid .ledger-card-bg {
   display: none;
 }
 
@@ -1685,6 +2283,16 @@ onUnmounted(() => {
   gap: 16rpx;
   padding: 0 32rpx;
   align-items: start;
+}
+
+/* 账本列表独立滚动容器：
+   - max-height 仅在内容超出时生效，数据较少时高度自适应（内容高度），不预留固定空白，布局自然紧凑；
+   - 配合外层 page-scroll，账本过多时仅列表纵向滚动，顶部总览与标题保持稳固；
+   - enhanced + 隐藏滚动条提升滚动流畅度与视觉整洁 */
+.ledger-list-scroll {
+  width: 100%;
+  max-height: calc(100vh - 760rpx);
+  -webkit-overflow-scrolling: touch;
 }
 
 .ledger-list.is-grid .ledger-card {
@@ -1727,8 +2335,8 @@ onUnmounted(() => {
 }
 
 /* 田字格：图标/信息/操作/进度条等内容浮于封面之上 */
-.ledger-list.is-grid .ledger-card > .ledger-body,
-.ledger-list.is-grid .ledger-card > .ledger-check {
+.ledger-list.is-grid .ledger-card>.ledger-body,
+.ledger-list.is-grid .ledger-card>.ledger-check {
   position: relative;
   z-index: 2;
 }
@@ -1745,7 +2353,7 @@ onUnmounted(() => {
   box-shadow: 0 6rpx 18rpx rgba(15, 28, 20, 0.10);
 }
 
-/* 田字格：框内第一行 —— 笔数(左) 与 收支(右) 两端对齐；操作附于右侧 */
+/* 田字格：框内第一行 —— 笔数(左) 与 收支(右) 两端对齐 */
 .ledger-list.is-grid .ledger-row {
   display: flex;
   flex-direction: row;
@@ -1782,19 +2390,6 @@ onUnmounted(() => {
 /* 进度条：归入面板，跟随内容自然排列（无独立背景，故必然可见） */
 .ledger-list.is-grid .ledger-bar-wrap {
   margin-top: 20rpx;
-}
-
-.ledger-list.is-grid .ledger-actions {
-  flex-direction: row;
-  margin-left: 0;
-  gap: 12rpx;
-  flex: 0 0 auto;
-}
-
-.ledger-list.is-grid .ledger-act {
-  width: 48rpx;
-  height: 48rpx;
-  font-size: 22rpx;
 }
 
 .ledger-row {
@@ -1902,6 +2497,136 @@ onUnmounted(() => {
   &-hover {
     background: rgba(37, 204, 93, 0.12);
   }
+
+  &.ledger-act-del {
+    background: rgba(255, 240, 240, 0.75);
+  }
+
+  &.ledger-act-del.ledger-act-hover {
+    background: rgba(255, 99, 99, 0.14);
+  }
+}
+
+/* 操作入口：右上角「⋯」更多按钮（点击或长按卡片展开菜单），紧贴卡片右上角 */
+.ledger-more-float {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 4;
+  width: 52rpx;
+  height: 52rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 外缘（上、右）贴齐卡片直角，内下角柔化；右上圆角对齐卡片 28rpx 圆角 */
+  border-radius: 0 28rpx 0 16rpx;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(8rpx);
+  -webkit-backdrop-filter: blur(8rpx);
+}
+
+.ledger-more-hover {
+  background: rgba(37, 204, 93, 0.14);
+}
+
+.ledger-more-dot {
+  font-size: 38rpx;
+  line-height: 1;
+  color: #2b3a2f;
+}
+
+/* 操作形态：覆盖账本内容的半透明遮罩，正中居中 tabs 操作按钮（仿 Uiverse tabs+glider） */
+.ledger-action {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 28rpx;
+  overflow: hidden;
+  /* 遮罩：半透明压暗 + 模糊账本内容 */
+  background: rgba(255, 255, 255, 0.32);
+  backdrop-filter: blur(6rpx);
+  -webkit-backdrop-filter: blur(6rpx);
+}
+
+/* 仿 Uiverse tabs 容器 */
+.tabs {
+  display: flex;
+  position: relative;
+  background-color: #fff;
+  box-shadow:
+    0 0 2rpx 0 rgba(24, 94, 224, 0.15),
+    0 12rpx 24rpx 0 rgba(24, 94, 224, 0.15);
+  padding: 5rpx;
+  border-radius: 12rpx;
+}
+
+.tab {
+  z-index: 2;
+}
+
+.tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 60rpx;
+  width: 140rpx;
+  font-size: 26rpx;
+  color: #2b3a2f;
+  font-weight: 500;
+  border-radius: 99rpx;
+  cursor: pointer;
+  transition: color 0.15s ease-in;
+}
+
+.tab.active {
+  color: var(--g5);
+}
+
+/* 仿 notification 徽标（放在编辑 tab 上） */
+.notification {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 22rpx;
+  padding: 0 8rpx;
+  position: absolute;
+  top: -16rpx;
+  right: 12rpx;
+  font-size: 18rpx;
+  border-radius: 8rpx;
+  background-color: #e6f5ea;
+  color: var(--g5);
+  transition: 0.15s ease-in;
+}
+
+.tab.active .notification {
+  background-color: var(--g5);
+  color: #fff;
+}
+
+/* glider 滑块 */
+.glider {
+  position: absolute;
+  display: flex;
+  height: 60rpx;
+  width: 140rpx;
+  background-color: var(--g0);
+  z-index: 1;
+  border-radius: 8rpx;
+  transition: 0.15s ease-out;
+  transform: translateX(100%);
+}
+
+.glider.gl-left {
+  transform: translateX(0);
+}
+
+.glider.gl-right {
+  transform: translateX(100%);
 }
 
 /* 进度条：参照 Uiverse.io(FColombati) kawaii 风格
@@ -2118,6 +2843,9 @@ onUnmounted(() => {
 
 .sheet-panel {
   width: 750rpx;
+  max-height: 86vh;
+  overflow-y: auto;
+  box-sizing: border-box;
   padding: 40rpx 40rpx 60rpx;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(242, 252, 242, 0.96));
   border-radius: 48rpx 48rpx 0 0;
@@ -2147,23 +2875,570 @@ onUnmounted(() => {
   width: 100%;
   height: 88rpx;
   border-radius: 28rpx;
-  background: rgba(242, 252, 242, 0.8);
+  background: rgba(242, 252, 242, 0.4);
   border: 2rpx solid rgba(194, 242, 200, 0.4);
   padding: 0 28rpx;
   font-size: 28rpx;
   margin-bottom: 32rpx;
+  outline: none;
+  /* 参考 Uiverse.io 动效：缓动曲线与时长保持一致 */
+  transition: all 0.1s cubic-bezier(0.19, 1, 0.22, 1);
+
+  &.focused {
+    border: 4rpx solid rgba(194, 242, 200, 1);
+  }
 }
 
-.sheet-btn {
+/* 表单分区标签 */
+.form-label {
+  font-size: 26rpx;
+  font-weight: 700;
+  color: var(--g3);
+  margin: 12rpx 0 16rpx;
+}
+
+/* 主题色三选项（封面取色 / 预设 / 自定义） */
+.color-opts {
+  display: flex;
+  gap: 20rpx;
+  margin-bottom: 8rpx;
+}
+
+.color-opt {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10rpx;
+  padding: 16rpx 0;
+  border-radius: 16rpx;
+  background: rgba(255, 255, 255, 0.55);
+  border: 3rpx solid transparent;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.color-opt.active {
+  border-color: var(--g5);
+  background: rgba(230, 245, 234, 0.9);
+}
+
+.color-opt-ico {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  @include sj-flex-center;
+  overflow: hidden;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.12);
+}
+
+.color-opt-img {
   width: 100%;
-  padding: 28rpx;
-  border-radius: 28rpx;
-  @include sj-brand-gradient;
-  text-align: center;
+  height: 100%;
+}
+
+.color-opt-auto {
+  font-size: 28rpx;
+  font-weight: 800;
   color: #fff;
+  background: var(--g5);
+  width: 100%;
+  height: 100%;
+  @include sj-flex-center;
+}
+
+.color-opt-plus {
+  font-size: 40rpx;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1;
+}
+
+.color-opt-label {
+  font-size: 22rpx;
+  color: var(--g3);
+  font-weight: 600;
+}
+
+/* 取色预览 / 配色色卡（封面取色模式下展示提取到的真实配色） */
+.color-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14rpx;
+  margin: 16rpx 0 4rpx;
+  padding: 16rpx 18rpx;
+  border-radius: 14rpx;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+/* 色卡：提取出的配色色块，可点击选择 */
+.swatch-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  width: 100%;
+}
+
+.swatch {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 14rpx;
+  border: 4rpx solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.15);
+  @include sj-flex-center;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.swatch.active {
+  border-color: var(--sel);
+  transform: scale(1.08);
+  box-shadow: 0 0 0 4rpx var(--sel-glow), 0 4rpx 14rpx rgba(0, 0, 0, 0.25);
+}
+
+.color-preview-text {
+  font-size: 24rpx;
+  color: var(--g3);
+  font-weight: 600;
+}
+
+.color-preview-tip {
+  font-size: 22rpx;
+  color: var(--g4);
+}
+
+/* 列表底部留白：高度覆盖固定 TabBar（含安全区），保证最后一项完整可见 */
+.list-bottom-gap {
+  width: 100%;
+  height: calc(env(safe-area-inset-bottom) + 130rpx);
+}
+
+/* 自定义颜色选择器弹窗 */
+.cp-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  @include sj-flex-center;
+  z-index: 1000;
+}
+
+.cp-panel {
+  width: 600rpx;
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 32rpx;
+  box-sizing: border-box;
+}
+
+.cp-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: var(--g3);
+  margin-bottom: 24rpx;
+  display: block;
+}
+
+.cp-sv {
+  position: relative;
+  width: 100%;
+  height: 320rpx;
+  border-radius: 16rpx;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.cp-sv-cursor {
+  position: absolute;
+  width: 28rpx;
+  height: 28rpx;
+  border-radius: 50%;
+  border: 4rpx solid #fff;
+  box-shadow: 0 0 0 1rpx rgba(0, 0, 0, 0.3);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.cp-hue {
+  position: relative;
+  width: 100%;
+  height: 28rpx;
+  border-radius: 14rpx;
+  margin: 28rpx 0;
+  overflow: visible;
+  touch-action: none;
+}
+
+.cp-hue-cursor {
+  position: absolute;
+  top: 50%;
+  width: 32rpx;
+  height: 32rpx;
+  border-radius: 50%;
+  border: 4rpx solid #fff;
+  background: transparent;
+  box-shadow: 0 0 0 1rpx rgba(0, 0, 0, 0.3);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.cp-preview {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-bottom: 24rpx;
+}
+
+.cp-preview-dot {
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 50%;
+  border: 2rpx solid rgba(0, 0, 0, 0.1);
+}
+
+.cp-hex {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: var(--g3);
+  letter-spacing: 1rpx;
+}
+
+.cp-actions {
+  display: flex;
+  gap: 20rpx;
+}
+
+.cp-cancel,
+.cp-confirm {
+  flex: 1 1 0;
+  text-align: center;
+  padding: 20rpx 0;
+  border-radius: 16rpx;
   font-size: 28rpx;
   font-weight: 700;
   cursor: pointer;
+}
+
+.cp-cancel {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--g3);
+}
+
+.cp-confirm {
+  background: var(--g5);
+  color: #fff;
+}
+
+/* 封面 + 系统默认图：左右横向布局 */
+.cover-icon-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 24rpx;
+  margin-bottom: 8rpx;
+}
+
+.cover-col {
+  flex: 0 0 240rpx;
+  min-width: 0;
+}
+
+.icon-col {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 封面：图片上传 + 预览（3:4 比例，左列展示） */
+.cover-upload {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border-radius: 28rpx;
+  background: rgba(242, 252, 242, 0.8);
+  border: 2rpx dashed rgba(194, 242, 200, 0.7);
+  @include sj-flex-center;
+  overflow: hidden;
+  margin-bottom: 0;
+  cursor: pointer;
+  /* 点击/按下动效：过渡曲线与时长与输入框一致 */
+  transition: all 0.1s cubic-bezier(0.19, 1, 0.22, 1);
+
+  &.pressed {
+    transform: scale(0.95);
+    border: 2rpx solid rgba(194, 242, 200, 1);
+  }
+}
+
+.cover-img {
+  width: 100%;
+  height: 100%;
+}
+
+.cover-placeholder {
+  @include sj-flex-center;
+  flex-direction: column;
+  gap: 8rpx;
+  position: relative;
+  z-index: 1;
+}
+
+.cover-default {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.4;
+  z-index: -1;
+}
+
+.cover-plus {
+  font-size: 56rpx;
+  color: var(--g4);
+  line-height: 1;
+}
+
+.cover-tip {
+  font-size: 24rpx;
+  color: var(--g4);
+}
+
+.cover-remove {
+  position: absolute;
+  top: 12rpx;
+  right: 12rpx;
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 36rpx;
+  line-height: 48rpx;
+  text-align: center;
+  z-index: 2;
+}
+
+/* 简介：多行文本 */
+.sheet-textarea {
+  width: 100%;
+  height: 160rpx;
+  border-radius: 28rpx;
+  background: rgba(242, 252, 242, 0.8);
+  border: 2rpx solid rgba(194, 242, 200, 0.4);
+  padding: 20rpx 28rpx;
+  font-size: 28rpx;
+  margin-bottom: 32rpx;
+  box-sizing: border-box;
+  outline: none;
+  /* 与名称输入框一致的 Uiverse 动效 */
+  transition: all 0.1s cubic-bezier(0.19, 1, 0.22, 1);
+  box-shadow: 0 0 40rpx -36rpx;
+
+  &.focused {
+    border: 4rpx solid rgba(194, 242, 200, 1);
+    box-shadow: 0 0 40rpx -30rpx rgba(37, 204, 93, 0.5);
+  }
+}
+
+/* 图片裁剪弹窗 */
+.crop-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 400;
+  @include sj-flex-center;
+  padding: 40rpx;
+  box-sizing: border-box;
+}
+
+.crop-panel {
+  width: 100%;
+  max-width: 680rpx;
+  background: #fff;
+  border-radius: 28rpx;
+  padding: 32rpx;
+  box-sizing: border-box;
+}
+
+.crop-head {
+  font-size: 30rpx;
+  font-weight: 800;
+  color: var(--ink);
+  text-align: center;
+  margin-bottom: 24rpx;
+}
+
+.crop-stage {
+  position: relative;
+  overflow: hidden;
+  // background: #111;
+  margin: 0 auto;
+  border-radius: 12rpx;
+  touch-action: none;
+}
+
+.crop-img {
+  position: absolute;
+}
+
+.crop-box {
+  position: absolute;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
+  border: 2rpx solid #fff;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.crop-grid {
+  width: calc(100% - 24rpx);
+  height: calc(100% - 24rpx);
+  /* 九宫格参考线：在 1/3、2/3 处显式绘制，不依赖平铺，保证严格居中对称 */
+  background-image:
+    linear-gradient(90deg, transparent 33.33%, rgba(255, 255, 255, 0.45) 33.33%, rgba(255, 255, 255, 0.45) 34%, transparent 34%),
+    linear-gradient(90deg, transparent 66.66%, rgba(255, 255, 255, 0.45) 66.66%, rgba(255, 255, 255, 0.45) 67.33%, transparent 67.33%),
+    linear-gradient(180deg, transparent 33.33%, rgba(255, 255, 255, 0.45) 33.33%, rgba(255, 255, 255, 0.45) 34%, transparent 34%),
+    linear-gradient(180deg, transparent 66.66%, rgba(255, 255, 255, 0.45) 66.66%, rgba(255, 255, 255, 0.45) 67.33%, transparent 67.33%);
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+
+.crop-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-bottom: 20rpx;
+}
+
+.crop-row-label {
+  font-size: 26rpx;
+  color: var(--g3);
+  flex: 0 0 auto;
+  width: 72rpx;
+}
+
+.crop-slider {
+  flex: 1 1 auto;
+}
+
+.crop-prev {
+  width: 96px;
+  height: 128px;
+  border-radius: 8rpx;
+  overflow: hidden;
+  // background: #eee;
+  border: 2rpx solid var(--g2);
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.crop-prev-img {
+  position: absolute;
+}
+
+.crop-actions {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 8rpx;
+}
+
+.crop-btn {
+  flex: 1;
+  text-align: center;
+  padding: 24rpx;
+  border-radius: 16rpx;
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.crop-cancel {
+  background: var(--g0);
+  color: var(--ink3);
+}
+
+.crop-ok {
+  @include sj-brand-gradient;
+  color: #fff;
+}
+
+.crop-export-canvas {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 600px;
+  height: 800px;
+}
+
+.sheet-btn {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 28rpx;
+  border-radius: 28rpx;
+  /* 未填写时：透明背景 + 品牌绿边框，仅显示边框颜色 */
+  background: transparent;
+  border: 2rpx solid var(--g4);
+  font-size: 28rpx;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.4s ease;
+
+  /* 底层：品牌绿文字，始终可见（透明底上清晰） */
+  &__base {
+    position: relative;
+    z-index: 1;
+    color: var(--g5);
+  }
+
+  /* 顶层白字层：覆盖整个按钮，文字绝对居中、位置固定不参与动画；
+     仅用 clip-path 斜切窗口"揭示"白字，窗口随 --fill 移动，文字本身不动。 */
+  &__fill {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    -webkit-clip-path: polygon(0 0,
+        calc(var(--fill, 0) * 100%) 0,
+        calc(var(--fill, 0) * 100% - 40rpx) 100%,
+        0 100%);
+    clip-path: polygon(0 0,
+        calc(var(--fill, 0) * 100%) 0,
+        calc(var(--fill, 0) * 100% - 40rpx) 100%,
+        0 100%);
+    transition: clip-path 0.6s cubic-bezier(0.19, 1, 0.22, 1);
+
+    &-txt {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+    }
+  }
+
+  /* 进度填充：斜切纯色，与白字窗口形状完全一致，宽度跟随 --fill；
+     只移动斜切窗口（背景），文字层不动。 */
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--g5);
+    -webkit-clip-path: polygon(0 0,
+        calc(var(--fill, 0) * 100%) 0,
+        calc(var(--fill, 0) * 100% - 40rpx) 100%,
+        0 100%);
+    clip-path: polygon(0 0,
+        calc(var(--fill, 0) * 100%) 0,
+        calc(var(--fill, 0) * 100% - 40rpx) 100%,
+        0 100%);
+    z-index: 0;
+    transition: clip-path 0.6s cubic-bezier(0.19, 1, 0.22, 1);
+  }
+
+  &:active {
+    transform: scale(0.97);
+  }
 }
 
 .icon-grid {
@@ -2174,14 +3449,19 @@ onUnmounted(() => {
 }
 
 .icon-cell {
-  width: 80rpx;
-  height: 80rpx;
+  width: 110rpx;
+  aspect-ratio: 3 / 4;
   border-radius: 24rpx;
   background: rgba(242, 252, 242, 0.8);
   border: 2rpx solid rgba(194, 242, 200, 0.4);
   @include sj-flex-center;
-  font-size: 40rpx;
+  overflow: hidden;
   cursor: pointer;
+
+  .icon-img {
+    width: 100%;
+    height: 100%;
+  }
 
   &.active {
     border-color: var(--g5);
@@ -2207,29 +3487,62 @@ onUnmounted(() => {
   border-color: var(--g3);
 }
 
-/* 卡片左侧复选框（多选模式） */
+/* 多选模式复选框：仿 Uiverse.io (gharsh11032000) radio-button */
 .ledger-check {
-  width: 40rpx;
-  height: 40rpx;
+  position: relative;
+  display: inline-block;
   flex-shrink: 0;
   align-self: center;
-  border-radius: 50%;
-  border: 3rpx solid var(--g5);
-  background: rgba(255, 255, 255, 0.9);
-  @include sj-flex-center;
+  width: 32rpx;
+  height: 32rpx;
   cursor: pointer;
 }
 
-.ledger-check.checked {
-  background: var(--g5);
-  border-color: var(--g5);
+.ledger-check-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
 }
 
-.ledger-check-mark {
-  color: #fff;
-  font-size: 26rpx;
-  font-weight: 800;
-  line-height: 1;
+.ledger-check-custom {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 32rpx;
+  height: 32rpx;
+  border-radius: 50%;
+  border: 2rpx solid var(--g5);
+  background: rgba(255, 255, 255, 0.9);
+  @include sj-flex-center;
+  /* 辉光（无延迟）先亮起；背景填充（延迟 0.2s）随后填入 —— 跨端稳定，避免 keyframes/var 兼容问题 */
+  transition: transform 0.3s ease, box-shadow 0.25s ease,
+    background-color 0.3s ease 0.2s, border-color 0.3s ease 0.2s;
+}
+
+/* 选中态：由 Vue 状态 class 驱动（兼容小程序），先辉光后填充 */
+.ledger-check.checked .ledger-check-custom {
+  border-color: transparent;
+  background-color: var(--g4);
+  box-shadow: 0 0 20rpx rgba(37, 204, 93, 0.5);
+  /* 选中瞬间辉光脉冲一下（仅动 box-shadow，填充仍由 class 过渡负责，避开 keyframes 填不满的坑） */
+  animation: checkPulse 0.5s ease;
+  border-radius: 50%;
+}
+
+/* 点击选中：绿光由弱到强再回落的脉冲 */
+@keyframes checkPulse {
+  0% {
+    box-shadow: 0 0 6rpx rgba(37, 204, 93, 0.3);
+  }
+
+  50% {
+    box-shadow: 0 0 30rpx rgba(37, 204, 93, 0.8);
+  }
+
+  100% {
+    box-shadow: 0 0 20rpx rgba(37, 204, 93, 0.5);
+  }
 }
 
 /* 底部批量操作栏 */
@@ -2245,8 +3558,15 @@ onUnmounted(() => {
   gap: 20rpx;
   padding: 20rpx 32rpx calc(20rpx + constant(safe-area-inset-bottom));
   padding: 20rpx 32rpx calc(20rpx + env(safe-area-inset-bottom));
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(242, 252, 242, 0.98));
-  box-shadow: 0 -6rpx 24rpx rgba(15, 28, 20, 0.12);
+  background: rgba(255, 255, 255, 1);
+  backdrop-filter: blur(36rpx) saturate(1.3);
+  -webkit-backdrop-filter: blur(36rpx) saturate(1.3);
+  border-top: 2rpx solid rgba(255, 255, 255, 0.5);
+  box-shadow:
+    0 6rpx 40rpx rgba($sj-brand, 0.1),
+    0 10rpx 16rpx rgba(0, 0, 0, 0.10),
+    inset 0 2rpx 0 rgba(255, 255, 255, 0.94);
+  border-radius: 24rpx 24rpx 0 0;
 }
 
 .batch-info {
@@ -2281,14 +3601,11 @@ onUnmounted(() => {
   font-size: 26rpx;
   font-weight: 700;
 }
-
 .batch-cancel {
-  background: rgba(124, 108, 248, 0.1);
-  color: #7c6cf8;
+  color: var(--ink3);
 }
-
 .batch-del {
-  background: linear-gradient(135deg, #ff8a8a, #ff5b5b);
+  background: linear-gradient(135deg, #ff8a8a, #ff6b6b);
   color: #fff;
 }
 
