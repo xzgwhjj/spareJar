@@ -28,11 +28,53 @@
         <!-- 顶部栏 -->
         <TopBar @refresh="handleRefresh" />
 
-        <!-- 预算仪表盘 -->
-        <BudgetGaugeCard :is-over="IS_OVER" />
+        <!-- 引导未完成提示条 -->
+        <view v-if="!onboardingDone" class="onboard-tip" @click="goOnboarding">
+          <text class="ot-icon">👋</text>
+          <view class="ot-info">
+            <text class="ot-title">完成新手设置，开启存钱之旅</text>
+            <text class="ot-sub">设日限额 · 记第一笔 · 建心愿</text>
+          </view>
+          <text class="ot-arrow">›</text>
+        </view>
+
+        <!-- Bento：余钱罐主视觉卡 + 心愿进度迷你卡（右格） -->
+        <view class="bento">
+          <view class="bento-jar">
+            <BudgetGaugeCard :is-over="isOver" />
+          </view>
+          <view class="bento-wish">
+            <WishMiniCard />
+          </view>
+        </view>
+
+        <!-- 今日消费 chips -->
+        <TodaySpendChips />
 
         <!-- 盈余横幅 -->
         <SurplusBanner />
+
+        <!-- 拍照识别记账快速入口（阶段 9） -->
+        <view class="ocr-quick card-in-1" @click="goOcr">
+          <view class="ocr-quick-icon">📷</view>
+          <view class="ocr-quick-info">
+            <text class="ocr-quick-title">拍照识别记账</text>
+            <text class="ocr-quick-sub">小票 / 截图一键入账</text>
+          </view>
+          <text class="ocr-quick-arrow">›</text>
+        </view>
+
+        <!-- 总余额卡片（阶段 10 资产账户） -->
+        <view class="total-balance-placeholder card-in-1" @click="onTotalBalancePlaceholder">
+          <view class="tb-left">
+            <text class="tb-icon">🏦</text>
+            <view class="tb-info">
+              <text class="tb-label">总余额（可支配）</text>
+              <text class="tb-amount">¥{{ formatFen(disposableFen) }}</text>
+            </view>
+          </view>
+          <text class="tb-arrow">›</text>
+        </view>
 
         <!-- 存款池 -->
         <view class="savings-pool-band card-in-1">
@@ -44,12 +86,12 @@
             </view>
             <view class="pool-info">
               <text class="pool-label">存款池余额</text>
-              <text class="pool-amount">¥{{ SAVINGS_POOL.toLocaleString() }}</text>
+              <text class="pool-amount">¥{{ savingsPoolText }}</text>
             </view>
             <view class="pool-trend-box">
               <view class="pool-trend-item">
-                <text class="trend-icon">📈</text>
-                <text class="trend-text">本月 +¥320</text>
+                <text class="trend-icon">🔥</text>
+                <text class="trend-text">连续 {{ currentStreak }} 天</text>
               </view>
               <view class="pool-trend" @click="goSurplusHistory">
                 <text class="trend-text">查看明细</text>
@@ -76,30 +118,82 @@
 <script setup>
 import TabBar from '@/components/tabbar/tabbar.vue';
 import PrivacyPopup from '@/components/PrivacyPopup.vue';
-import { ref } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import BillList from './components/BillList.vue';
 import BudgetGaugeCard from './components/BudgetGaugeCard.vue';
 import HealthDualTrack from './components/HealthDualTrack.vue';
 import SurplusBanner from './components/SurplusBanner.vue';
 import TopBar from './components/TopBar.vue';
+import WishMiniCard from './components/WishMiniCard.vue';
+import TodaySpendChips from './components/TodaySpendChips.vue';
+import { useUserStore } from '@/stores/user.js';
+import { formatFen } from '@/utils/money.js';
 
-/* Mock 数据 */
-const DAILY_LIMIT = 200;
-const SPENT_TODAY = 81;
-const LEFT_TODAY = DAILY_LIMIT - SPENT_TODAY;
-const YESTERDAY_SURPLUS = 32;
-const SAVINGS_POOL = 1248;
-const IS_OVER = false;
-const STREAK = 7;
+const {
+  state,
+  isLoggedIn,
+  dailyLimitFen,
+  spentTodayFen,
+  leftTodayFen,
+  isOverLimit,
+  currentStreak,
+  surplusPoolBalanceFen,
+  refreshTodayDashboard,
+  loadCategories,
+  loadWishes,
+  loadAssetAccounts,
+  onboardingDone
+} = useUserStore();
+
+const isOver = computed(() => isOverLimit.value);
+
+// 阶段 10：总余额（可支配）来自资产账户汇总
+const disposableFen = computed(() => (state.assetTotals ? state.assetTotals.disposable : 0));
+const savingsPoolText = computed(() => formatFen(surplusPoolBalanceFen.value));
+
+const goOnboarding = () => {
+  uni.navigateTo({ url: '/pages/onboarding/onboarding' });
+};
 
 const refreshing = ref(false);
-const handleRefresh = () => {
+const handleRefresh = async () => {
   refreshing.value = true;
-  setTimeout(() => (refreshing.value = false), 1200);
+  try {
+    await Promise.all([
+      refreshTodayDashboard({ force: true }),
+      loadCategories(),
+      loadWishes()
+    ]);
+  } catch (err) {
+    console.error('[index] 刷新看板失败', err);
+  } finally {
+    refreshing.value = false;
+  }
 };
+
+onMounted(async () => {
+  if (!isLoggedIn.value) return;
+  try {
+    await Promise.all([
+      refreshTodayDashboard(),
+      loadCategories(),
+      loadWishes()
+    ]);
+  } catch (err) {
+    console.error('[index] 初始化看板失败', err);
+  }
+});
 
 const goSurplusHistory = () => {
   uni.navigateTo({ url: '/pages/surplus-history/surplus-history' });
+};
+
+const goOcr = () => {
+  uni.navigateTo({ url: '/pages/ocr/ocr' });
+};
+
+const onTotalBalancePlaceholder = () => {
+  uni.navigateTo({ url: '/pages/asset-mgr/asset-mgr' });
 };
 </script>
 
@@ -130,6 +224,24 @@ const goSurplusHistory = () => {
 
     .page-scroll {
       height: 1624rpx;
+    }
+
+    /* 引导未完成提示条 */
+    .onboard-tip {
+      display: flex;
+      align-items: center;
+      gap: 16rpx;
+      margin: 0 var(--page-margin) 20rpx;
+      padding: 20rpx 24rpx;
+      border-radius: var(--radius-badge);
+      background: linear-gradient(135deg, rgba(79,217,116,0.18), rgba(37,204,93,0.12));
+      border: 1px solid rgba(79,217,116,0.4);
+
+      .ot-icon { font-size: 36rpx; }
+      .ot-info { flex: 1; display: flex; flex-direction: column; }
+      .ot-title { font-size: 26rpx; font-weight: 700; color: #0f1c14; }
+      .ot-sub { font-size: 20rpx; color: #6b8c7a; margin-top: 4rpx; }
+      .ot-arrow { font-size: 36rpx; color: #25cc5d; }
     }
 
     /* 刷新指示器 */
@@ -166,6 +278,116 @@ const goSurplusHistory = () => {
       .refresh-text {
         font-size: 22rpx;
         color: var(--ink2);
+      }
+    }
+
+    /* Bento：余钱罐主视觉卡（上）+ 心愿进度迷你卡（下），纵向堆叠互不干扰 */
+    .bento {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 20rpx;
+      margin: var(--band-gap) var(--page-margin) 0;
+
+      .bento-jar {
+        width: 100%;
+        :deep(.budget-gauge-card) {
+          margin: 0;
+        }
+      }
+      .bento-wish {
+        width: 100%;
+        display: flex;
+        :deep(.wish-mini) {
+          margin: 0;
+          width: 100%;
+        }
+      }
+    }
+
+    /* 总余额（阶段 10 资产账户） */
+    .total-balance-placeholder {
+      margin: var(--band-gap) var(--page-margin) 0;
+      padding: 24rpx 28rpx;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+
+      .tb-left {
+        display: flex;
+        align-items: center;
+        gap: 18rpx;
+      }
+      .tb-icon {
+        font-size: 36rpx;
+        width: 72rpx;
+        height: 72rpx;
+        border-radius: 22rpx;
+        background: linear-gradient(135deg, rgba(194, 242, 200, 0.45), rgba(137, 229, 156, 0.3));
+        border: 2rpx solid rgba(137, 229, 156, 0.35);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .tb-info {
+        display: flex;
+        flex-direction: column;
+      }
+      .tb-label {
+        font-size: 24rpx;
+        color: var(--ink4);
+      }
+      .tb-amount {
+        font-size: 32rpx;
+        font-weight: 800;
+        color: var(--ink);
+        margin-top: 2rpx;
+      }
+      .tb-arrow {
+        font-size: 36rpx;
+        color: var(--g5);
+      }
+    }
+
+    /* 拍照识别记账快速入口（阶段 9） */
+    .ocr-quick {
+      margin: var(--band-gap) var(--page-margin) 0;
+      padding: 24rpx 28rpx;
+      display: flex;
+      align-items: center;
+      gap: 18rpx;
+      cursor: pointer;
+
+      .ocr-quick-icon {
+        font-size: 36rpx;
+        width: 72rpx;
+        height: 72rpx;
+        border-radius: 22rpx;
+        background: linear-gradient(135deg, rgba(194, 242, 200, 0.5), rgba(137, 229, 156, 0.32));
+        border: 2rpx solid rgba(137, 229, 156, 0.35);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .ocr-quick-info {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
+      .ocr-quick-title {
+        font-size: 26rpx;
+        font-weight: 700;
+        color: var(--ink);
+      }
+      .ocr-quick-sub {
+        font-size: 20rpx;
+        color: var(--ink4);
+        margin-top: 4rpx;
+      }
+      .ocr-quick-arrow {
+        font-size: 36rpx;
+        color: var(--g5);
       }
     }
 

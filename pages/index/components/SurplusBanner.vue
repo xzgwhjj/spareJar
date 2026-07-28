@@ -5,7 +5,7 @@
       <view class="surplus-content-glow" />
 
       <!-- 左上：a 图片 + b 标签 -->
-      <image class="surplus-avatar" src="/static/images/icon_surplus.png" mode="aspectFit" />
+      <image class="surplus-avatar" :src="cdn('/app_static/images/icon_surplus.png')" mode="aspectFit" />
 
       <!-- c / d / f + e：小圆角矩形 + 大圆角矩形 -->
       <view class="surplus-folder">
@@ -28,11 +28,11 @@
             <view class="surplus-main">
               <view class="surplus-title-row">
                 <view class="surplus-dot" />
-                <text class="surplus-title-text">昨日结余待分配</text>
+                <text class="surplus-title-text">{{ yesterdaySurplusFen > 0 ? '昨日结余待分配' : '昨日结余已分配' }}</text>
               </view>
               <view class="surplus-amount-row">
                 <text class="surplus-plus">＋¥</text>
-                <text class="surplus-num">{{ YESTERDAY_SURPLUS }}</text>
+                <text class="surplus-num">{{ yesterdaySurplusText }}</text>
               </view>
             </view>
             <view class="surplus-actions">
@@ -55,8 +55,12 @@
 
 <script setup>
 import { computed, ref } from 'vue';
+import { cdn } from '@/utils/cdn.js';
+import { useUserStore } from '@/stores/user.js';
+import { formatFen } from '@/utils/money.js';
 
-const YESTERDAY_SURPLUS = 32;
+const { yesterdaySurplusFen } = useUserStore();
+const yesterdaySurplusText = computed(() => formatFen(yesterdaySurplusFen.value));
 
 /** 单个 tab 动画占全周期的 1/3，12s 一轮 */
 const TAB_CYCLE_S = 12;

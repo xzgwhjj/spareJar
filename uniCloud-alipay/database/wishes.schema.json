@@ -67,8 +67,9 @@
       "defaultValue": 0
     },
     "completed_at": {
-      "bsonType": "timestamp",
-      "description": "达成时间"
+      "bsonType": "string",
+      "description": "达成时间",
+      "maxLength": 19
     },
     "sort_order": {
       "bsonType": "int",
@@ -76,12 +77,14 @@
       "defaultValue": 0
     },
     "created_at": {
-      "bsonType": "timestamp",
-      "description": "创建时间"
+      "bsonType": "string",
+      "description": "创建时间",
+      "maxLength": 19
     },
     "updated_at": {
-      "bsonType": "timestamp",
-      "description": "更新时间"
+      "bsonType": "string",
+      "description": "更新时间",
+      "maxLength": 19
     }
   }
 }

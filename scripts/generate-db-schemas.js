@@ -29,7 +29,8 @@ const SYSTEM_READ = {
 }
 
 function tsField(desc) {
-  return { bsonType: 'timestamp', description: desc }
+  // 数据库时间统一以 'YYYY-MM-DD HH:MM:SS' 字符串存储（长度 19）
+  return { bsonType: 'string', description: desc, maxLength: 19 }
 }
 
 function strField(maxLength, desc, extra = {}) {
@@ -228,13 +229,16 @@ writeSchema('ledgers', {
     is_default: { ...boolField('默认选中'), defaultValue: false },
     is_shared: { ...boolField('共享账本'), defaultValue: false },
     share_code: strField(16, '邀请码'),
+    monthly_budget: { ...intField('月度预算（分）'), defaultValue: 0 },
     sort_order: { ...intField('排序'), defaultValue: 0 },
     deleted_at: tsField('软删'),
     created_at: tsField('创建时间')
   }
 })
 writeIndex('ledgers', [
-  idx('uk_user_name', [{ name: 'user_id', type: 'varchar' }, { name: 'name', type: 'varchar' }], true),
+  // 允许同名账本：不再对 user_id+name 建唯一索引；created_at 仅作非唯一查询索引，
+  // 避免同秒创建（字符串秒级精度）触发唯一冲突。
+  idx('idx_user_created', [{ name: 'user_id', type: 'varchar' }, { name: 'created_at', type: 'varchar' }]),
   idx('idx_user_system', [{ name: 'user_id', type: 'varchar' }, { name: 'is_system', type: 'bool' }]),
   idx('uk_share_code', [{ name: 'share_code', type: 'varchar' }], true)
 ])

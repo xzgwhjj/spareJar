@@ -11,7 +11,7 @@
       <view class="limit-btn" @click="goLimitSetting">
         <!-- 待：符合风格的限额图标 -->
         <text class="limit-btn-icon">🎯</text>
-        <text class="limit-btn-text">限额 ¥{{ DAILY_LIMIT }}</text>
+        <text class="limit-btn-text">限额 ¥{{ dailyLimitText }}</text>
         <text class="limit-btn-arrow">›</text>
       </view>
       <view v-if="isOver" class="over-badge">
@@ -24,15 +24,15 @@
       <!-- 存钱罐 SVG -->
       <view class="jar-wrapper">
         <SavingsJar :pct="pct" :is-over="isOver" :left-pct="pct" />
-        <text class="jar-limit-text">满额 ¥{{ DAILY_LIMIT }}</text>
+        <text class="jar-limit-text">满额 ¥{{ dailyLimitText }}</text>
       </view>
 
       <!-- 悬浮面板 -->
       <view class="panel-float" :style="{ outline: isOver ? ' 2rpx solid rgba(255,107,107,0.18)' : '2rpx solid rgba(37,204,93,0.18)', boxShadow: isOver ? '0 16rpx 56rpx rgba(255,107,107,0.14),0 2px 8px rgba(0,0,0,0.05), inset 0 1.5px 0 rgba(255,255,255,0.98)' : '0 16rpx 56rpx rgba(37,204,93,0.2),0 2px 8px rgba(0,0,0,0.07), inset 0 1.5px 0 rgba(255,255,255,0.98)' }">
         <view class="hud-inner">
           <text class="hud-label">还可花</text>
-          <text class="hud-amount" :class="{ 'over-amount': isOver }">¥{{ LEFT_TODAY }}</text>
-          <text class="hud-spent">已用 ¥{{ SPENT_TODAY }} · 限额 ¥{{ DAILY_LIMIT }}</text>
+          <text class="hud-amount" :class="{ 'over-amount': isOver }">¥{{ leftText }}</text>
+          <text class="hud-spent">已用 ¥{{ spentText }} · 限额 ¥{{ dailyLimitText }}</text>
           <view class="hud-bar" :class="{ 'over-bar': isOver }">
             <view
               class="bar-grow-inner"
@@ -47,47 +47,37 @@
         </view>
       </view>
     </view>
-
-    <!-- 今日消费 chips -->
-    <view class="stats-panel">
-      <text class="stats-title">今日消费</text>
-      <view class="stats-chips">
-        <view v-for="b in BILLS" :key="b.id" class="stat-chip" :style="{ background: b.bg }">
-          <text>{{ b.icon }}</text>
-          <text>¥{{ Math.abs(b.amount) }}</text>
-        </view>
-      </view>
-      <text class="stats-total">
-        共 <text class="strong">{{ BILLS.length }}</text> 笔 · 合计
-        <text class="strong" :class="{ 'over-total': isOver }">¥{{ TOTAL_BILLS }}</text>
-      </text>
-    </view>
   </view>
 </template>
 
 <script setup>
 import { computed } from 'vue';
 import SavingsJar from './SavingsJar.vue';
+import { useUserStore } from '@/stores/user.js';
+import { formatFen } from '@/utils/money.js';
 
-defineProps({
+const props = defineProps({
   isOver: { type: Boolean, default: false },
 });
 
-const DAILY_LIMIT = 200;
-const SPENT_TODAY = 81;
-const LEFT_TODAY = DAILY_LIMIT - SPENT_TODAY;
-// 待：符合风格的消费图标（餐饮、交通、饮品、日用等）
-const BILLS = [
-  { id: 'b1', icon: '🍜', bg: '#FFF3E0', name: '午饭拉面', cat: '餐饮', time: '12:30', amount: -28 },
-  { id: 'b2', icon: '🚇', bg: '#E3F2FD', name: '地铁通勤', cat: '交通', time: '08:15', amount: -6 },
-  { id: 'b3', icon: '☕', bg: '#FBE9E7', name: '拿铁咖啡', cat: '饮品', time: '09:40', amount: -32 },
-  { id: 'b4', icon: '🛒', bg: '#F3E5F5', name: '便利店', cat: '日用', time: '19:00', amount: -15 },
-];
-const TOTAL_BILLS = BILLS.reduce((s, b) => s + Math.abs(b.amount), 0);
+const { state, dailyLimitFen, spentTodayFen, leftTodayFen, isOverLimit } = useUserStore();
 
-const pct = computed(() => Math.max(0, Math.min(LEFT_TODAY / DAILY_LIMIT, 1)));
-const spentPct = computed(() => SPENT_TODAY / DAILY_LIMIT);
-const cardClass = computed(() => (LEFT_TODAY < 0 ? 'glass-hero-alert alert-flash' : 'glass-hero'));
+const over = computed(() => props.isOver || isOverLimit.value);
+const dailyLimitText = computed(() => formatFen(dailyLimitFen.value));
+const spentText = computed(() => formatFen(spentTodayFen.value));
+const leftText = computed(() => formatFen(leftTodayFen.value));
+
+const pct = computed(() => {
+  const limit = dailyLimitFen.value;
+  if (!limit || limit <= 0) return 0;
+  return Math.max(0, Math.min(leftTodayFen.value / limit, 1));
+});
+const spentPct = computed(() => {
+  const limit = dailyLimitFen.value;
+  if (!limit || limit <= 0) return 0;
+  return Math.min(spentTodayFen.value / limit, 1);
+});
+const cardClass = computed(() => (over.value ? 'glass-hero-alert alert-flash' : 'glass-hero'));
 
 const goLimitSetting = () => uni.navigateTo({ url: '/pages/limit-setting/limit-setting' });
 </script>
@@ -226,35 +216,4 @@ const goLimitSetting = () => uni.navigateTo({ url: '/pages/limit-setting/limit-s
   transition: width 0.8s cubic-bezier(0.34, 1.2, 0.64, 1);
 }
 
-/* 今日消费 */
-.stats-panel {
-  margin-top: 24rpx;
-}
-.stats-title {
-  font-size: 22rpx;
-  color: #9bb8a8;
-  font-weight: 600;
-  display: block;
-  margin-bottom: 16rpx;
-}
-.stats-chips { display: flex; flex-wrap: wrap; gap: 12rpx; }
-.stat-chip {
-  display: flex;
-  align-items: center;
-  gap: 6rpx;
-  padding: 8rpx 18rpx;
-  border-radius: 40rpx;
-  font-size: 22rpx;
-  font-weight: 600;
-  color: #3a5244;
-}
-.stats-total {
-  margin-top: 16rpx;
-  margin-bottom: 8rpx;
-  font-size: 22rpx;
-  color: #9bb8a8;
-  display: block;
-}
-.stats-total .strong { font-weight: 700; color: #3a5244; }
-.stats-total .over-total { color: #ff6b6b; }
 </style>

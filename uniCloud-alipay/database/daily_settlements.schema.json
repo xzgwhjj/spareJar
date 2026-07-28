@@ -104,12 +104,14 @@
       "defaultValue": false
     },
     "settled_at": {
-      "bsonType": "timestamp",
-      "description": "日切时间"
+      "bsonType": "string",
+      "description": "日切时间",
+      "maxLength": 19
     },
     "created_at": {
-      "bsonType": "timestamp",
-      "description": "创建时间"
+      "bsonType": "string",
+      "description": "创建时间",
+      "maxLength": 19
     }
   }
 }

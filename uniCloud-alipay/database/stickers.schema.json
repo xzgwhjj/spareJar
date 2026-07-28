@@ -90,8 +90,9 @@
       "defaultValue": 0
     },
     "last_used_at": {
-      "bsonType": "timestamp",
-      "description": "最近使用"
+      "bsonType": "string",
+      "description": "最近使用",
+      "maxLength": 19
     },
     "sort_order": {
       "bsonType": "int",
@@ -99,16 +100,19 @@
       "defaultValue": 0
     },
     "deleted_at": {
-      "bsonType": "timestamp",
-      "description": "软删"
+      "bsonType": "string",
+      "description": "软删",
+      "maxLength": 19
     },
     "created_at": {
-      "bsonType": "timestamp",
-      "description": "创建时间"
+      "bsonType": "string",
+      "description": "创建时间",
+      "maxLength": 19
     },
     "updated_at": {
-      "bsonType": "timestamp",
-      "description": "更新时间"
+      "bsonType": "string",
+      "description": "更新时间",
+      "maxLength": 19
     }
   }
 }

@@ -59,12 +59,14 @@
       "maxLength": 64
     },
     "expires_at": {
-      "bsonType": "timestamp",
-      "description": "过期时间"
+      "bsonType": "string",
+      "description": "过期时间",
+      "maxLength": 19
     },
     "created_at": {
-      "bsonType": "timestamp",
-      "description": "创建时间"
+      "bsonType": "string",
+      "description": "创建时间",
+      "maxLength": 19
     }
   }
 }

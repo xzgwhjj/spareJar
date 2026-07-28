@@ -28,8 +28,9 @@
       "foreignKey": "achievements.code"
     },
     "unlocked_at": {
-      "bsonType": "timestamp",
-      "description": "解锁时间"
+      "bsonType": "string",
+      "description": "解锁时间",
+      "maxLength": 19
     },
     "is_seen": {
       "bsonType": "bool",

@@ -3,13 +3,13 @@
     <view class="topbar-left">
       <view class="topbar-greeting">
         <!-- 待：替换成小狗版天气图，根据天气情况显示不同图标 -->
-        <image src="/static/images/icon_sunny.png" class="greeting-icon"></image>
-        <text class="greeting-text">第7天</text>
+        <image :src="cdn('/app_static/images/icon_sunny.png')" class="greeting-icon"></image>
+        <text class="greeting-text">第{{ currentStreak }}天</text>
       </view>
       <view class="topbar-date">
         <view class="date-bar" />
-        <text class="date-text">6月16日</text>
-        <text class="weekday-text">周一</text>
+        <text class="date-text">{{ dateText }}</text>
+        <text class="weekday-text">{{ weekdayText }}</text>
       </view>
     </view>
 
@@ -17,7 +17,7 @@
     <view class="topbar-right">
       <view class="avatar-btn" :class="{ guest: isGuest }" @tap="onAvatarClick">
         <!-- 待：替换成小狗版头像图标，根据是否登录显示不同图标 -->
-        <image :src="isGuest ? '/static/images/icon_avatar.png' : '/static/images/icon_avatar.png'" class="avatar-icon" mode="aspectFit">
+        <image :src="cdn('/app_static/images/icon_avatar.png')" class="avatar-icon" mode="aspectFit">
         </image>
       </view>
     </view>
@@ -26,11 +26,23 @@
 
 <script setup>
 import { useUserStore } from '@/stores/user.js';
-import { onMounted, ref } from 'vue';
+import { cdn } from '@/utils/cdn.js';
+import { onMounted, ref, computed } from 'vue';
+import { todayDateKey, parseDateKey } from '@/utils/date.js';
 
 defineEmits(['refresh']);
 
-const { isLoggedIn, isGuest } = useUserStore();
+const { isLoggedIn, isGuest, currentStreak } = useUserStore();
+
+const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+const dateText = computed(() => {
+  const d = parseDateKey(todayDateKey());
+  return `${d.getMonth() + 1}月${d.getDate()}日`;
+});
+const weekdayText = computed(() => {
+  const d = parseDateKey(todayDateKey());
+  return WEEKDAYS[d.getDay()];
+});
 
 function resolveTopPadding() {
   try {

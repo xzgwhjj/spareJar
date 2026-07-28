@@ -38,6 +38,7 @@
 
 <script setup>
 import { onMounted, onUnmounted, ref } from 'vue';
+import { checkLoggedIn } from '@/stores/user.js';
 
 defineOptions({
   virtualHost: true,
@@ -116,9 +117,19 @@ const tabs = [
   },
 ];
 
+// 需要登录鉴权才能进入的 tab（按 key 标识，目前仅「账本」受限）
+const LOGIN_REQUIRED_KEYS = ['book'];
+
 const switchTab = (index) => {
   const tab = tabs[index];
   if (!tab?.path) return;
+  // 登录鉴权拦截：访问受限 tab 且未登录时，重定向到登录页并携带目标路径，
+  // 待登录成功后由登录页 reLaunch 回原目标页。
+  if (LOGIN_REQUIRED_KEYS.includes(tab.key) && !checkLoggedIn()) {
+    console.log('[tabbar] 未登录，拦截「' + tab.label + '」跳转至登录页，redirect =', tab.path);
+    uni.navigateTo({ url: `/pages/login/login?redirect=${encodeURIComponent(tab.path)}` });
+    return;
+  }
   uni.switchTab({ url: tab.path });
 };
 </script>

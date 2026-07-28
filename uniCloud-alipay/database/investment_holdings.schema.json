@@ -77,20 +77,24 @@
       "description": "浮动盈亏(分)"
     },
     "last_adjust_at": {
-      "bsonType": "timestamp",
-      "description": "最近调整"
+      "bsonType": "string",
+      "description": "最近调整",
+      "maxLength": 19
     },
     "deleted_at": {
-      "bsonType": "timestamp",
-      "description": "软删"
+      "bsonType": "string",
+      "description": "软删",
+      "maxLength": 19
     },
     "created_at": {
-      "bsonType": "timestamp",
-      "description": "创建时间"
+      "bsonType": "string",
+      "description": "创建时间",
+      "maxLength": 19
     },
     "updated_at": {
-      "bsonType": "timestamp",
-      "description": "更新时间"
+      "bsonType": "string",
+      "description": "更新时间",
+      "maxLength": 19
     }
   }
 }

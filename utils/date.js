@@ -44,6 +44,16 @@ function pad2(n) {
 }
 
 /**
+ * 将 'YYYY-MM-DD HH:MM:SS' 规范为 ISO 片段 'YYYY-MM-DDTHH:MM:SS'，
+ * 以便 new Date() 在各引擎（含 iOS/Safari）正确解析。
+ * @param {string} s
+ * @returns {string}
+ */
+function normalizeTimestamp(s) {
+  return s.replace(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})$/, '$1T$2')
+}
+
+/**
  * 校验 date_key 格式与日历合法性
  * @param {unknown} dateKey
  * @returns {dateKey is string}
@@ -109,7 +119,7 @@ export function toDate(input) {
     if (isValidDateKey(input)) {
       return parseDateKey(input)
     }
-    const parsed = new Date(input)
+    const parsed = new Date(normalizeTimestamp(input))
     if (Number.isNaN(parsed.getTime())) {
       throw new DateKeyError(`无法解析日期: ${input}`, 'DATE_PARSE')
     }
@@ -136,6 +146,34 @@ export function formatDateKey(input) {
 export function formatMonthKey(input) {
   const dateKey = formatDateKey(input)
   return dateKey.slice(0, 7)
+}
+
+/**
+ * 格式化为日期时间字符串 YYYY-MM-DD HH:MM:SS（本地时区），用于数据库时间字段存储。
+ * 兼容 Date / 时间戳(ms) / 'YYYY-MM-DD' / 'YYYY-MM-DD HH:MM:SS' 输入。
+ * @param {Date|number|string} [input]
+ * @returns {string}
+ */
+export function formatDateTime(input = new Date()) {
+  let date
+  if (input instanceof Date) date = input
+  else if (typeof input === 'number') date = new Date(input)
+  else date = new Date(normalizeTimestamp(String(input)))
+  if (Number.isNaN(date.getTime())) {
+    throw new DateKeyError(`无法解析时间: ${input}`, 'DATE_PARSE')
+  }
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ` +
+    `${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`
+}
+
+/**
+ * 格式化为 year_key (YYYY)
+ * @param {Date|number|string} [input]
+ * @returns {string}
+ */
+export function formatYearKey(input) {
+  const date = toDate(input)
+  return `${date.getFullYear()}`
 }
 
 /**
@@ -302,6 +340,8 @@ export default {
   toDate,
   formatDateKey,
   formatMonthKey,
+  formatYearKey,
+  formatDateTime,
   parseDateKey,
   parseMonthKey,
   dateKeyToTimestamp,

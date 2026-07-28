@@ -82,8 +82,9 @@
       "defaultValue": ""
     },
     "created_at": {
-      "bsonType": "timestamp",
-      "description": "创建时间"
+      "bsonType": "string",
+      "description": "创建时间",
+      "maxLength": 19
     }
   }
 }

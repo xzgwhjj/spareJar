@@ -2,6 +2,8 @@
 
 const uniID = require('uni-id-common')
 const createConfig = require('uni-config-center')({ pluginId: 'uni-id' })
+// 复用 sparejar-db 公共模块的幂等总账本初始化逻辑（ensureMasterLedger）
+const dbApi = require('sparejar-db')
 
 function ok(data) {
   return { code: 0, message: 'ok', data }
@@ -69,10 +71,11 @@ async function upsertUniIdUser(openid, unionid) {
       wx_unionid: unionid || doc.wx_unionid || null,
       last_login_date: now
     })
-    return doc
+    // 仅更新登录态，未新建账户
+    return { user: doc, isNew: false }
   }
 
-  await users.doc(openid).set({
+  const newDoc = {
     wx_openid: openid,
     wx_unionid: unionid || null,
     nickname: '',
@@ -81,9 +84,10 @@ async function upsertUniIdUser(openid, unionid) {
     last_login_date: now,
     token: [],
     status: 0
-  })
+  }
+  await users.doc(openid).set(newDoc)
 
-  return { _id: openid, wx_openid: openid }
+  return { user: { _id: openid, ...newDoc }, isNew: true }
 }
 
 exports.main = async (event, context) => {
@@ -104,7 +108,17 @@ exports.main = async (event, context) => {
   try {
     const wxSession = await jscode2session(code, appid, appsecret)
     const openid = wxSession.openid
-    await upsertUniIdUser(openid, wxSession.unionid)
+    const { isNew } = await upsertUniIdUser(openid, wxSession.unionid)
+
+    // 注册（首次创建用户）即初始化专属默认总账本，并与用户 openid 关联；
+    // 后续登录/进入应用时该账本已存在，直接按 user_id 读取，避免重复创建。
+    if (isNew) {
+      try {
+        await dbApi.ensureMasterLedger(openid)
+      } catch (e) {
+        console.error('[sparejar-auth] 新用户创建默认总账本失败', openid, e)
+      }
+    }
 
     const uniIdIns = uniID.createInstance({ context })
     const tokenRes = await uniIdIns.createToken({ uid: openid })

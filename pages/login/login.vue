@@ -17,7 +17,7 @@
     </view>
     <view class="login-content card-in-1">
       <view class="logo-wrap">
-        <image src="/static/images/icon_logo.png" class="logo" mode="aspectFit"></image>
+        <image :src="cdn('/app_static/images/icon_logo.png')" class="logo" mode="aspectFit"></image>
         <view class="logo-bg"></view>
       </view>
     </view>
@@ -50,12 +50,22 @@
 <script setup>
 import PrivacyPopup from '@/components/PrivacyPopup.vue';
 import { ref } from 'vue';
-import { loginAndBootstrap, isUserStoreError } from '@/stores/user.js';
+import { cdn } from '@/utils/cdn.js';
+import { onLoad } from '@dcloudio/uni-app';
+import { useUserStore, loginWithWeixin, bootstrap, isUserStoreError } from '@/stores/user.js';
 import { usePrivacy } from '@/stores/privacy.js';
 
 const { state: privacyState } = usePrivacy();
+const userStore = useUserStore();
 const loading = ref(false);
 const agreedPrivacy = ref(false);
+// 登录后需要返回的目标页面（由拦截方通过 ?redirect= 传入，支持 tabBar 与普通页面）
+const redirect = ref('');
+
+onLoad((query) => {
+  redirect.value = query && query.redirect ? decodeURIComponent(query.redirect) : '';
+  console.log('[login] onLoad redirect =', redirect.value);
+});
 
 // 返回按钮与微信胶囊垂直居中对齐
 function resolveNavTop() {
@@ -115,16 +125,30 @@ async function handleLogin() {
 
   loading.value = true;
   try {
-    await loginAndBootstrap();
-    uni.showToast({ title: '登录成功', icon: 'success' });
+    // 1) 仅等待微信登录换取 token（登录态建立的必要步骤，无法绕过）
+    await loginWithWeixin();
+
+    // 2) 登录态已就绪，立即提示并跳转，不再等待全量业务数据加载
+    // uni.showToast({ title: '登录成功', icon: 'success' });
     setTimeout(() => {
+      // 若由受限页面拦截而来，登录成功后平滑返回原目标页面（reLaunch 同时支持 tabBar 与普通页）
+      if (redirect.value) {
+        console.log('[login] 登录成功，reLaunch 回原目标页 =', redirect.value);
+        uni.reLaunch({ url: redirect.value });
+        return;
+      }
       const pages = getCurrentPages();
       if (pages.length > 1) {
         uni.navigateBack();
       } else {
         uni.switchTab({ url: '/pages/index/index' });
       }
-    }, 400);
+    }, 300);
+
+    // 3) 业务数据（心愿/贴纸/挑战/资产/健康/分类/看板等）改为后台异步补全，
+    //    不阻塞登录跳转；目标页（如账本）进入后会自行按需加载，用户立即可见。
+    bootstrap().catch((err) => console.error('[login] 后台 bootstrap 失败', err));
+    uni.$emit('sparejar-auth-changed', { isLoggedIn: true, uid: userStore.state.uid });
   } catch (err) {
     const message = isUserStoreError(err) ? err.message : (err?.message || '登录失败');
     uni.showToast({ title: message, icon: 'none', duration: 3000 });

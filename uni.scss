@@ -82,6 +82,8 @@ $sj-g2: #c2f2c8 !default;
 $sj-g3: #89e59c !default;
 $sj-g4: #4fd974 !default;
 $sj-g5: #25cc5d !default;
+$sj-g6: #EFF8E0 !default;
+$sj-g7: #E4F0FE !default;
 $sj-ink: #0f1c14 !default;
 $sj-ink-deep: #1a2820 !default;
 $sj-ink2: #3a5244 !default;
@@ -93,6 +95,10 @@ $sj-amber: #f59e0b !default;
 $sj-amber2: #fcd34d !default;
 $sj-amber-bg: rgba(245, 158, 11, 0.1) !default;
 $sj-blue: #93c5fd !default;
+$sj-purple: #7c6cf8 !default;            // 月结余/紫色
+$sj-purple-bg: rgba(124, 108, 248, 0.1) !default;
+$sj-glow: #23c55e !default;               // 卡片右下角绿色光晕（示例）
+$sj-white-75: rgba(255, 255, 255, 0.75) !default;
 $sj-aurora-top: #c8f4d0 !default;
 $sj-aurora-halo: #a8efc0 !default;
 $sj-blob-light: #b8f0c2 !default;
@@ -126,6 +132,9 @@ $sj-radius-pill: 999px !default;
   --brand-rgb: #{$sj-brand-rgb};
   --radius-xl: #{$sj-radius-xl};
   --radius-lg: #{$sj-radius-lg};
+  --purple: #{$sj-purple};
+  --glow: #{$sj-glow};
+  --white-75: #{$sj-white-75};
 }
 @mixin sj-brand-gradient($deg: 135deg) {
   background: linear-gradient($deg, $sj-g4, $sj-g5);

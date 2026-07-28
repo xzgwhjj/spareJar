@@ -10,6 +10,10 @@
 <script setup>
 import { loadAnimation, setup } from 'lottie-miniprogram';
 import { getCurrentInstance, onMounted, onUnmounted } from 'vue';
+import { cdn } from '@/utils/cdn.js';
+
+// Lottie 动画资源（远程 CDN，失败自动回退本地打包）
+const CDN_LOTTIE_URL = cdn('/app_static/lotties/star_piggy_bank.json');
 
 const props = defineProps({
   /** 剩余可花比例 0~1（保留以兼容父组件调用，视觉由 Lottie 呈现） */
@@ -120,13 +124,25 @@ async function initLottie() {
         // ★ 关键：必须先调用 setup 注入小程序 canvas 适配环境
         setup(canvas);
 
-        // 动态加载 Lottie 资源（避免常态打包 754KB）
+        // 加载 Lottie 资源（仅远程 CDN，本地文件已移除）
         let animationData = null;
         try {
-          const mod = await import('@/static/lotties/star_piggy_bank.json');
-          animationData = mod.default || mod;
+          const req = await new Promise((resolve, reject) => {
+            uni.request({
+              url: CDN_LOTTIE_URL,
+              method: 'GET',
+              success: resolve,
+              fail: reject,
+            });
+          });
+          animationData = req.data;
         } catch (e) {
-          console.error('[SavingsJar] 加载 Lottie 资源失败:', e);
+          console.error('[SavingsJar] 远程 Lottie 加载失败:', e);
+          resolve(false);
+          return;
+        }
+        if (!animationData) {
+          console.error('[SavingsJar] 远程 Lottie 返回为空');
           resolve(false);
           return;
         }

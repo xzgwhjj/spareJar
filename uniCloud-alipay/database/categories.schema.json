@@ -32,7 +32,7 @@
     },
     "group": {
       "bsonType": "string",
-      "description": "二级分组码(中层)，按 type 隔离，如 fixed/variable/lifestyle/leisure/medical/education/social/unexpected 或 active/passive/transfer/occasional",
+      "description": "二级分组码(中层)，按 type 隔离，如 fixed/variable 或 active/passive",
       "maxLength": 32
     },
     "name": {
@@ -67,8 +67,9 @@
       "foreignKey": "categories._id"
     },
     "created_at": {
-      "bsonType": "timestamp",
-      "description": "创建时间"
+      "bsonType": "string",
+      "description": "创建时间",
+      "maxLength": 19
     }
   }
 }

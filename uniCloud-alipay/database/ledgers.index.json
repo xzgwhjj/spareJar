@@ -1,6 +1,6 @@
 [
   {
-    "IndexName": "uk_user_name",
+    "IndexName": "idx_user_created",
     "MgoKeySchema": {
       "MgoIndexKeys": [
         {
@@ -9,12 +9,12 @@
           "Type": "varchar"
         },
         {
-          "Name": "name",
+          "Name": "created_at",
           "Direction": "1",
           "Type": "varchar"
         }
       ],
-      "MgoIsUnique": true
+      "MgoIsUnique": false
     }
   },
   {

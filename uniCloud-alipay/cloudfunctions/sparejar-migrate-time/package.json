@@ -1,0 +1,10 @@
+{
+  "name": "sparejar-migrate-time",
+  "version": "1.0.0",
+  "description": "一次性迁移：历史数字时间戳 -> yyyy-mm-dd hh:mm:ss 字符串",
+  "main": "index.js",
+  "cloudfunction-config": {
+    "memorySize": 256,
+    "timeout": 60
+  }
+}

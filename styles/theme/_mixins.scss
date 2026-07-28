@@ -16,8 +16,15 @@
   --red-soft: #{$sj-red};
   --red-bg: #{$sj-red-bg};
   --amber: #{$sj-amber};
+  --amber2: #{$sj-amber2};
   --amber-bg: #{$sj-amber-bg};
+  --blue: #{$sj-blue};
   --brand-rgb: #{$sj-brand-rgb};
+  --radius-xl: #{$sj-radius-xl};
+  --radius-lg: #{$sj-radius-lg};
+  --purple: #{$sj-purple};
+  --glow: #{$sj-glow};
+  --white-75: #{$sj-white-75};
 }
 
 @mixin sj-brand-gradient($deg: 135deg) {

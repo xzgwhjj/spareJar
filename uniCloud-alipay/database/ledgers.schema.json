@@ -52,18 +52,25 @@
       "description": "邀请码",
       "maxLength": 16
     },
+    "monthly_budget": {
+      "bsonType": "int",
+      "description": "月度预算（分）",
+      "defaultValue": 0
+    },
     "sort_order": {
       "bsonType": "int",
       "description": "排序",
       "defaultValue": 0
     },
     "deleted_at": {
-      "bsonType": "timestamp",
-      "description": "软删"
+      "bsonType": "string",
+      "description": "软删",
+      "maxLength": 19
     },
     "created_at": {
-      "bsonType": "timestamp",
-      "description": "创建时间"
+      "bsonType": "string",
+      "description": "创建时间",
+      "maxLength": 19
     }
   }
 }

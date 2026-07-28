@@ -85,9 +85,65 @@
       }
     },
     {
+      "path": "pages/sticker-lib/sticker-edit",
+      "style": {
+        "navigationBarTitleText": "编辑贴纸",
+        "navigationStyle": "custom"
+      }
+    },
+    {
       "path": "pages/asset-mgr/asset-mgr",
       "style": {
         "navigationBarTitleText": "资产管理",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/asset-detail/asset-detail",
+      "style": {
+        "navigationBarTitleText": "账户详情",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/category-mgr/category-mgr",
+      "style": {
+        "navigationBarTitleText": "分类管理",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/onboarding/onboarding",
+      "style": {
+        "navigationBarTitleText": "新手设置",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/notify-setting/notify-setting",
+      "style": {
+        "navigationBarTitleText": "通知设置",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/ocr/ocr",
+      "style": {
+        "navigationBarTitleText": "拍照识别记账",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/health-settings/health-settings",
+      "style": {
+        "navigationBarTitleText": "身体数据设置",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/meal-detail/meal-detail",
+      "style": {
+        "navigationBarTitleText": "餐次详情",
         "navigationStyle": "custom"
       }
     }

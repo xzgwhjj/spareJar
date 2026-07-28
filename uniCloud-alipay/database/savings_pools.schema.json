@@ -50,8 +50,9 @@
       "maxLength": 7
     },
     "updated_at": {
-      "bsonType": "timestamp",
-      "description": "更新时间"
+      "bsonType": "string",
+      "description": "更新时间",
+      "maxLength": 19
     }
   }
 }

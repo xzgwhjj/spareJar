@@ -16,7 +16,7 @@
           <text class="topbar-title">🏆 余钱罐挑战</text>
         </view>
         <view class="streak-badge badge-pulse">
-          <text>🔥 连击 {{ DAILY.streak }} 天</text>
+          <text>🔥 连击 {{ streakDays }} 天</text>
         </view>
       </view>
 
@@ -26,26 +26,31 @@
           <text class="ch-icon">📅</text>
           <view>
             <text class="ch-title">每日挑战</text>
-            <text class="ch-sub">今日限额 ¥{{ DAILY.dailyLimit }}</text>
+            <text class="ch-sub">今日限额 {{ formatFen(dailyChallenge.limit) }}</text>
           </view>
-          <text class="ch-status" :class="DAILY.success ? 'success' : 'fail'">
-            {{ DAILY.success ? '✅ 达成' : '❌ 超支' }}
+          <text class="ch-status" :class="dailyChallenge.success ? 'success' : 'fail'">
+            {{ dailyChallenge.success ? '✅ 达成' : '❌ 超支' }}
           </text>
         </view>
 
-        <!-- 进度环 -->
-        <view class="ring-container">
+        <block v-if="dailyChallenge.has">
           <view class="ring-label">
-            <text class="ring-spent">¥{{ DAILY.todaySpent }}</text>
-            <text class="ring-remain">剩余 ¥{{ DAILY.dailyLimit - DAILY.todaySpent }}</text>
+            <text class="ring-spent">{{ formatFen(dailyChallenge.consumed) }}</text>
+            <text class="ring-remain">剩余 {{ formatFen(Math.max(0, dailyChallenge.limit - dailyChallenge.consumed)) }}</text>
           </view>
+          <view class="daily-bar">
+            <view class="daily-fill" :style="{ width: Math.min(dailyChallenge.consumed / Math.max(1, dailyChallenge.limit) * 100, 100) + '%', background: dailyChallenge.success ? 'linear-gradient(90deg,#89e59c,#25cc5d)' : '#ff6b6b' }" />
+          </view>
+        </block>
+        <view v-else class="ch-empty">
+          <text>设置日限额后开启每日挑战</text>
         </view>
 
         <!-- 7日热力图 -->
         <text class="section-subtitle">最近 7 天</text>
         <view class="heatmap">
-          <view v-for="(d, i) in DAILY.historyDays" :key="i" class="heat-day">
-            <view class="heat-bar" :class="d.success ? 'success' : 'fail'" :style="{ height: (d.spent / d.limit * 50) + 'px' }" />
+          <view v-for="(d, i) in history7" :key="i" class="heat-day">
+            <view class="heat-bar" :class="d.is_success ? 'success' : 'fail'" :style="{ height: (d.base_limit > 0 ? Math.min(d.consumed / d.base_limit, 1.2) * 42 : (d.is_success ? 42 : 6)) + 'px' }" />
             <text class="heat-label">{{ d.date }}</text>
           </view>
         </view>
@@ -53,40 +58,48 @@
 
       <!-- 月度挑战 -->
       <view class="glass-mid card-in-1" style="margin:0 16px 16px;padding:18px;">
-        <text class="section-title">📆 月度挑战</text>
-        <view v-for="mc in MONTH_CHALLENGES" :key="mc.id" class="challenge-card" style="margin-top:12px;">
+        <view class="section-title-row">
+          <text class="section-title">📆 月度挑战</text>
+          <text class="add-target" @click="openTargetSheet('monthly')">+ 设目标</text>
+        </view>
+        <view v-if="!monthlyChallenges.length" class="ch-empty"><text>本月还没有挑战目标，点「设目标」开启</text></view>
+        <view v-for="mc in monthlyChallenges" :key="mc._id" class="challenge-card" style="margin-top:12px;">
           <view class="ch-card-header">
-            <text class="ch-card-title">{{ mc.title }}</text>
-            <text class="ch-card-status" :class="mc.done ? (mc.success ? 'success' : 'fail') : 'pending'">
-              {{ mc.done ? (mc.success ? '已完成' : '未达成') : '进行中' }}
+            <text class="ch-card-title">{{ mc.ledger_id ? '绑定账本挑战' : '本月消费挑战' }}</text>
+            <text class="ch-card-status" :class="mc.status === 'completed' ? (mc.is_success ? 'success' : 'fail') : 'pending'">
+              {{ mc.status === 'completed' ? (mc.is_success ? '已达标' : '未达成') : '进行中' }}
             </text>
           </view>
-          <view class="ch-card-bar">
-            <view class="ch-card-fill" :style="{ width: Math.min(mc.spent / mc.target * 100, 100) + '%', background: mc.spent > mc.target ? '#ff6b6b' : 'linear-gradient(90deg,#89e59c,#25cc5d)' }" />
+          <view v-if="mc.target_amount > 0" class="ch-card-bar">
+            <view class="ch-card-fill" :style="{ width: Math.min(mc.consumed_amount / Math.max(1, mc.target_amount) * 100, 100) + '%', background: mc.consumed_amount > mc.target_amount ? '#ff6b6b' : 'linear-gradient(90deg,#89e59c,#25cc5d)' }" />
           </view>
           <view class="ch-card-meta">
-            <text>¥{{ mc.spent }} / ¥{{ mc.target }}</text>
-            <text>{{ mc.startDate }} - {{ mc.endDate }}</text>
+            <text>{{ mc.target_amount > 0 ? formatFen(mc.consumed_amount) + ' / ' + formatFen(mc.target_amount) : '目标未设置' }}</text>
+            <text @click="openTargetSheet('monthly')" style="color:#25cc5d;">编辑</text>
           </view>
         </view>
       </view>
 
       <!-- 年度挑战 -->
       <view class="glass-mid card-in-1" style="margin:0 16px 16px;padding:18px;">
-        <text class="section-title">🎯 年度挑战</text>
-        <view v-for="yc in YEAR_CHALLENGES" :key="yc.id" class="challenge-card" style="margin-top:12px;">
+        <view class="section-title-row">
+          <text class="section-title">🎯 年度挑战</text>
+          <text class="add-target" @click="openTargetSheet('yearly')">+ 设目标</text>
+        </view>
+        <view v-if="!yearlyChallenges.length" class="ch-empty"><text>今年还没有挑战目标，点「设目标」开启</text></view>
+        <view v-for="yc in yearlyChallenges" :key="yc._id" class="challenge-card" style="margin-top:12px;">
           <view class="ch-card-header">
-            <text class="ch-card-title">{{ yc.title }}</text>
-            <text class="ch-card-status" :class="yc.done ? (yc.success ? 'success' : 'fail') : 'pending'">
-              {{ yc.done ? (yc.success ? '已完成' : '未达成') : '进行中' }}
+            <text class="ch-card-title">{{ yc.ledger_id ? '绑定账本挑战' : (yc.period_key + ' 年度挑战') }}</text>
+            <text class="ch-card-status" :class="yc.status === 'completed' ? (yc.is_success ? 'success' : 'fail') : 'pending'">
+              {{ yc.status === 'completed' ? (yc.is_success ? '已达标' : '未达成') : '进行中' }}
             </text>
           </view>
-          <view class="ch-card-bar">
-            <view class="ch-card-fill" :style="{ width: Math.min(yc.spent / yc.target * 100, 100) + '%' }" />
+          <view v-if="yc.target_amount > 0" class="ch-card-bar">
+            <view class="ch-card-fill" :style="{ width: Math.min(yc.consumed_amount / Math.max(1, yc.target_amount) * 100, 100) + '%', background: yc.consumed_amount > yc.target_amount ? '#ff6b6b' : 'linear-gradient(90deg,#89e59c,#25cc5d)' }" />
           </view>
           <view class="ch-card-meta">
-            <text>¥{{ yc.spent.toLocaleString() }} / ¥{{ yc.target.toLocaleString() }}</text>
-            <text>{{ yc.year }}年</text>
+            <text>{{ yc.target_amount > 0 ? formatFen(yc.consumed_amount) + ' / ' + formatFen(yc.target_amount) : '目标未设置' }}</text>
+            <text @click="openTargetSheet('yearly')" style="color:#25cc5d;">编辑</text>
           </view>
         </view>
       </view>
@@ -94,17 +107,54 @@
       <!-- 徽章墙 -->
       <view class="glass-mid card-in-1" style="margin:0 16px 24px;padding:18px;">
         <text class="section-title">🎖️ 徽章成就</text>
+        <view v-if="!achievementsList.length" class="ch-empty"><text>完成记账、设限额、连续打卡即可点亮徽章</text></view>
         <view class="badge-grid">
-          <view v-for="b in BADGES" :key="b.id" class="badge-item" :class="{ unlocked: b.unlocked }">
-            <view class="badge-icon-box" :class="b.tier">
-              <text class="badge-emoji">{{ b.unlocked ? b.emoji : '🔒' }}</text>
+          <view v-for="b in achievementsList" :key="b.code" class="badge-item" :class="{ unlocked: b.unlocked }" @click="openPoster(b)">
+            <view class="badge-icon-box" :class="tierOf(b)">
+              <text class="badge-emoji">{{ b.unlocked ? badgeEmoji(b) : '🔒' }}</text>
             </view>
             <text class="badge-name">{{ b.name }}</text>
-            <text class="badge-tier">{{ tierLabel(b.tier) }}</text>
+            <text class="badge-tier">{{ b.unlocked ? '已解锁' : '未解锁' }}</text>
           </view>
         </view>
       </view>
     </scroll-view>
+
+    <!-- 设置目标弹窗 -->
+    <view v-if="showTargetSheet" class="sheet-overlay" @click="showTargetSheet = false">
+      <view class="sheet" @click.stop>
+        <text class="sheet-title">{{ targetType === 'monthly' ? '设置月度挑战目标' : '设置年度挑战目标' }}</text>
+        <text class="sheet-sub">周期内总消费不超过该金额即达标</text>
+        <input class="sheet-input" v-model="targetAmountYuan" type="digit" placeholder="目标金额（元）" />
+        <text class="sheet-label">绑定账本（可选，仅统计该账本消费）</text>
+        <picker class="sheet-picker" :range="ledgerOptions" range-key="label" @change="onLedgerPick">
+          <view class="sheet-picker-text">{{ ledgerLabel }}</view>
+        </picker>
+        <view class="sheet-actions">
+          <view class="sheet-btn ghost" @click="showTargetSheet = false">取消</view>
+          <view class="sheet-btn" @click="confirmTarget">保存</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 分享海报弹层 -->
+    <view v-if="showPoster" class="sheet-overlay" @click="showPoster = false">
+      <view class="poster-sheet" @click.stop>
+        <view class="poster-card">
+          <text class="poster-emoji">{{ posterAch ? badgeEmoji(posterAch) : '🏆' }}</text>
+          <text class="poster-name">{{ posterAch ? posterAch.name : '' }}</text>
+          <text class="poster-desc">{{ posterAch ? (posterAch.description || '') : '' }}</text>
+          <view class="poster-streak"><text>🔥 连续挑战 {{ streakDays }} 天</text></view>
+          <text class="poster-brand">余钱罐 · 把省下的钱攒成惊喜</text>
+        </view>
+        <view class="sheet-actions">
+          <view class="sheet-btn ghost" @click="showPoster = false">关闭</view>
+          <view class="sheet-btn" @click="savePoster">保存海报</view>
+        </view>
+      </view>
+    </view>
+
+    <canvas canvas-id="posterCanvas" :style="{ position: 'fixed', left: '-9999px', top: '0', width: '300px', height: '420px' }" />
 
     <!-- TabBar -->
     <TabBar :current="3" />
@@ -112,42 +162,135 @@
 </template>
 
 <script setup>
-import TabBar from '@/components/tabbar/tabbar.vue';
-const DAILY = {
-  streak: 23,
-  todaySpent: 134.5,
-  dailyLimit: 200,
-  success: true,
-  historyDays: [
-    { date: '06-15', spent: 98, limit: 200, success: true },
-    { date: '06-16', spent: 176, limit: 200, success: true },
-    { date: '06-17', spent: 210, limit: 200, success: false },
-    { date: '06-18', spent: 145, limit: 200, success: true },
-    { date: '06-19', spent: 88, limit: 200, success: true },
-    { date: '06-20', spent: 190, limit: 200, success: true },
-    { date: '06-21', spent: 134, limit: 200, success: true },
-  ],
-};
+import { ref, computed, onMounted } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
+import TabBar from '@/components/tabbar/tabbar.vue'
+import { useUserStore } from '@/stores/user.js'
+import { listLedgers } from '@/api/sparejar.js'
+import { formatFen, yuanToFen } from '@/utils/money.js'
+import { formatMonthKey, formatYearKey } from '@/utils/date.js'
 
-const MONTH_CHALLENGES = [
-  { id: 'm1', title: '6月餐饮控制', target: 3000, spent: 2340, startDate: '06-01', endDate: '06-30', done: false, success: false },
-  { id: 'm2', title: '6月日用品管控', target: 1200, spent: 1150, startDate: '06-01', endDate: '06-30', done: false, success: false },
-];
+const store = useUserStore()
+const toast = (title, icon = 'none') => uni.showToast({ title, icon })
 
-const YEAR_CHALLENGES = [
-  { id: 'y1', title: '2024 年存款目标', target: 50000, spent: 28500, year: 2024, done: false, success: false },
-];
+const summary = computed(() => store.state.challenges)
+const achievementsList = computed(() => store.state.achievements || [])
+const streakDays = computed(() => store.currentStreak.value)
 
-const BADGES = [
-  { id: 'b1', emoji: '🔥', name: '七日连击', desc: '', condition: '', unlocked: true, unlockedAt: '', tier: 'bronze', category: 'daily' },
-  { id: 'b2', emoji: '💎', name: '月度达人', desc: '', condition: '', unlocked: true, unlockedAt: '', tier: 'silver', category: 'monthly' },
-  { id: 'b3', emoji: '👑', name: '存款万元户', desc: '', condition: '', unlocked: true, unlockedAt: '', tier: 'gold', category: 'special' },
-  { id: 'b4', emoji: '🌟', name: '年度英雄', desc: '', condition: '', unlocked: false, unlockedAt: '', tier: 'diamond', category: 'yearly' },
-  { id: 'b5', emoji: '🎯', name: '精准射手', desc: '', condition: '', unlocked: false, unlockedAt: '', tier: 'silver', category: 'monthly' },
-  { id: 'b6', emoji: '🏆', name: '冠军', desc: '', condition: '', unlocked: false, unlockedAt: '', tier: 'gold', category: 'special' },
-];
+const dailyChallenge = computed(() => {
+  const s = summary.value
+  if (s && s.daily) {
+    const limit = s.daily.base_limit_snapshot || 0
+    return { consumed: s.daily.consumed_amount || 0, limit, success: !!s.daily.is_success, has: limit > 0 }
+  }
+  const set = store.state.dashboard.settlement
+  const limit = store.dailyLimitFen.value || 0
+  const consumed = set ? (set.challenge_consumed || 0) : 0
+  return { consumed, limit, success: limit > 0 ? consumed <= limit : false, has: limit > 0 }
+})
 
-const tierLabel = (t) => ({ bronze: '铜', silver: '银', gold: '金', diamond: '钻' })[t] || t;
+const history7 = computed(() => summary.value ? (summary.value.history7 || []) : [])
+const monthlyChallenges = computed(() => summary.value ? (summary.value.monthly || []) : [])
+const yearlyChallenges = computed(() => summary.value ? (summary.value.yearly || []) : [])
+
+const badgeEmoji = (b) => {
+  if (b.code === 'streak_7' || b.code === 'streak_30') return '🔥'
+  if (b.code === 'first_record') return '📝'
+  if (b.code === 'first_wish') return '💡'
+  if (b.code === 'limit_set') return '🎯'
+  if (b.code === 'monthly_success') return '📆'
+  const map = { streak: '🔥', record: '✨', limit: '🎯', challenge: '🏆', custom: '⭐' }
+  return map[b.condition_type] || '🏅'
+}
+const tierOf = (b) => {
+  if (b.unlock_skin_id === 'celadon_jar') return 'diamond'
+  if (b.unlock_skin_id === 'warm_gold') return 'gold'
+  return b.unlocked ? 'silver' : 'bronze'
+}
+
+// 设置目标
+const showTargetSheet = ref(false)
+const targetType = ref('monthly')
+const targetAmountYuan = ref('')
+const targetLedgerId = ref('')
+const ledgers = ref([])
+const ledgerOptions = computed(() => [{ id: '', label: '全部账本（默认）' }].concat(ledgers.value.map((l) => ({ id: l._id, label: l.name }))))
+const ledgerLabel = computed(() => {
+  const f = ledgerOptions.value.find((o) => o.id === targetLedgerId.value)
+  return f ? f.label : '全部账本（默认）'
+})
+const onLedgerPick = (e) => { targetLedgerId.value = ledgerOptions.value[e.detail.value].id }
+
+async function loadLedgers() {
+  try {
+    // 走云函数读取，禁止前端直连数据库
+    ledgers.value = await listLedgers()
+  } catch (err) {
+    ledgers.value = []
+  }
+}
+function openTargetSheet(type) {
+  targetType.value = type
+  targetAmountYuan.value = ''
+  targetLedgerId.value = ''
+  loadLedgers()
+  showTargetSheet.value = true
+}
+async function confirmTarget() {
+  const fen = yuanToFen(targetAmountYuan.value)
+  if (!fen.ok) { toast(fen.error && fen.error.message ? fen.error.message : '请输入有效金额'); return }
+  const periodKey = targetType.value === 'monthly' ? formatMonthKey() : formatYearKey()
+  try {
+    await store.setChallengeTargetAction(targetType.value, periodKey, fen.value, targetLedgerId.value || undefined)
+    showTargetSheet.value = false
+    toast('目标已设置', 'success')
+  } catch (err) {
+    toast(err && err.message ? err.message : '设置失败')
+  }
+}
+
+// 分享海报
+const showPoster = ref(false)
+const posterAch = ref(null)
+function openPoster(b) {
+  if (!b.unlocked) return
+  posterAch.value = b
+  showPoster.value = true
+}
+function savePoster() {
+  const a = posterAch.value
+  if (!a) return
+  const ctx = uni.createCanvasContext('posterCanvas')
+  ctx.setFillStyle('#0f1c14'); ctx.fillRect(0, 0, 300, 420)
+  ctx.setFillStyle('#25cc5d'); ctx.setFontSize(22); ctx.fillText('余钱罐 · 成就解锁', 24, 56)
+  ctx.setFillStyle('#ffffff'); ctx.setFontSize(38); ctx.fillText(a.name, 24, 130)
+  ctx.setFillStyle('#9bb8a8'); ctx.setFontSize(14)
+  ctx.fillText(a.description || '', 24, 170)
+  ctx.setFillStyle('#ffd866'); ctx.setFontSize(20)
+  ctx.fillText('连续挑战 ' + streakDays.value + ' 天', 24, 250)
+  ctx.setFillStyle('#9bb8a8'); ctx.setFontSize(13)
+  ctx.fillText('把省下的钱攒成惊喜', 24, 392)
+  ctx.draw(false, () => {
+    uni.canvasToTempFilePath({
+      canvasId: 'posterCanvas',
+      success: (res) => {
+        uni.saveImageToPhotosAlbum({
+          filePath: res.tempFilePath,
+          success: () => toast('已保存到相册', 'success'),
+          fail: () => toast('保存失败，请授权相册')
+        })
+      },
+      fail: () => toast('生成海报失败')
+    })
+  })
+}
+
+async function refresh() {
+  await Promise.all([store.loadChallengeSummary(), store.evaluateAchievementsAction(), store.loadAchievements()])
+}
+
+onMounted(refresh)
+onShow(refresh)
 </script>
 
 <style scoped>
@@ -165,14 +308,15 @@ const tierLabel = (t) => ({ bronze: '铜', silver: '银', gold: '金', diamond: 
 .ch-status.success { color: #25cc5d; }
 .ch-status.fail { color: #ff6b6b; }
 
-.ring-container { display: flex; justify-content: center; padding: 10px 0; }
-.ring-label { text-align: center; }
-.ring-spent { font-size: 36px; font-weight: 900; color: #0f1c14; display: block; }
+.ring-label { text-align: center; display: block; margin-bottom: 10px; }
+.ring-spent { font-size: 32px; font-weight: 900; color: #0f1c14; display: block; }
 .ring-remain { font-size: 12px; color: #25cc5d; font-weight: 600; }
+.daily-bar { height: 10px; border-radius: 6px; background: rgba(194,242,200,0.3); overflow: hidden; }
+.daily-fill { height: 100%; border-radius: 6px; transition: width 0.6s ease; }
+.ch-empty { text-align: center; font-size: 12px; color: #9bb8a8; padding: 14px 0; }
 
 .section-subtitle { font-size: 12px; color: #6b8c7a; font-weight: 600; display: block; margin: 12px 0 8px; }
-
-.heatmap { display: flex; justify-content: space-around; align-items: flex-end; height: 64px; }
+.heatmap { display: flex; justify-content: space-around; align-items: flex-end; height: 56px; }
 .heat-day { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .heat-bar { width: 12px; border-radius: 3px 3px 0 0; }
 .heat-bar.success { background: linear-gradient(0deg,#4fd974,#25cc5d); }
@@ -180,6 +324,8 @@ const tierLabel = (t) => ({ bronze: '铜', silver: '银', gold: '金', diamond: 
 .heat-label { font-size: 9px; color: #9bb8a8; }
 
 .section-title { font-size: 14px; font-weight: 700; color: #0f1c14; }
+.section-title-row { display: flex; justify-content: space-between; align-items: center; }
+.add-target { font-size: 12px; color: #25cc5d; font-weight: 700; }
 
 .challenge-card { padding: 12px 0; border-top: 1px solid rgba(15,28,20,0.04); }
 .ch-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
@@ -203,4 +349,24 @@ const tierLabel = (t) => ({ bronze: '铜', silver: '银', gold: '金', diamond: 
 .badge-emoji { font-size: 24px; }
 .badge-name { font-size: 10px; font-weight: 600; color: #3a5244; display: block; }
 .badge-tier { font-size: 8px; color: #9bb8a8; }
+
+.sheet-overlay { position: fixed; inset: 0; background: rgba(15,28,20,0.45); z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
+.sheet { width: 100%; background: #fff; border-radius: 20px 20px 0 0; padding: 22px 20px calc(22px + env(safe-area-inset-bottom)); }
+.sheet-title { font-size: 16px; font-weight: 800; color: #0f1c14; display: block; }
+.sheet-sub { font-size: 11px; color: #9bb8a8; display: block; margin: 4px 0 14px; }
+.sheet-input { height: 44px; border-radius: 12px; background: #f2fcf2; padding: 0 14px; font-size: 15px; margin-bottom: 14px; }
+.sheet-label { font-size: 11px; color: #6b8c7a; display: block; margin-bottom: 6px; }
+.sheet-picker { height: 44px; border-radius: 12px; background: #f2fcf2; display: flex; align-items: center; padding: 0 14px; margin-bottom: 16px; }
+.sheet-picker-text { font-size: 14px; color: #3a5244; }
+.sheet-actions { display: flex; gap: 12px; }
+.sheet-btn { flex: 1; height: 46px; border-radius: 14px; background: linear-gradient(135deg,#4fd974,#25cc5d); color: #fff; font-size: 15px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.sheet-btn.ghost { background: #f2fcf2; color: #3a5244; }
+
+.poster-sheet { width: 100%; background: #fff; border-radius: 20px 20px 0 0; padding: 22px 20px calc(22px + env(safe-area-inset-bottom)); }
+.poster-card { background: linear-gradient(160deg,#0f1c14,#1f3a2a); border-radius: 18px; padding: 28px 20px; text-align: center; margin-bottom: 16px; }
+.poster-emoji { font-size: 56px; display: block; }
+.poster-name { font-size: 22px; font-weight: 900; color: #fff; display: block; margin: 10px 0 6px; }
+.poster-desc { font-size: 12px; color: #9bb8a8; display: block; margin-bottom: 16px; }
+.poster-streak { display: inline-block; padding: 6px 14px; border-radius: 20px; background: rgba(255,216,102,0.15); color: #ffd866; font-size: 13px; font-weight: 700; }
+.poster-brand { font-size: 11px; color: #6b8c7a; display: block; margin-top: 16px; }
 </style>

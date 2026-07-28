@@ -1,8 +1,8 @@
 {
   "passwordSecret": "sparejar-password-secret-change-me",
   "tokenSecret": "sparejar-token-secret-change-in-production",
-  "tokenExpiresIn": 604800,
-  "tokenExpiresThreshold": 86400,
+  "tokenExpiresIn": 2592000,
+  "tokenExpiresThreshold": 604800,
   "passwordErrorLimit": 6,
   "passwordErrorRetryTime": 3600,
   "dcloudAppid": "__UNI__4A13F4C",

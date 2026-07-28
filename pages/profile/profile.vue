@@ -54,12 +54,51 @@
 
       <view class="menu-group" style="margin-top:16px;">
         <text class="menu-title">健康与预算</text>
-        <view class="menu-item glass-thin" style="margin:0 16px 0;border-radius:0;" @click="activeSheet = 'rules'">
+        <view class="menu-item glass-thin" style="margin:0 16px 0;border-radius:0;" @click="openRules">
           <view class="menu-left"><text class="menu-icon">📋</text><text class="menu-label">预算规则</text></view>
           <text class="menu-arrow">›</text>
         </view>
         <view class="menu-item glass-thin" style="margin:0 16px 0;border-radius:0;" @click="goLimitSetting">
           <view class="menu-left"><text class="menu-icon">🎯</text><text class="menu-label">限额设置</text></view>
+          <text class="menu-arrow">›</text>
+        </view>
+        <view class="menu-item glass-thin" style="margin:0 16px 0;border-radius:0;" @click="goCategoryMgr">
+          <view class="menu-left"><text class="menu-icon">🗂️</text><text class="menu-label">分类管理</text></view>
+          <text class="menu-arrow">›</text>
+        </view>
+      </view>
+
+      <view class="menu-group" style="margin-top:16px;">
+        <text class="menu-title">功能设置</text>
+        <view class="menu-item glass-thin" style="margin:0 16px 0;border-radius:0;">
+          <view class="menu-left">
+            <text class="menu-icon">🍽️</text>
+            <view class="menu-label-col">
+              <text class="menu-label">餐饮轻记录</text>
+              <text class="menu-sub">开启后餐饮账目可记录餐次与热量</text>
+            </view>
+          </view>
+          <view class="sw-switch" :class="{ on: mealEnabled }" @click="toggleMeal">
+            <view class="sw-knob" :class="{ on: mealEnabled }" />
+          </view>
+        </view>
+        <view class="menu-item glass-thin" style="margin:0 16px 0;border-radius:0;">
+          <view class="menu-left">
+            <text class="menu-icon">🔥</text>
+            <view class="menu-label-col">
+              <text class="menu-label">减脂模式</text>
+              <text class="menu-sub">展示热量缺口（消耗−摄入）</text>
+            </view>
+          </view>
+          <view class="sw-switch" :class="{ on: fatLossEnabled }" @click="toggleFatLoss">
+            <view class="sw-knob" :class="{ on: fatLossEnabled }" />
+          </view>
+        </view>
+        <view class="menu-item glass-thin" style="margin:0 16px 0;border-radius:0;" @click="goHealthSettings">
+          <view class="menu-left">
+            <text class="menu-icon">⚖️</text>
+            <text class="menu-label">身体数据设置</text>
+          </view>
           <text class="menu-arrow">›</text>
         </view>
       </view>
@@ -114,7 +153,7 @@
             <view class="seg-btn" :class="{ active: penaltyRule === 'freeze' }" @click="penaltyRule = 'freeze'">冻结一日</view>
           </view>
 
-          <view class="save-btn" @click="activeSheet = null">
+          <view class="save-btn" @click="saveRules">
             <text>保存设置</text>
           </view>
         </view>
@@ -151,8 +190,10 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { useUserStore } from '@/stores/user.js';
+import { updateSettings } from '@/api/sparejar.js';
+import { todayDateKey, addDaysToDateKey } from '@/utils/date.js';
 
-const { isGuest, state, currentStreak, logout } = useUserStore();
+const { isGuest, state, currentStreak, logout, loadSettings, refreshTodayDashboard } = useUserStore();
 
 const activeSheet = ref(null);
 const dailyLimit = ref('200');
@@ -179,7 +220,7 @@ const userStats = [
 
 const menuItems = [
   { icon: '📊', label: '数据导出', action: () => {} },
-  { icon: '🔔', label: '通知设置', action: () => {} },
+  { icon: '🔔', label: '通知设置', action: goNotifySetting },
   { icon: '🔒', label: '隐私与安全', action: () => {} },
   { icon: '🗑️', label: '清理数据', action: () => {} },
 ];
@@ -192,7 +233,101 @@ const goLimitSetting = () => {
   uni.navigateTo({ url: '/pages/limit-setting/limit-setting' });
 };
 
+const goCategoryMgr = () => {
+  if (isGuest.value) {
+    goLogin();
+    return;
+  }
+  uni.navigateTo({ url: '/pages/category-mgr/category-mgr' });
+};
+
+const goNotifySetting = () => {
+  if (isGuest.value) {
+    goLogin();
+    return;
+  }
+  uni.navigateTo({ url: '/pages/notify-setting/notify-setting' });
+};
+
 const goLogin = () => uni.navigateTo({ url: '/pages/login/login' });
+
+// ===== 阶段 11：餐饮轻记录 / 减脂模式开关 =====
+const mealEnabled = computed(() => !!(state.settings && state.settings.meal_tracking_enabled));
+const fatLossEnabled = computed(() => !!(state.settings && state.settings.fat_loss_mode_enabled));
+
+async function toggleMeal() {
+  if (isGuest.value) { goLogin(); return; }
+  const next = !mealEnabled.value;
+  try {
+    await updateSettings({ meal_tracking_enabled: next });
+    await loadSettings();
+    uni.showToast({ title: next ? '已开启餐饮轻记录' : '已关闭', icon: 'none' });
+  } catch (err) {
+    uni.showToast({ title: (err && err.message) || '操作失败', icon: 'none' });
+  }
+}
+
+async function toggleFatLoss() {
+  if (isGuest.value) { goLogin(); return; }
+  const next = !fatLossEnabled.value;
+  try {
+    await updateSettings({ fat_loss_mode_enabled: next });
+    await loadSettings();
+    if (next) goHealthSettings();
+    else uni.showToast({ title: '已关闭减脂模式', icon: 'none' });
+  } catch (err) {
+    uni.showToast({ title: (err && err.message) || '操作失败', icon: 'none' });
+  }
+}
+
+const goHealthSettings = () => {
+  if (isGuest.value) { goLogin(); return; }
+  uni.navigateTo({ url: '/pages/health-settings/health-settings' });
+};
+
+function syncRulesFromSettings() {
+  const s = state.settings;
+  const eff = (s && s.pending_base_limit != null && s.limit_effective_date && s.limit_effective_date <= todayDateKey())
+    ? s.pending_base_limit
+    : (s ? s.daily_base_limit : 10000);
+  dailyLimit.value = String(Math.round(eff / 100));
+  surplusRule.value = (s && s.default_surplus_action === 'savings_pool') ? 'pool' : 'next';
+  penaltyRule.value = (s && s.over_limit_penalty_enabled) ? 'reduce' : 'none';
+}
+
+const openRules = () => {
+  if (isGuest.value) {
+    goLogin();
+    return;
+  }
+  if (!state.settings) loadSettings().then(syncRulesFromSettings).catch(() => {});
+  else syncRulesFromSettings();
+  activeSheet.value = 'rules';
+};
+
+const saveRules = async () => {
+  const yuan = Math.floor(Number(dailyLimit.value));
+  if (!Number.isFinite(yuan) || yuan < 1) {
+    uni.showToast({ title: '每日限额需 ≥ 1 元', icon: 'none' });
+    return;
+  }
+  const patch = {
+    pending_base_limit: yuan * 100,
+    limit_effective_date: addDaysToDateKey(todayDateKey(), 1),
+    default_surplus_action: surplusRule.value === 'pool' ? 'savings_pool' : 'roll_over',
+    over_limit_penalty_enabled: penaltyRule.value !== 'none',
+    penalty_streak_deduct: penaltyRule.value === 'freeze' ? 2 : 1
+  };
+  try {
+    await updateSettings(patch);
+    await loadSettings();
+    await refreshTodayDashboard({ force: true });
+    activeSheet.value = null;
+    uni.showToast({ title: '设置已保存', icon: 'success' });
+  } catch (err) {
+    uni.showToast({ title: (err && err.message) || '保存失败', icon: 'none' });
+  }
+};
 
 function handleLogout() {
   uni.showModal({
@@ -243,6 +378,23 @@ function handleLogout() {
 .logout-label { color: #ff6b6b; }
 .menu-item-logout { margin-top: 8px !important; border-radius: 14px !important; }
 .menu-arrow { font-size: 18px; color: #c2f2c8; }
+.menu-label-col { display: flex; flex-direction: column; }
+.menu-sub { font-size: 11px; color: #8a9a90; margin-top: 2px; }
+
+/* 开关 */
+.sw-switch {
+  width: 46px; height: 26px; border-radius: 14px;
+  background: #d8e6dc; position: relative; flex-shrink: 0;
+  transition: background 0.22s ease; cursor: pointer;
+}
+.sw-switch.on { background: linear-gradient(135deg, #7ed390, #25cc5d); }
+.sw-knob {
+  width: 20px; height: 20px; border-radius: 50%; background: #fff;
+  position: absolute; top: 3px; left: 3px;
+  transition: left 0.22s cubic-bezier(0.34, 1.4, 0.64, 1);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+.sw-knob.on { left: 23px; }
 
 /* Sheet */
 .sheet-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 300; display: flex; align-items: flex-end; justify-content: center; }

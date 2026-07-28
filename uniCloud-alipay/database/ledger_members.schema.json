@@ -37,8 +37,9 @@
       "defaultValue": "member"
     },
     "joined_at": {
-      "bsonType": "timestamp",
-      "description": "加入时间"
+      "bsonType": "string",
+      "description": "加入时间",
+      "maxLength": 19
     }
   }
 }
