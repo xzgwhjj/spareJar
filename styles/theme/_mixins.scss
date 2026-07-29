@@ -6,9 +6,14 @@
   --g0: #{$sj-g0};
   --g1: #{$sj-g1};
   --g2: #{$sj-g2};
+  --g2-0: #{$sj-g2-0};
+  --g2-1: #{$sj-g2-1};
   --g3: #{$sj-g3};
   --g4: #{$sj-g4};
   --g5: #{$sj-g5};
+  --g6: #{$sj-g6};
+  --g7: #{$sj-g7};
+  --g8: #{$sj-g8};
   --ink: #{$sj-ink};
   --ink2: #{$sj-ink2};
   --ink3: #{$sj-ink3};
@@ -25,6 +30,7 @@
   --purple: #{$sj-purple};
   --glow: #{$sj-glow};
   --white-75: #{$sj-white-75};
+  --shadow-light: #{$sj-shadow-light};
 }
 
 @mixin sj-brand-gradient($deg: 135deg) {

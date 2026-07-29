@@ -22,7 +22,7 @@
       style="
         height: 100%;
         z-index: 2;
-        padding-bottom: calc(180rpx + env(safe-area-inset-bottom));
+        padding-bottom: calc(90rpx + env(safe-area-inset-bottom));
       "
     >
       <!-- TopBar -->
@@ -172,37 +172,39 @@
             />
 
             <scroll-view class="ov-scroll" scroll-x>
-              <view class="ov-chip">
-                <text class="ov-chip-label">支出</text>
-                <text class="ov-chip-val" style="color: var(--red-soft)"
-                  >-¥{{ fmt(ovExpense) }}</text
-                >
-              </view>
-              <view class="ov-chip">
-                <text class="ov-chip-label">收入</text>
-                <text class="ov-chip-val" style="color: var(--g5)"
-                  >+¥{{ fmt(ovIncome) }}</text
-                >
-              </view>
-              <view class="ov-chip">
-                <text class="ov-chip-label">结余</text>
-                <text
-                  class="ov-chip-val"
-                  :style="{ color: ovNet >= 0 ? 'var(--g5)' : 'var(--red-soft)' }"
-                  >{{ ovNet >= 0 ? "+" : "-" }}¥{{ fmt(Math.abs(ovNet)) }}</text
-                >
-              </view>
-              <view class="ov-chip">
-                <text class="ov-chip-label">账本</text>
-                <text class="ov-chip-val" style="color: var(--amber2)"
-                  >{{ ovLedgerCount }}本</text
-                >
-              </view>
-              <view class="ov-chip">
-                <text class="ov-chip-label">记录</text>
-                <text class="ov-chip-val" style="color: var(--blue)"
-                  >{{ ovTxCount }}笔</text
-                >
+              <view class="ov-track">
+                <view class="ov-chip">
+                  <text class="ov-chip-label">支出</text>
+                  <text class="ov-chip-val" style="color: var(--red-soft)"
+                    >-¥{{ fmt(ovExpense) }}</text
+                  >
+                </view>
+                <view class="ov-chip">
+                  <text class="ov-chip-label">收入</text>
+                  <text class="ov-chip-val" style="color: var(--g5)"
+                    >+¥{{ fmt(ovIncome) }}</text
+                  >
+                </view>
+                <view class="ov-chip">
+                  <text class="ov-chip-label">结余</text>
+                  <text
+                    class="ov-chip-val"
+                    :style="{ color: ovNet >= 0 ? 'var(--g5)' : 'var(--red-soft)' }"
+                    >{{ ovNet >= 0 ? "+" : "-" }}¥{{ fmt(Math.abs(ovNet)) }}</text
+                  >
+                </view>
+                <view class="ov-chip">
+                  <text class="ov-chip-label">账本</text>
+                  <text class="ov-chip-val" style="color: var(--amber2)"
+                    >{{ ovLedgerCount }}本</text
+                  >
+                </view>
+                <view class="ov-chip">
+                  <text class="ov-chip-label">记录</text>
+                  <text class="ov-chip-val" style="color: var(--blue)"
+                    >{{ ovTxCount }}笔</text
+                  >
+                </view>
               </view>
             </scroll-view>
           </view>
@@ -241,11 +243,12 @@
         >
           <view class="ledger-list is-list">
             <view v-for="l in ledgerViews" :key="l._id" class="ledger-card-wrap">
-              <view class="ledger-card-bg"></view>
+              <!-- <view class="ledger-card-bg"></view> -->
               <view
                 class="ledger-card card-item"
                 @click="onCardClick(l)"
                 @longpress="onCardLongPress(l)"
+                hover-class="ledger-card--pressed"
               >
                 <!-- 多选模式：卡片左侧复选框（仿 Uiverse radio-button，总账本不可选） -->
                 <label
@@ -265,9 +268,14 @@
                 <!-- 底层内容：封面 + 信息 + 操作入口（始终渲染，正常态显示） -->
                 <!-- 封面图：列表模式作为左侧封面块 -->
                 <image
-                  :src="resolveCover(l.cover) || defaultCoverUrl"
+                  :src="
+                    coverErrors[l._id]
+                      ? defaultCoverUrl
+                      : resolveCover(l.cover) || defaultCoverUrl
+                  "
                   mode="aspectFill"
                   class="ledger-cover"
+                  @error="onCoverError(l)"
                 ></image>
                 <!-- 右侧内容栏：名称+类型 与 收支同处一行（左名右收支），进度条在下方 -->
                 <view class="ledger-body">
@@ -871,18 +879,6 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from "vue";
-import { cdn, resolveCover } from "@/utils/cdn.js";
-import { uploadLedgerCover, deleteLedgerCover } from "@/utils/cloudFile.js";
-import {
-  extractCoverPalette,
-  hexToRgba,
-  hsvToHex,
-  hexToHsv,
-} from "@/utils/coverColor.js";
-import { onShow } from "@dcloudio/uni-app";
-import TabBar from "@/components/tabbar/tabbar.vue";
-import { useUserStore, checkLoggedIn } from "@/stores/user.js";
 import {
   createLedger as apiCreateLedger,
   updateLedger as apiUpdateLedger,
@@ -891,7 +887,19 @@ import {
   listLedgers,
   listTransactions,
 } from "@/api/sparejar.js";
+import TabBar from "@/components/tabbar/tabbar.vue";
+import { checkLoggedIn, useUserStore } from "@/stores/user.js";
+import { cdn, resolveCover } from "@/utils/cdn.js";
+import { deleteLedgerCover, uploadLedgerCover } from "@/utils/cloudFile.js";
+import {
+  extractCoverPalette,
+  hexToHsv,
+  hexToRgba,
+  hsvToHex,
+} from "@/utils/coverColor.js";
 import { formatDateKey, formatMonthKey } from "@/utils/date.js";
+import { onShow } from "@dcloudio/uni-app";
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 
 const PAGE_TABS = [
   { key: "ledger", label: "账本", icon: "📖" },
@@ -1005,6 +1013,16 @@ const LEDGER_ICONS = [
 // 默认封面相对路径（封面为空时兜底展示）
 const DEFAULT_COVER_REL = "/app_static/images/icon_cover.png";
 const defaultCoverUrl = cdn(DEFAULT_COVER_REL);
+
+// 封面加载失败（404 / 网络错误等）：用响应式错误表（按账本 _id 记录）回退到默认图。
+// 注意：ledgerViews 是 computed，每次返回全新普通对象；若把 coverError 直接挂在 item 上，
+// 该赋值非响应式、且不随 item 持久，导致 fallback 永不生效。故用独立响应式 map 记录失败项。
+const coverErrors = reactive({});
+function onCoverError(item) {
+  if (item && item._id) {
+    coverErrors[item._id] = true;
+  }
+}
 
 // 判断是否为图片路径（与 emoji 图标区分），兼容旧 emoji 数据
 function isImg(v) {
@@ -1400,12 +1418,8 @@ const transactions = ref([]);
 
 // 调色板（无封面取色/旧账本回退）：与封面取色锚点一致，更深、更高饱和、对比更高
 const PALETTE = [
-  { color: "#16a34a", colorBg: "#e1fae3" },
+  { color: "#8ae99b", colorBg: "#e1fae3" },
   { color: "#5b3fc4", colorBg: "#f3f0ff" },
-  { color: "#d99a00", colorBg: "#fffbeb" },
-  { color: "#cf1f82", colorBg: "#fff0f6" },
-  { color: "#0a86a0", colorBg: "#e0f7fb" },
-  { color: "#cf2b2b", colorBg: "#fff0f0" },
 ];
 
 const monthKey = (() => {
@@ -2158,7 +2172,7 @@ onUnmounted(() => {
   overflow: hidden;
   position: relative;
   margin: 0 auto;
-  // background: var(--g0);
+  background: var(--g0);
 }
 
 .topbar {
@@ -2224,7 +2238,8 @@ onUnmounted(() => {
   transform: translate3d(0px, 0px, 30px);
   border: 2rpx solid rgba(255, 255, 255, 1);
   border-radius: 36rpx 110rpx 110rpx 110rpx;
-  box-shadow: 0 2rpx 12rpx 0 rgba(0, 0, 0, 0.1);
+  box-shadow: inset 6rpx 6rpx 12rpx rgba(206, 232, 218, 0.3),
+    inset -6rpx -6rpx 12rpx rgba(255, 255, 255, 0.6);
   box-sizing: border-box;
 }
 
@@ -2236,12 +2251,11 @@ onUnmounted(() => {
   z-index: 0;
   width: calc((100% - 68rpx) / 4);
   height: 76rpx;
-  background: linear-gradient(0deg, var(--g0) 0%, var(--g1) 100%);
-  backdrop-filter: blur(12rpx) saturate(1.3);
-  -webkit-backdrop-filter: blur(12rpx) saturate(1.3);
-  border: 3rpx solid var(--g1);
+  background: linear-gradient(135deg, #e6f8ed 0%, #ffffff 45%);
+  border: 2rpx solid rgba(214, 233, 222, 0.9);
   border-radius: 110rpx 110rpx 36rpx 110rpx;
-  box-shadow: 0 2rpx 12rpx 0 rgba(0, 0, 0, 0.1);
+  box-shadow: inset 6rpx 6rpx 12rpx rgba(206, 232, 218, 0.3),
+    inset -6rpx -6rpx 12rpx rgba(255, 255, 255, 0.6);
   box-sizing: border-box;
   pointer-events: none;
   transition: left 0.42s cubic-bezier(0.34, 1.4, 0.64, 1);
@@ -2374,38 +2388,38 @@ onUnmounted(() => {
   position: absolute;
   left: 1%;
   right: 1%;
-  bottom: 8rpx;
+  bottom: 12rpx;
   width: 98%;
   box-sizing: border-box;
   white-space: nowrap;
   -webkit-overflow-scrolling: touch;
-  display: flex;
-  align-items: center;
   padding: 0 16rpx;
   height: 100rpx;
-  /* 来自 Uiverse 按钮的初始默认静态样式（已排除 transition / :hover / :active / :focus 等交互与动画规则） */
-  background: linear-gradient(
-    -75deg,
-    rgba(255, 255, 255, 0.05),
-    rgba(255, 255, 255, 0.2),
-    rgba(255, 255, 255, 0.05)
-  );
-  border-radius: 999vw;
-  box-shadow: inset 0 0.125em 0.125em rgba(0, 0, 0, 0.05),
-    inset 0 -0.125em 0.125em rgba(255, 255, 255, 0.5),
-    0 0.25em 0.125em -0.125em rgba(0, 0, 0, 0.2),
-    0 0 0.1em 0.25em inset rgba(255, 255, 255, 0.2), 0 0 0 0 rgba(255, 255, 255, 1);
-  backdrop-filter: blur(clamp(1px, 0.125em, 4px));
-  -webkit-backdrop-filter: blur(clamp(1px, 0.125em, 4px));
-  -moz-backdrop-filter: blur(clamp(1px, 0.125em, 4px));
-  -ms-backdrop-filter: blur(clamp(1px, 0.125em, 4px));
+
+  /* 垂直居中层：普通 view 用 flex 可靠居中；inline-flex 让轨道按内容宽度撑开，横向滚动照常 */
+  .ov-track {
+    display: inline-flex;
+    align-items: center;
+    height: 100%;
+    white-space: nowrap;
+  }
+  /* 仿列表卡片：软 UI 浮雕（inset 双阴影 + 浅绿渐变 + 描边），内层 chip 保持平铺 */
+  background: linear-gradient(135deg, #e6f8ed 0%, #ffffff 27%);
+  border: 2rpx solid rgba(214, 233, 222, 0.9);
+  border-radius: 28rpx;
+  box-shadow: inset 6rpx 6rpx 12rpx rgba(206, 232, 218, 0.3),
+    inset -6rpx -6rpx 12rpx rgba(255, 255, 255, 0.6);
 
   .ov-chip {
-    display: inline-block;
-    vertical-align: top;
+    display: inline-flex;
+    flex-direction: column;
+    justify-content: center;
+    flex-shrink: 0;
+    vertical-align: middle;
     min-width: 156rpx;
+    height: 72rpx;
     margin-right: 16rpx;
-    padding: 18rpx 24rpx;
+    padding: 0 24rpx;
     background: var(--g0);
     border-radius: 20rpx;
     text-align: left;
@@ -2426,8 +2440,9 @@ onUnmounted(() => {
 }
 
 .ov-body {
-  /* 预留底部空间，供绝对定位的 ov-scroll 贴底展示，避免遮挡日历 */
-  padding-bottom: 76rpx;
+  /* 预留底部空间，供绝对定位的 ov-scroll 贴底展示，避免遮挡日历；
+     适当加大以拉开日历与底部 chip 托盘的间距 */
+  padding-bottom: 90rpx;
 }
 
 .summary-stats {
@@ -2789,22 +2804,31 @@ onUnmounted(() => {
   gap: 20rpx;
   margin: 0 32rpx 26rpx;
   padding: 28rpx 32rpx;
-  background: linear-gradient(
-    0deg,
-    rgba(255, 255, 255, 0.5) 0%,
-    rgba(255, 255, 255, 1) 100%
-  );
-  backdrop-filter: blur(10rpx) saturate(1.3);
-  -webkit-backdrop-filter: blur(10rpx) saturate(1.3);
-  border: 4rpx solid white;
+  background: linear-gradient(135deg, #e6f8ed 0%, #ffffff 27%);
+  border: 2rpx solid rgba(214, 233, 222, 0.9);
+  border-radius: 28rpx;
+  /* 仿 Uiverse neu-button：内陷（inset）双阴影，营造软 UI 浮雕 */
+  box-shadow: inset 6rpx 6rpx 12rpx rgba(206, 232, 218, 0.3),
+    inset -6rpx -6rpx 12rpx rgba(255, 255, 255, 0.6);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 
-/* 列表态：封面图作为左侧封面块（沿用原图标封面位置与尺寸），不再隐藏 */
+/* 列表态：neu 按压态（仿 Uiverse neu-button hover/focus：内陷+外凸浮雕） */
+.ledger-list.is-list .ledger-card--pressed,
+.ledger-list.is-list .ledger-card:active {
+  box-shadow: inset 3rpx 3rpx 6rpx rgba(206, 232, 218, 0.3),
+    inset -3rpx -3rpx 6rpx rgba(255, 255, 255, 0.6),
+    3rpx 3rpx 6rpx rgba(206, 232, 218, 0.27), -3rpx -3rpx 6rpx rgba(255, 255, 255, 0.6);
+  transform: scale(0.99);
+}
+
+/* 列表态：封面图作为左侧封面块，高度拉伸至与右侧内容栏（.ledger-body）完全一致，
+   去掉固定高度 + align-self:stretch 使其填满卡片交叉轴高度；aspectFill 裁切填满不变形 */
 .ledger-list.is-list .ledger-cover {
   position: relative;
   display: block;
-  width: 88rpx;
-  height: 120rpx;
+  width: 120rpx;
+  height: 160rpx;
   flex-shrink: 0;
   border-radius: 18rpx;
   overflow: hidden;
@@ -2840,6 +2864,10 @@ onUnmounted(() => {
 .ledger-list.is-list .ledger-bar-wrap {
   position: relative;
   margin-top: 40rpx;
+  /* 标签行与进度条改为正常文档流，用 flex 列 + gap 控制间距，响应式稳定、两端对齐不变 */
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
 }
 
 /* 账本列表独立滚动容器：
@@ -2878,7 +2906,7 @@ onUnmounted(() => {
 }
 
 .ledger-name {
-  font-size: 26rpx;
+  font-size: 28rpx;
   font-weight: 700;
   line-height: 1.2;
   color: var(--ink);
@@ -2888,16 +2916,16 @@ onUnmounted(() => {
   font-size: 18rpx;
   line-height: 1;
   padding: 4rpx 12rpx;
+  font-weight: 700;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 12rpx;
 
   &.master {
-    background: rgba(37, 204, 93, 0.12);
-    color: var(--g5);
+    background: linear-gradient(135deg, var(--g4) 0%, var(--g5));
+    color: #fff;
   }
-
   &.sub {
     background: rgba(124, 108, 248, 0.1);
     color: #7c6cf8;
@@ -2905,7 +2933,7 @@ onUnmounted(() => {
 }
 
 .ledger-meta {
-  font-size: 20rpx;
+  font-size: 22rpx;
   color: var(--ink4);
   display: block;
   margin-top: 8rpx;
@@ -2926,7 +2954,7 @@ onUnmounted(() => {
 
 .balance-sub {
   display: block;
-  font-size: 18rpx;
+  font-size: 22rpx;
   color: var(--ink4);
   line-height: 1;
   margin-top: 8rpx;
@@ -2984,14 +3012,17 @@ onUnmounted(() => {
   justify-content: center;
   /* 外缘（上、右）贴齐卡片直角，内下角柔化；右上圆角对齐卡片 28rpx 圆角 */
   border-radius: 16rpx;
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(8rpx);
-  -webkit-backdrop-filter: blur(8rpx);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(135deg, #e6f8ed 0%, #ffffff 27%);
+  /* neu 内凹（反向浮雕）：顶部阴影 / 底部高光，与原外凸完全反转；尺寸、圆角、模糊、透明度保持一致 */
+  box-shadow: inset 4rpx 4rpx 8rpx rgba(206, 232, 218, 0.3),
+    inset -4rpx -4rpx 8rpx rgba(255, 255, 255, 0.6);
 }
 
 .ledger-more-hover {
-  background: rgba(37, 204, 93, 0.14);
+  background: linear-gradient(135deg, #e6f8ed 0%, #ffffff 45%);
+  /* neu 反向：按压时外凸弹出，与原「按压内陷」相反 */
+  box-shadow: 4rpx 4rpx 8rpx rgba(206, 232, 218, 0.3),
+    -4rpx -4rpx 8rpx rgba(255, 255, 255, 0.6);
 }
 
 .ledger-more-dot {
@@ -3099,29 +3130,27 @@ onUnmounted(() => {
   --dark: color-mix(in sRGB, var(--base) 90%, #000);
   --transparent: transparent;
   position: relative;
-  height: 18rpx;
-  border-radius: 18rpx;
+  height: 12rpx;
+  border-radius: 12rpx;
   overflow: hidden;
   background: radial-gradient(circle, rgba(255, 255, 255, 0.85) 2rpx, transparent 3rpx) 0
       0 / 22rpx 22rpx,
     linear-gradient(transparent 70%, var(--dark) 100%), var(--light);
-  margin-top: 10rpx;
+  /* 间距由 wrap 的 flex gap 控制；浮雕：未走过部分的浅浮雕（暗部薄荷 / 亮部纯白），与页面半浮雕风格一致；填充部分会盖住已走区域，仅未走部分显浮雕 */
+  box-shadow: inset 2rpx 2rpx 4rpx rgba(206, 232, 218, 0.35),
+    inset -2rpx -2rpx 4rpx rgba(255, 255, 255, 0.65);
 }
 
-/* 进度条右上角的“使用/限额”标签：定位在胶囊右上角外侧，左右两端对齐，随维度切换文案 */
+/* 进度条上方的“使用/限额”标签行：左右两端对齐，随维度切换文案；回归正常流，间距由 wrap 的 gap 控制 */
 .ledger-bar-label {
-  position: absolute;
-  top: 0;
-  right: 0;
-  left: 0;
-  transform: translateY(-100%);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 20rpx;
+  margin: 0;
+  min-width: 0;
+  font-size: 22rpx;
   color: var(--ink4);
   white-space: nowrap;
-  margin-bottom: 36rpx;
 }
 
 .ledger-bar-label.is-over {
@@ -3131,7 +3160,7 @@ onUnmounted(() => {
 .ledger-bar-label .bar-dim {
   color: var(--ink4);
   font-weight: 600;
-  font-size: 20rpx;
+  font-size: 22rpx;
 }
 
 .ledger-bar-label .bar-val {
@@ -3150,7 +3179,8 @@ onUnmounted(() => {
       color-mix(in sRGB, var(--base) 80%, #fff),
       var(--transparent) 24rpx
     ),
-    linear-gradient(transparent 70%, var(--dark) 100%), var(--base);
+    linear-gradient(transparent 82%, var(--dark) 100%),
+    color-mix(in sRGB, var(--base) 60%, #fff);
   transition: width 0.6s ease;
 }
 

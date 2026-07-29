@@ -176,8 +176,8 @@
   "globalStyle": {
     "navigationBarTextStyle": "black",
     "navigationBarTitleText": "余钱贯",
-    "navigationBarBackgroundColor": "#F2FCF2",
-    "backgroundColor": "#F2FCF2"
+    "navigationBarBackgroundColor": "#f5fff7",
+    "backgroundColor": "#f5fff7"
   },
   "uniIdRouter": {}
 }
