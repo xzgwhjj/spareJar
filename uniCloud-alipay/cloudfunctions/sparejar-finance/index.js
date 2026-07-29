@@ -392,6 +392,12 @@ exports.main = async (event, context) => {
         if (!data.collection) return fail('collection is required')
         return ok(await dbApi.getDoc(data.collection, userId))
 
+      // 删除用户上传的临时封面（客户端删除可能受权限/环境限制，服务端兜底）
+      case 'deleteCover':
+        if (!data.fileID) return fail('fileID is required')
+        await uniCloud.deleteFile({ fileList: [data.fileID] })
+        return ok()
+
       default:
         return fail(`unknown action: ${action}`, 404)
     }

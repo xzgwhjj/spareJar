@@ -27,3 +27,79 @@ export function resolveCover(v) {
   if (v.startsWith('/')) return cdn(v);
   return v;
 }
+
+/**
+ * 云存储文件 ID（cloud://...）解析为临时可访问 URL。
+ * 用户上传的封面落在 uniCloud 云存储（与网页托管是两套不互通的空间），
+ * 不能直接用 CDN 域名拼接，必须经 getTempFileURL 换临时链。
+ *
+ * 关键：uniCloud.getTempFileURL 的返回 fileList 与请求 fileList **同序**，
+ * 但响应里的 item.fileID 在阿里云环境下常被规范化成与上传时不一致的格式，
+ * 因此回填必须用「请求索引」对齐，不能用响应里的 fileID 当 key，否则
+ * map[l.cover]（l.cover 是入库时的原始 fileID）永远命中不了、封面回退默认图。
+ *
+ * 临时链有有效期，缓存带 TTL：过期后下次访问自动重新换取，避免刷新时用到已
+ * 失效（404）的链接。
+ */
+const _tempUrlCache = new Map(); // fileID -> { url, t }
+const TEMP_URL_TTL = 50 * 60 * 1000; // 50 分钟，留余量在默认 1h 有效期前刷新
+function _cacheGet(fileID) {
+  const hit = _tempUrlCache.get(fileID);
+  if (!hit) return undefined;
+  if (Date.now() - hit.t > TEMP_URL_TTL) {
+    _tempUrlCache.delete(fileID);
+    return undefined;
+  }
+  return hit.url;
+}
+function _cacheSet(fileID, url) {
+  _tempUrlCache.set(fileID, { url, t: Date.now() });
+}
+
+export async function getCloudTempUrl(fileID) {
+  if (!fileID || !String(fileID).startsWith('cloud://')) return '';
+  const cached = _cacheGet(fileID);
+  if (cached !== undefined) return cached;
+  try {
+    const res = await uniCloud.getTempFileURL({ fileList: [fileID] });
+    const item = res.fileList && res.fileList[0];
+    const url = (item && (item.tempFileURL || item.fileID)) || '';
+    _cacheSet(fileID, url);
+    return url;
+  } catch (e) {
+    console.warn('[cdn] getTempFileURL 失败:', fileID, e);
+    return '';
+  }
+}
+
+/**
+ * 批量解析云存储文件 ID（列表场景一次性换取所有封面 URL，省请求）。
+ * 按请求索引对齐回填，保证 out[原fileID] 一定可用。
+ * @param {string[]} fileIDs 可能含非 cloud:// 的项，会自动忽略
+ * @returns {Promise<Object<string,string>>} { 原fileID: tempUrl }
+ */
+export async function getCloudTempUrls(fileIDs) {
+  const unique = [...new Set((fileIDs || []).filter((id) => id && String(id).startsWith('cloud://')))];
+  const out = {};
+  const need = [];
+  for (const id of unique) {
+    const cached = _cacheGet(id);
+    if (cached !== undefined) out[id] = cached;
+    else need.push(id);
+  }
+  if (!need.length) return out;
+  try {
+    const res = await uniCloud.getTempFileURL({ fileList: need });
+    const items = res.fileList || [];
+    // 按索引对齐：响应第 i 项对应请求第 i 个 fileID（响应 fileID 可能已被规范化，不可当 key）
+    for (let i = 0; i < need.length; i++) {
+      const item = items[i];
+      const url = (item && (item.tempFileURL || item.fileID)) || '';
+      _cacheSet(need[i], url);
+      out[need[i]] = url;
+    }
+  } catch (e) {
+    console.warn('[cdn] 批量 getTempFileURL 失败:', e);
+  }
+  return out;
+}

@@ -45,6 +45,7 @@ export const ACTIONS = Object.freeze({
   CREATE_LEDGER: 'createLedger',
   UPDATE_LEDGER: 'updateLedger',
   DELETE_LEDGER: 'deleteLedger',
+  DELETE_COVER: 'deleteCover',
   ENSURE_MASTER_LEDGER: 'ensureMasterLedger',
   LIST_LEDGERS: 'listLedgers',
   GET_LEDGER_DETAIL: 'getLedgerDetail',

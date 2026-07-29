@@ -267,16 +267,16 @@
                 </label>
                 <!-- 底层内容：封面 + 信息 + 操作入口（始终渲染，正常态显示） -->
                 <!-- 封面图：列表模式作为左侧封面块 -->
-                <image
-                  :src="
-                    coverErrors[l._id]
-                      ? defaultCoverUrl
-                      : resolveCover(l.cover) || defaultCoverUrl
-                  "
-                  mode="aspectFill"
-                  class="ledger-cover"
-                  @error="onCoverError(l)"
-                ></image>
+                  <image
+                    :src="
+                      coverErrors[l._id]
+                        ? defaultCoverUrl
+                        : coverDisplay(l) || defaultCoverUrl
+                    "
+                    mode="aspectFill"
+                    class="ledger-cover"
+                    @error="onCoverError(l)"
+                  ></image>
                 <!-- 右侧内容栏：名称+类型 与 收支同处一行（左名右收支），进度条在下方 -->
                 <view class="ledger-body">
                   <!-- 毛玻璃面板容器，收纳名称/收支/进度条等字段 -->
@@ -285,7 +285,7 @@
                       <view class="ledger-info">
                         <view class="ledger-name-row">
                           <text class="ledger-name">{{ l.name }}</text>
-                          <!-- 类型徽标：仅主账本显示“主”；子账本不显示 -->
+                          <!-- 类型徽标：仅主账本显示"主"；子账本不显示 -->
                           <text v-if="l.type === 'master'" class="ledger-type master"
                             >主</text
                           >
@@ -553,7 +553,7 @@
     </view>
 
     <!-- 新增账本弹窗：四模块表单（封面 / 名称 / 简介 / 系统默认图） -->
-    <view v-if="showNewLedger" class="sheet-overlay" @click="closeNewLedger">
+    <view v-if="showNewLedger" class="sheet-overlay" @click="closeNewLedger(false)">
       <view class="sheet-panel" @click.stop>
         <view class="sheet-handle">
           <view class="handle-bar" />
@@ -592,11 +592,6 @@
                 mode="aspectFill"
               />
               <view v-else class="cover-placeholder">
-                <image
-                  class="cover-default"
-                  :src="resolveCover(COVER_PLACEHOLDER)"
-                  mode="aspectFill"
-                />
                 <text class="cover-tip">点击从相册选择</text>
               </view>
               <view
@@ -630,60 +625,29 @@
           </view>
         </view>
 
-        <!-- 4. 主题色：1）封面自动取色 2）自定义 -->
+        <!-- 主题色 -->
         <view class="form-label">主题色</view>
         <view class="color-opts">
-          <!-- 选项1：根据封面自动提取主题色 -->
+          <!-- 自定义颜色选择器 -->
           <view
             class="color-opt"
-            :class="{ active: newLedgerColorMode === 'auto' }"
-            @click="newLedgerColorMode = 'auto'"
-          >
-            <view class="color-opt-ico">
-              <image
-                v-if="newLedgerCover"
-                :src="newLedgerCover"
-                mode="aspectFill"
-                class="color-opt-img"
-              />
-              <text v-else class="color-opt-auto">封</text>
-            </view>
-            <text class="color-opt-label">封面取色</text>
-          </view>
-
-          <!-- 选项2：自定义颜色选择器 -->
-          <view
-            class="color-opt"
-            :class="{ active: newLedgerColorMode === 'custom' }"
+            :class="{ active: true }"
             @click="openCustomColor"
           >
             <view class="color-opt-ico" :style="{ background: newLedgerColor }"> </view>
             <text class="color-opt-label">自定义</text>
           </view>
         </view>
-
-        <!-- 封面取色色卡：提取真实配色，用户直接点选所需颜色 -->
-        <view v-if="newLedgerColorMode === 'auto'" class="color-preview">
-          <text v-if="newLedgerCover && coverPalette.length" class="color-preview-tip"
-            >从封面提取的配色中选取主题色：</text
-          >
-          <view v-if="newLedgerCover && coverPalette.length" class="swatch-row">
-            <view
-              v-for="c in coverPalette"
-              :key="c"
-              class="swatch"
-              :class="{ active: selectedAutoColor === c }"
-              :style="{ background: c, '--sel': c, '--sel-glow': hexToRgba(c, 0.3) }"
-              @click="selectedAutoColor = c"
-            >
-            </view>
-          </view>
-          <text v-if="newLedgerCover && coverPalette.length" class="color-preview-text"
-            >已选：{{ selectedAutoColor }}</text
-          >
-          <text v-else class="color-preview-tip"
-            >选择封面后将自动提取配色，可点击色卡选取主题色</text
-          >
+        <!-- 自动取色色板（点选可微调） -->
+        <view v-if="autoPaletteNew.length" class="auto-palette">
+          <view
+            v-for="(c, i) in autoPaletteNew"
+            :key="'n' + i"
+            class="auto-swatch"
+            :class="{ active: c === newLedgerColor }"
+            :style="{ background: c }"
+            @click="pickAutoSwatch('new', c)"
+          ></view>
         </view>
 
         <!-- 3. 简介（多行文本） -->
@@ -698,7 +662,7 @@
           @blur="descFocused = false"
         />
 
-        <view class="sheet-btn" :style="{ '--fill': fillRatio }" @click="onSubmit">
+        <view class="sheet-btn" :class="{ 'is-full': fillComplete }" :style="{ '--fill': fillRatio }" @click="onSubmit">
           <text class="sheet-btn__base">创建账本</text>
           <view class="sheet-btn__fill">
             <view class="sheet-btn__fill-txt">创建账本</view>
@@ -768,7 +732,8 @@
             :value="zoom"
             min="0"
             max="100"
-            block-size="20"
+            block-size="18"
+            active-color="#8ae99b"
             @changing="onCropZoom"
             @change="onCropZoom"
           />
@@ -791,7 +756,7 @@
     </view>
 
     <!-- 编辑账本弹窗 -->
-    <view v-if="showEdit" class="sheet-overlay" @click="closeEditLedger">
+    <view v-if="showEdit" class="sheet-overlay" @click="closeEditLedger(false)">
       <view class="sheet-panel" @click.stop>
         <view class="sheet-handle">
           <view class="handle-bar" />
@@ -829,12 +794,6 @@
                 mode="aspectFill"
               />
               <view v-else class="cover-placeholder">
-                <image
-                  class="cover-default"
-                  :src="resolveCover(COVER_PLACEHOLDER)"
-                  mode="aspectFill"
-                />
-                <!-- 待：加一个小狗拿着照相机的图标 -->
                 <text class="cover-tip">点击从相册选择</text>
               </view>
               <view
@@ -867,8 +826,54 @@
           </view>
         </view>
 
-        <view class="sheet-btn" @click="saveEdit">
-          <text>保存</text>
+        <!-- 主题色 -->
+        <view class="form-label">主题色</view>
+        <view class="color-opts">
+          <view
+            class="color-opt"
+            :class="{ active: true }"
+            @click="openEditCustomColor"
+          >
+            <view class="color-opt-ico" :style="{ background: editColor }"> </view>
+            <text class="color-opt-label">自定义</text>
+          </view>
+        </view>
+        <!-- 自动取色色板（点选可微调） -->
+        <view v-if="autoPaletteEdit.length" class="auto-palette">
+          <view
+            v-for="(c, i) in autoPaletteEdit"
+            :key="'e' + i"
+            class="auto-swatch"
+            :class="{ active: c === editColor }"
+            :style="{ background: c }"
+            @click="pickAutoSwatch('edit', c)"
+          ></view>
+        </view>
+
+        <!-- 简介 -->
+        <view class="form-label">简介</view>
+        <textarea
+          class="sheet-textarea"
+          :class="{ focused: editDescFocused }"
+          v-model="editLedgerDesc"
+          placeholder="添加一段描述，方便日后回忆"
+          maxlength="200"
+          @focus="editDescFocused = true"
+          @blur="editDescFocused = false"
+        />
+
+        <view
+          class="sheet-btn sheet-btn--emboss"
+          :style="{ '--fill': editFillRatio }"
+          @click="saveEdit"
+        >
+          <!-- 浮雕基底：未填充时纹理清晰突出于表面；液体升起后被淹没 -->
+          <view class="emboss-base"></view>
+          <!-- 液体填充：从底部升起淹没浮雕，液面带高光 -->
+          <view class="emboss-liquid"></view>
+          <!-- 文字：深绿（未淹没区可见）+ 白字（淹没区可见），随 --fill 互补裁切 -->
+          <text class="emboss-text emboss-text--base">保存</text>
+          <text class="emboss-text emboss-text--top">保存</text>
         </view>
       </view>
     </view>
@@ -889,13 +894,13 @@ import {
 } from "@/api/sparejar.js";
 import TabBar from "@/components/tabbar/tabbar.vue";
 import { checkLoggedIn, useUserStore } from "@/stores/user.js";
-import { cdn, resolveCover } from "@/utils/cdn.js";
+import { cdn, resolveCover, getCloudTempUrl, getCloudTempUrls } from "@/utils/cdn.js";
 import { deleteLedgerCover, uploadLedgerCover } from "@/utils/cloudFile.js";
 import {
-  extractCoverPalette,
   hexToHsv,
-  hexToRgba,
   hsvToHex,
+  extractCoverColor,
+  extractCoverPalette,
 } from "@/utils/coverColor.js";
 import { formatDateKey, formatMonthKey } from "@/utils/date.js";
 import { onShow } from "@dcloudio/uni-app";
@@ -943,16 +948,16 @@ function resetNewLedger() {
   newLedgerCover.value = "";
   newLedgerCoverRel.value = "";
   newLedgerDesc.value = "";
-  newLedgerColorMode.value = "auto";
-  newLedgerColor.value = "#16a34a";
-  coverPalette.value = [];
-  selectedAutoColor.value = "";
+  newLedgerColor.value = "#25cc5d";
+  autoPaletteNew.value = [];
   pendingCover.value = null;
   coverUploading = null;
 }
 
-// 关闭新建弹窗：若用户上传了封面但最终未创建，清理 CDN 上的临时文件
-async function closeNewLedger() {
+// 关闭新建弹窗：committed=true 表示创建成功（封面已落库，保留文件）；
+// 其余（蒙版取消/未创建）作废进行中的上传并清理临时文件，防止孤儿残留
+async function closeNewLedger(committed = false) {
+  if (!committed) currentUploadToken.value.new++; // 取消 → 作废进行中的上传
   if (coverUploading) {
     try {
       await coverUploading;
@@ -960,7 +965,7 @@ async function closeNewLedger() {
       /* 失败已提示 */
     }
   }
-  await clearPending("new");
+  if (!committed) await clearPending("new");
   resetNewLedger();
   showNewLedger.value = false;
 }
@@ -1000,9 +1005,12 @@ async function onSubmit() {
 }
 const newLedgerIcon = ref("");
 const newLedgerCover = ref(""); // 预览地址（显示/取色用）
-const newLedgerCoverRel = ref(""); // 落库相对路径（/app_static/... 或 /ledger_img/...）
+const newLedgerCoverRel = ref(""); // 落库值：系统图为 /app_static/...，用户上传为 cloud:// fileID
 let coverUploading = null; // 自定义封面上传中的 promise
 const pendingCover = ref(null); // 已上传未提交的临时文件 { target, rel, fileID }
+// 上传令牌：每次 applyCover 自增并记入闭包。上传完成回调比对当前令牌，
+// 若已被替换/移除/取消（令牌失效），立即删除孤儿文件，不再写入 pendingCover。
+const currentUploadToken = ref({ new: 0, edit: 0 });
 const newLedgerDesc = ref("");
 // 系统默认图：预设图片图标库（3:4 网格），仅存相对路径，回显时拼接 CDN 域名
 const LEDGER_ICONS = [
@@ -1018,6 +1026,17 @@ const defaultCoverUrl = cdn(DEFAULT_COVER_REL);
 // 注意：ledgerViews 是 computed，每次返回全新普通对象；若把 coverError 直接挂在 item 上，
 // 该赋值非响应式、且不随 item 持久，导致 fallback 永不生效。故用独立响应式 map 记录失败项。
 const coverErrors = reactive({});
+// 云存储封面（用户上传，存 cloud:// fileID）解析后的临时访问 URL，按账本 _id 记录。
+// 云存储与网页托管不互通，fileID 不能直接拼 CDN 域名，必须经 getTempFileURL 换临时链。
+const coverUrlMap = reactive({});
+// 封面显示：cloud:// → 用预解析的临时链；/app_static → 拼 CDN；/ledger_img（旧数据，文件已不可达）→ 留空走默认图
+function coverDisplay(l) {
+  const c = String(l.cover || '');
+  if (!c) return '';
+  if (c.startsWith('cloud://')) return coverUrlMap[l._id] || '';
+  if (c.startsWith('/ledger_img/')) return '';
+  return resolveCover(c);
+}
 function onCoverError(item) {
   if (item && item._id) {
     coverErrors[item._id] = true;
@@ -1063,7 +1082,7 @@ function chooseCover(target = "new") {
     },
   });
 }
-// 清理某个 target 下“已上传但未提交”的临时封面（取消/替换/关闭时调用）
+// 清理某个 target 下"已上传但未提交"的临时封面（取消/替换/关闭时调用）
 async function clearPending(target) {
   const p = pendingCover.value;
   if (!p) return;
@@ -1072,12 +1091,16 @@ async function clearPending(target) {
   await deleteLedgerCover(p.fileID);
 }
 function removeCover(target = "new") {
+  // 作废进行中的上传（令牌失效），上传完成回调会删除孤儿文件
+  currentUploadToken.value[target]++;
   if (target === "edit") {
     editLedgerCover.value = "";
     editLedgerCoverRel.value = "";
+    autoPaletteEdit.value = [];
   } else {
     newLedgerCover.value = "";
     newLedgerCoverRel.value = "";
+    autoPaletteNew.value = [];
   }
   clearPending(target);
 }
@@ -1089,12 +1112,21 @@ function applyCover(target, path) {
   }
   if (target === "edit") editLedgerCover.value = path;
   else newLedgerCover.value = path;
+  // 选封面后自动提取色板（展示在主题色区底部）
+  autoExtract(target);
+  // 本次上传令牌：后续若被替换/移除/取消，令牌会自增失效，上传完成即删孤儿文件
+  const myToken = ++currentUploadToken.value[target];
   // 替换场景：先清理上一张待提交的上传
   clearPending(target).then(() => {
     const run = uploadLedgerCover(path)
       .then(({ rel, fileID }) => {
-        if (target === "edit") editLedgerCoverRel.value = rel;
-        else newLedgerCoverRel.value = rel;
+        // 令牌失效（已被替换/移除/取消）→ 本次上传不再需要，立即删除孤儿文件
+        if (currentUploadToken.value[target] !== myToken) {
+          return deleteLedgerCover(fileID);
+        }
+        // 落库用云存储 fileID（cloud://...），回显时经 getTempFileURL 解析，不再拼 CDN 域名
+        if (target === "edit") editLedgerCoverRel.value = fileID;
+        else newLedgerCoverRel.value = fileID;
         pendingCover.value = { target, rel, fileID };
       })
       .catch((e) => {
@@ -1106,6 +1138,8 @@ function applyCover(target, path) {
 }
 // 选择系统默认图：存相对路径，回显时拼接 CDN 域名（target: 'new' | 'edit'）
 function pickSystemIcon(ic, target) {
+  // 选系统图 → 放弃自定义上传：作废进行中的上传，清理临时文件
+  currentUploadToken.value[target]++;
   if (target === "edit") {
     editIcon.value = ic;
     editLedgerCover.value = resolveCover(ic);
@@ -1116,42 +1150,11 @@ function pickSystemIcon(ic, target) {
     newLedgerCoverRel.value = ic;
   }
   clearPending(target); // 选了系统图 → 清理之前可能上传的自定义临时图
+  autoExtract(target); // 选封面后自动提取色板（展示在主题色区底部）
 }
 
-// —— 主题色选择（创建账本）：1) 封面自动取色 2) 预设 3) 自定义 ——
-// newLedgerColorMode: 'auto' | 'custom'；newLedgerColor 为自定义选中的 hex
-const newLedgerColorMode = ref("auto");
-const newLedgerColor = ref("#16a34a");
-// 封面取色色卡：选中“封面取色”且有封面时，提取真实配色色板供用户点选（落库用所选色）
-const coverPalette = ref([]);
-const selectedAutoColor = ref("");
-function updateAutoPreview() {
-  if (newLedgerColorMode.value === "auto" && newLedgerCover.value) {
-    extractCoverPalette(newLedgerCover.value)
-      .then((pal) => {
-        coverPalette.value = pal || [];
-        if (coverPalette.value.length) {
-          // 保留先前选择（若仍在新色板中），否则默认最突出的首色
-          if (
-            !selectedAutoColor.value ||
-            !coverPalette.value.includes(selectedAutoColor.value)
-          ) {
-            selectedAutoColor.value = coverPalette.value[0];
-          }
-        } else {
-          selectedAutoColor.value = "";
-        }
-      })
-      .catch(() => {
-        coverPalette.value = [];
-        selectedAutoColor.value = "";
-      });
-  } else {
-    coverPalette.value = [];
-    selectedAutoColor.value = "";
-  }
-}
-watch([newLedgerColorMode, newLedgerCover], updateAutoPreview, { immediate: true });
+// 主题色：自定义取色 + 选封面后自动生成的色板建议（见 autoExtract）
+const newLedgerColor = ref("#25cc5d"); // 自定义选中的 hex
 
 // 自定义颜色选择器弹窗状态（HSV 拖动）
 const showColorPicker = ref(false);
@@ -1162,17 +1165,54 @@ const pickerVal = ref(90);
 const cpHex = computed(() => hsvToHex(pickerHue.value, pickerSat.value, pickerVal.value));
 
 // 打开自定义：用当前已选色初始化 HSV，避免每次从头开始
+// 自定义颜色选择器：区分「新建 / 编辑」两个上下文，确认时写回对应状态
+const colorContext = ref("new");
 function openCustomColor() {
-  newLedgerColorMode.value = "custom";
+  colorContext.value = "new";
   const hsv = hexToHsv(newLedgerColor.value);
   pickerHue.value = hsv.h;
   pickerSat.value = hsv.s;
   pickerVal.value = hsv.v;
   showColorPicker.value = true;
 }
+function openEditCustomColor() {
+  colorContext.value = "edit";
+  const hsv = hexToHsv(editColor.value);
+  pickerHue.value = hsv.h;
+  pickerSat.value = hsv.s;
+  pickerVal.value = hsv.v;
+  showColorPicker.value = true;
+}
 function confirmCustomColor() {
-  newLedgerColor.value = cpHex.value;
+  if (colorContext.value === "edit") editColor.value = cpHex.value;
+  else newLedgerColor.value = cpHex.value;
   showColorPicker.value = false;
+}
+
+// 封面自动取色：选封面后静默提取主色 + 调色盘（见 utils/coverColor.js）。
+// 主色仅在新建态直接落色；编辑态保留已存/已选主题色，仅把色板展示在主题色区底部供点选微调。
+const autoPaletteNew = ref([]);
+const autoPaletteEdit = ref([]);
+async function autoExtract(context) {
+  const cover = context === "edit" ? editLedgerCover.value : newLedgerCover.value;
+  if (!cover) return;
+  const palRef = context === "edit" ? autoPaletteEdit : autoPaletteNew;
+  try {
+    const [main, pal] = await Promise.all([
+      extractCoverColor(cover),
+      extractCoverPalette(cover, 20),
+    ]);
+    if (context === "new" && main) newLedgerColor.value = main;
+    palRef.value = pal && pal.length ? pal : main ? [main] : [];
+  } catch (e) {
+    console.error("[ledger] 封面自动取色失败:", e);
+    palRef.value = [];
+  }
+}
+// 点击自动取色得到的色板色卡：写回主题色（用于精细挑选）
+function pickAutoSwatch(context, hex) {
+  if (context === "edit") editColor.value = hex;
+  else newLedgerColor.value = hex;
 }
 
 // 选择器视觉样式（背景随时钟更新）
@@ -1248,7 +1288,7 @@ const boxW = ref(0); // 裁剪框（显示坐标）
 const boxH = ref(0);
 const boxX = ref(0);
 const boxY = ref(0);
-const zoom = ref(50); // 0~100，越大裁剪框越小（越“放大”）
+const zoom = ref(50); // 0~100，越大裁剪框越小（越"放大"）
 
 const stageStyle = computed(() => ({
   width: stageW.value + "px",
@@ -1402,7 +1442,21 @@ const editTarget = ref(null);
 const editName = ref("");
 const editIcon = ref("");
 const editLedgerCover = ref(""); // 预览地址
-const editLedgerCoverRel = ref(""); // 落库相对路径
+const editLedgerCoverRel = ref(""); // 落库值：系统图为 /app_static/...，用户上传为 cloud:// fileID
+const editOldCoverFileID = ref(""); // 编辑前已有的用户封面 fileID，替换成功后清理旧文件
+const editLedgerDesc = ref(""); // 简介（与新建字段一致）
+// 主题色：自定义取色 + 选封面后自动生成的色板建议（见 autoExtract）
+const editColor = ref("#25cc5d"); // 自定义选中的 hex
+const editDescFocused = ref(false); // 简介输入框聚焦态
+
+// 编辑弹窗"保存"按钮的浮雕液态填充比例：随表单字段完成度 0→1（未填 0 / 部分 / 全填 1）
+const editFillRatio = computed(() => {
+  let r = 0;
+  if (editName.value.trim()) r += 0.5;
+  if (editIcon.value) r += 0.25;
+  if (editLedgerCover.value) r += 0.25;
+  return r;
+});
 
 // 多选删除：模式开关、已选账本 id、删除确认弹窗目标
 const multiSelect = ref(false);
@@ -1658,7 +1712,7 @@ const ledgerViews = computed(() =>
   })
 );
 
-// 维度中文前缀：用于进度条“使用/限额”标签
+// 维度中文前缀：用于进度条"使用/限额"标签
 const dimWord = (dim) => (dim === "day" ? "日" : dim === "year" ? "年" : "月");
 
 // 预算周期命名：随上方所选日期维度联动（天→天预算 / 月→月度预算 / 年→年度预算）
@@ -1815,6 +1869,18 @@ async function loadData() {
     );
     ledgers.value = list;
     transactions.value = txData;
+    // 预解析云存储封面（用户上传，存 cloud:// fileID）为临时访问 URL，填入 coverUrlMap
+    const cloudCovers = list
+      .filter((l) => l.cover && String(l.cover).startsWith("cloud://"))
+      .map((l) => l.cover);
+    if (cloudCovers.length) {
+      const map = await getCloudTempUrls(cloudCovers);
+      for (const l of list) {
+        if (l.cover && String(l.cover).startsWith("cloud://") && map[l.cover]) {
+          coverUrlMap[l._id] = map[l.cover];
+        }
+      }
+    }
     if (list.length === 0) {
       console.warn(
         "[ledger][loadData] ⚠️ 最终列表仍为空：请确认已登录（非游客）且 ensureMasterLedger 或前端直写成功，详见上方日志"
@@ -1929,24 +1995,8 @@ async function createLedger() {
     finalCover = pickRandomCover();
     if (!finalIcon) finalIcon = finalCover; // 未选图标则同步用随机封面，保持视觉统一
   }
-  // 主题色：按所选模式落库为具体 hex（封面取色/预设/自定义三种来源统一），
-  // 后续访问直接读取该字段，不再重复提取或要求用户重选
-  let themeColor = null;
-  if (newLedgerColorMode.value === "auto") {
-    // 优先采用用户在色卡中点选的颜色；无封面时（随机封面）回退提取主色
-    if (selectedAutoColor.value) {
-      themeColor = selectedAutoColor.value;
-    } else if (finalCover) {
-      try {
-        const pal = await extractCoverPalette(resolveCover(finalCover));
-        themeColor = (pal && pal[0]) || null;
-      } catch (e) {
-        themeColor = null;
-      }
-    }
-  } else {
-    themeColor = newLedgerColor.value;
-  }
+  // 主题色：仅自定义取色（封面自动取色已移除），直接落库所选 hex
+  const themeColor = newLedgerColor.value;
   try {
     // 走云函数：created_at/updated_at 由服务端自动填充（字符串），前端不传时间字段
     await apiCreateLedger({
@@ -1958,13 +2008,15 @@ async function createLedger() {
       sort_order: ledgers.value.length,
       theme_color: themeColor,
     });
-    // 创建成功：封面已正式引用，解除“待清理”标记，避免被误删
+    // 创建成功：封面已正式引用，解除"待清理"标记，避免被误删
     pendingCover.value = null;
-    closeNewLedger();
+    closeNewLedger(true);
     uni.showToast({ title: "已创建", icon: "success" });
     await loadData();
   } catch (err) {
     console.error("[ledger][createLedger] 创建账本失败:", err);
+    // 创建失败：新上传的封面未落库，清理云存储临时文件，避免孤儿残留
+    if (pendingCover.value) deleteLedgerCover(pendingCover.value.fileID);
     const msg = (err && (err.message || err.errMsg)) || "创建失败";
     uni.showToast({
       title: /already exists/i.test(msg) ? "创建冲突，请重试" : "创建失败",
@@ -1974,14 +2026,30 @@ async function createLedger() {
 }
 
 // 编辑账本（主账本仅允许改名/图标，不可删除）
-function openEdit(l) {
+async function openEdit(l) {
   editTarget.value = l;
   editName.value = l.name;
   // 仅当现有图标在图片库中才选中，否则不预选（避免强制选中首项）
   editIcon.value = l.icon && LEDGER_ICONS.includes(l.icon) ? l.icon : "";
-  // 封面预览用 resolveCover（兼容旧 emoji/完整 URL）；落库用相对路径
-  editLedgerCover.value = resolveCover(l.cover);
-  editLedgerCoverRel.value = l.cover && String(l.cover).startsWith("/") ? l.cover : "";
+  // 落库值兼容系统图(/app_static)与云存储(cloud://)
+  editLedgerCoverRel.value =
+    l.cover && (String(l.cover).startsWith("/") || String(l.cover).startsWith("cloud://"))
+      ? l.cover
+      : "";
+  // 预览地址：系统图/emoji 用 resolveCover 直出；用户上传为 cloud:// fileID，需解析为临时 URL 才能显示
+  if (l.cover && String(l.cover).startsWith("cloud://")) {
+    editLedgerCover.value = await getCloudTempUrl(l.cover);
+  } else {
+    editLedgerCover.value = resolveCover(l.cover);
+  }
+  // 记录编辑前的用户封面 fileID，替换成功后删旧文件，避免云存储冗余
+  editOldCoverFileID.value = l.cover && String(l.cover).startsWith("cloud://") ? l.cover : "";
+  // 简介：与新建字段一致
+  editLedgerDesc.value = l.desc || "";
+  // 主题色：保留已持久化的颜色
+  editColor.value = l.theme_color || "#25cc5d";
+  // 已有封面则自动提取色板（编辑态仅作建议，不覆盖已存主题色）
+  autoExtract("edit");
   showEdit.value = true;
 }
 
@@ -2007,11 +2075,11 @@ function toggleMenu(l) {
   openMenuId.value = willOpen ? l._id : null;
   if (willOpen) actionTab.value = "edit"; // 打开时滑块复位到「编辑」
 }
-// tabs 当前高亮项（控制 glider 滑块位置；默认“编辑”为安全高亮）
+// tabs 当前高亮项（控制 glider 滑块位置；默认"编辑"为安全高亮）
 const actionTab = ref("edit");
 function onMenuDelete(l) {
   actionTab.value = "delete";
-  // 先让滑块滑到“删除”，再弹出删除确认，使 tabs 高亮可见
+  // 先让滑块滑到"删除"，再弹出删除确认，使 tabs 高亮可见
   setTimeout(() => {
     openMenuId.value = null;
     openDelete(l);
@@ -2052,24 +2120,39 @@ async function saveEdit() {
   }
   try {
     // 走云函数：updated_at 由服务端自动刷新（字符串），前端不传时间字段
-    // cover 落库相对路径（系统图 /app_static/... 或自定义 /ledger_img/...）
+    // cover 落库值：系统图为 /app_static/...，用户上传为 cloud:// fileID
+    const newCover = editLedgerCoverRel.value;
+    // 主题色：仅自定义取色（封面自动取色已移除），直接落库所选 hex
+    const themeColor = editColor.value;
     await apiUpdateLedger(editTarget.value._id, {
       name,
       icon: editIcon.value || LEDGER_ICONS[0],
-      cover: editLedgerCoverRel.value,
+      cover: newCover,
+      desc: editLedgerDesc.value,
+      theme_color: themeColor,
     });
-    // 保存成功：封面已正式引用，解除“待清理”标记
+    // 保存成功：若封面被替换，清理编辑前的旧用户封面文件（cloud://），避免云存储冗余
+    if (editOldCoverFileID.value && editOldCoverFileID.value !== newCover) {
+      deleteLedgerCover(editOldCoverFileID.value);
+    }
+    editOldCoverFileID.value = "";
+    // 保存成功：封面已正式引用，解除"待清理"标记
     pendingCover.value = null;
-    closeEditLedger();
+    closeEditLedger(true);
     uni.showToast({ title: "已保存", icon: "success" });
     await loadData();
   } catch (err) {
+    // 保存失败：新上传的封面未落库，清理云存储临时文件，避免孤儿残留
+    if (pendingCover.value) deleteLedgerCover(pendingCover.value.fileID);
     uni.showToast({ title: "保存失败", icon: "none" });
   }
 }
 
 // 关闭编辑弹窗：若上传了新封面但最终未保存，清理 CDN 上的临时文件
-async function closeEditLedger() {
+// 关闭编辑弹窗：committed=true 表示保存成功（封面已落库，保留文件）；
+// 其余（蒙版取消/未保存）作废进行中的上传并清理临时文件，防止孤儿残留
+async function closeEditLedger(committed = false) {
+  if (!committed) currentUploadToken.value.edit++; // 取消 → 作废进行中的上传
   if (coverUploading) {
     try {
       await coverUploading;
@@ -2077,12 +2160,15 @@ async function closeEditLedger() {
       /* 失败已提示 */
     }
   }
-  await clearPending("edit");
+  if (!committed) await clearPending("edit");
   editTarget.value = null;
   editName.value = "";
   editIcon.value = "";
   editLedgerCover.value = "";
   editLedgerCoverRel.value = "";
+  editLedgerDesc.value = "";
+  editColor.value = "#25cc5d";
+  autoPaletteEdit.value = [];
   showEdit.value = false;
 }
 
@@ -2172,7 +2258,7 @@ onUnmounted(() => {
   overflow: hidden;
   position: relative;
   margin: 0 auto;
-  background: var(--g0);
+  // background: var(--g0);
 }
 
 .topbar {
@@ -2777,7 +2863,7 @@ onUnmounted(() => {
 }
 
 /* 绿色层叠背景：绝对定位于 wrap 内、卡片之下（z-index:0）。
-   四周比卡片各探出 8rpx（左右/底部），形成“卡片下垫一层圆角矩形”的层叠视觉。 */
+   四周比卡片各探出 8rpx（左右/底部），形成"卡片下垫一层圆角矩形"的层叠视觉。 */
 .ledger-list.is-list .ledger-card-bg {
   position: absolute;
   left: 24rpx;
@@ -2802,7 +2888,7 @@ onUnmounted(() => {
   flex-direction: row;
   align-items: center;
   gap: 20rpx;
-  margin: 0 32rpx 26rpx;
+  margin: 0 32rpx 40rpx;
   padding: 28rpx 32rpx;
   background: linear-gradient(135deg, #e6f8ed 0%, #ffffff 27%);
   border: 2rpx solid rgba(214, 233, 222, 0.9);
@@ -2860,7 +2946,7 @@ onUnmounted(() => {
   min-width: 0;
 }
 
-/* 列表态：进度条容器（承载右上角“使用/限额”标签）与上方行保持间距 */
+/* 列表态：进度条容器（承载右上角"使用/限额"标签）与上方行保持间距 */
 .ledger-list.is-list .ledger-bar-wrap {
   position: relative;
   margin-top: 40rpx;
@@ -3141,7 +3227,7 @@ onUnmounted(() => {
     inset -2rpx -2rpx 4rpx rgba(255, 255, 255, 0.65);
 }
 
-/* 进度条上方的“使用/限额”标签行：左右两端对齐，随维度切换文案；回归正常流，间距由 wrap 的 gap 控制 */
+/* 进度条上方的"使用/限额"标签行：左右两端对齐，随维度切换文案；回归正常流，间距由 wrap 的 gap 控制 */
 .ledger-bar-label {
   display: flex;
   justify-content: space-between;
@@ -3356,11 +3442,7 @@ onUnmounted(() => {
   overflow-y: auto;
   box-sizing: border-box;
   padding: 40rpx 40rpx 60rpx;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.98),
-    rgba(242, 252, 242, 0.96)
-  );
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 1));
   border-radius: 48rpx 48rpx 0 0;
 }
 
@@ -3370,10 +3452,10 @@ onUnmounted(() => {
 }
 
 .handle-bar {
-  width: 76rpx;
-  height: 8rpx;
-  border-radius: 6rpx;
-  background: rgba(194, 242, 200, 0.8);
+  width: 100rpx;
+  height: 16rpx;
+  border-radius: 12rpx;
+  background: linear-gradient(180deg, var(--g4) 0%, var(--g3) 40%, #ffffff 100%);
 }
 
 .sheet-title {
@@ -3384,21 +3466,26 @@ onUnmounted(() => {
   margin-bottom: 28rpx;
 }
 
+/* 通用渐变：薄荷色 -> 白色，输入框与封面框共用 */
+$coverGrad: linear-gradient(135deg, rgba(242, 252, 242, 0.4) 0%, #ffffff 50%);
+
 .sheet-input {
   width: 100%;
   height: 88rpx;
+  box-sizing: border-box;
   border-radius: 28rpx;
-  background: rgba(242, 252, 242, 0.4);
+  background: $coverGrad;
   border: 2rpx solid rgba(194, 242, 200, 0.4);
   padding: 0 28rpx;
   font-size: 28rpx;
   margin-bottom: 32rpx;
   outline: none;
-  /* 参考 Uiverse.io 动效：缓动曲线与时长保持一致 */
-  transition: all 0.1s cubic-bezier(0.19, 1, 0.22, 1);
+  /* 仅过渡颜色与阴影，避免 border 宽度变化触发布局重排导致抖动 */
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 
   &.focused {
-    border: 4rpx solid rgba(194, 242, 200, 1);
+    border-color: rgba(37, 204, 93, 0.9);
+    box-shadow: 0 0 0 4rpx rgba(37, 204, 93, 0.12);
   }
 }
 
@@ -3406,11 +3493,11 @@ onUnmounted(() => {
 .form-label {
   font-size: 26rpx;
   font-weight: 700;
-  color: var(--g3);
+  color: var(--ink2);
   margin: 12rpx 0 16rpx;
 }
 
-/* 主题色三选项（封面取色 / 预设 / 自定义） */
+/* 主题色（自定义取色） */
 .color-opts {
   display: flex;
   gap: 20rpx;
@@ -3426,14 +3513,14 @@ onUnmounted(() => {
   padding: 16rpx 0;
   border-radius: 16rpx;
   background: rgba(255, 255, 255, 0.55);
-  border: 3rpx solid transparent;
+  border: 3rpx solid rgba(255, 255, 255, 1);
   cursor: pointer;
   transition: border-color 0.2s ease, background 0.2s ease;
 }
 
 .color-opt.active {
   border-color: var(--g5);
-  background: rgba(230, 245, 234, 0.9);
+  background: var(--g1);
 }
 
 .color-opt-ico {
@@ -3469,56 +3556,29 @@ onUnmounted(() => {
 
 .color-opt-label {
   font-size: 22rpx;
-  color: var(--g3);
+  color: var(--ink3);
   font-weight: 600;
 }
 
-/* 取色预览 / 配色色卡（封面取色模式下展示提取到的真实配色） */
-.color-preview {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 14rpx;
-  margin: 16rpx 0 4rpx;
-  padding: 16rpx 18rpx;
-  border-radius: 14rpx;
-  background: rgba(255, 255, 255, 0.55);
+/* 自动取色色板：提取出的代表色卡，点选可微调主题色 */
+.auto-palette {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 12rpx;
+  margin: 14rpx 0 4rpx;
 }
-
-/* 色卡：提取出的配色色块，可点击选择 */
-.swatch-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16rpx;
+.auto-swatch {
   width: 100%;
-}
-
-.swatch {
-  width: 72rpx;
-  height: 72rpx;
-  border-radius: 14rpx;
-  border: 4rpx solid rgba(255, 255, 255, 0.9);
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.15);
-  @include sj-flex-center;
+  aspect-ratio: 1 / 1;
+  border-radius: 12rpx;
+  box-shadow: 0 2rpx 6rpx rgba(0, 0, 0, 0.12);
   cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  border: 3rpx solid transparent;
+  transition: transform 0.15s ease, border-color 0.15s ease;
 }
-
-.swatch.active {
-  border-color: var(--sel);
+.auto-swatch.active {
+  border-color: var(--ink);
   transform: scale(1.08);
-  box-shadow: 0 0 0 4rpx var(--sel-glow), 0 4rpx 14rpx rgba(0, 0, 0, 0.25);
-}
-
-.color-preview-text {
-  font-size: 24rpx;
-  color: var(--g3);
-  font-weight: 600;
-}
-
-.color-preview-tip {
-  font-size: 22rpx;
-  color: var(--g4);
 }
 
 /* 列表底部留白：高度覆盖固定 TabBar（含安全区），保证最后一项完整可见 */
@@ -3547,7 +3607,7 @@ onUnmounted(() => {
 .cp-title {
   font-size: 30rpx;
   font-weight: 700;
-  color: var(--g3);
+  color: var(--ink);
   margin-bottom: 24rpx;
   display: block;
 }
@@ -3612,7 +3672,7 @@ onUnmounted(() => {
 .cp-hex {
   font-size: 28rpx;
   font-weight: 700;
-  color: var(--g3);
+  color: var(--ink2);
   letter-spacing: 1rpx;
 }
 
@@ -3634,7 +3694,7 @@ onUnmounted(() => {
 
 .cp-cancel {
   background: rgba(0, 0, 0, 0.05);
-  color: var(--g3);
+  color: var(--ink3);
 }
 
 .cp-confirm {
@@ -3666,7 +3726,7 @@ onUnmounted(() => {
   width: 100%;
   aspect-ratio: 3 / 4;
   border-radius: 28rpx;
-  background: rgba(242, 252, 242, 0.8);
+  background: $coverGrad;
   border: 2rpx dashed rgba(194, 242, 200, 0.7);
   @include sj-flex-center;
   overflow: hidden;
@@ -3694,15 +3754,6 @@ onUnmounted(() => {
   z-index: 1;
 }
 
-.cover-default {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0.4;
-  z-index: -1;
-}
-
 .cover-plus {
   font-size: 56rpx;
   color: var(--g4);
@@ -3711,7 +3762,7 @@ onUnmounted(() => {
 
 .cover-tip {
   font-size: 24rpx;
-  color: var(--g4);
+  color: var(--g5);
 }
 
 .cover-remove {
@@ -3734,20 +3785,19 @@ onUnmounted(() => {
   width: 100%;
   height: 160rpx;
   border-radius: 28rpx;
-  background: rgba(242, 252, 242, 0.8);
+  background: $coverGrad;
   border: 2rpx solid rgba(194, 242, 200, 0.4);
   padding: 20rpx 28rpx;
   font-size: 28rpx;
   margin-bottom: 32rpx;
   box-sizing: border-box;
   outline: none;
-  /* 与名称输入框一致的 Uiverse 动效 */
-  transition: all 0.1s cubic-bezier(0.19, 1, 0.22, 1);
-  box-shadow: 0 0 40rpx -36rpx;
+  /* 仅过渡颜色与阴影，避免 border 宽度变化触发布局重排导致抖动 */
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 
   &.focused {
-    border: 4rpx solid rgba(194, 242, 200, 1);
-    box-shadow: 0 0 40rpx -30rpx rgba(37, 204, 93, 0.5);
+    border-color: rgba(37, 204, 93, 0.9);
+    box-shadow: 0 0 0 4rpx rgba(37, 204, 93, 0.12);
   }
 }
 
@@ -3845,7 +3895,7 @@ onUnmounted(() => {
 
 .crop-row-label {
   font-size: 26rpx;
-  color: var(--g3);
+  color: var(--ink2);
   flex: 0 0 auto;
   width: 72rpx;
 }
@@ -3936,13 +3986,13 @@ onUnmounted(() => {
     -webkit-clip-path: polygon(
       0 0,
       calc(var(--fill, 0) * 100%) 0,
-      calc(var(--fill, 0) * 100% - 40rpx) 100%,
+      calc(var(--fill, 0) * 100% - 40rpx * (1 - var(--fill, 0))) 100%,
       0 100%
     );
     clip-path: polygon(
       0 0,
       calc(var(--fill, 0) * 100%) 0,
-      calc(var(--fill, 0) * 100% - 40rpx) 100%,
+      calc(var(--fill, 0) * 100% - 40rpx * (1 - var(--fill, 0))) 100%,
       0 100%
     );
     transition: clip-path 0.6s cubic-bezier(0.19, 1, 0.22, 1);
@@ -3967,13 +4017,13 @@ onUnmounted(() => {
     -webkit-clip-path: polygon(
       0 0,
       calc(var(--fill, 0) * 100%) 0,
-      calc(var(--fill, 0) * 100% - 40rpx) 100%,
+      calc(var(--fill, 0) * 100% - 40rpx * (1 - var(--fill, 0))) 100%,
       0 100%
     );
     clip-path: polygon(
       0 0,
       calc(var(--fill, 0) * 100%) 0,
-      calc(var(--fill, 0) * 100% - 40rpx) 100%,
+      calc(var(--fill, 0) * 100% - 40rpx * (1 - var(--fill, 0))) 100%,
       0 100%
     );
     z-index: 0;
@@ -3982,6 +4032,127 @@ onUnmounted(() => {
 
   &:active {
     transform: scale(0.97);
+  }
+
+  /* 完全填满（fill=1）：去掉右下角斜切尾，整块铺满不留缺口。
+     完整矩形与斜切多边形顶点数一致，clip-path 可平滑过渡。 */
+  &.is-full {
+    &::before,
+    &__fill {
+      -webkit-clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+      clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+    }
+  }
+}
+
+/* 编辑弹窗"保存"按钮：浮雕液态填充（未填充 / 部分 / 完全 三阶段） */
+.sheet-btn--emboss {
+  /* 重置继承自 .sheet-btn 的斜切填充伪元素，避免干扰浮雕效果 */
+  &::before {
+    display: none;
+    content: none;
+  }
+  /* 基底：浅薄荷渐变 + 品牌绿边框，作浮雕底衬（覆盖 .sheet-btn 的透明底） */
+  background: linear-gradient(135deg, rgba(242, 252, 242, 0.6) 0%, #ffffff 60%);
+  border-color: var(--g4);
+  min-height: 84rpx;
+  overflow: hidden;
+
+  /* 浮雕基底层：双向内凹阴影 + 点状纹理，未填充时清晰突出于表面 */
+  .emboss-base {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background-image: radial-gradient(
+      circle,
+      rgba(37, 204, 93, 0.22) 1.5rpx,
+      transparent 2rpx
+    );
+    background-size: 18rpx 18rpx;
+    background-position: 0 0;
+    box-shadow: inset 3rpx 3rpx 7rpx rgba(255, 255, 255, 0.95),
+      inset -3rpx -3rpx 7rpx rgba(160, 224, 178, 0.85);
+  }
+
+  /* 液体填充层：高度随 --fill 从底部升起，淹没浮雕；完全填充时铺满、表面平滑 */
+  .emboss-liquid {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: calc(var(--fill, 0) * 100%);
+    z-index: 1;
+    background: linear-gradient(
+      180deg,
+      var(--g5),
+      color-mix(in sRGB, var(--g5) 78%, #0a86a0)
+    );
+    /* 仅底部加暗内阴影给液体体积感，避免顶部白边（满填时会顶到按钮上边，否则显"没填满"） */
+    box-shadow: inset 0 -10rpx 18rpx rgba(0, 0, 0, 0.12);
+    transition: height 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+
+    /* 液面高光：模拟液体上表面反光，随填充升起；满填时(表面到顶)淡出，去除顶部白边 */
+    &::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 10rpx;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.6), transparent);
+      opacity: calc(1 - var(--fill, 0));
+      transition: opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+  }
+
+  /* 文字层：两层叠放，按 --fill 互补裁切，实现深绿↔白字平滑切换 */
+  .emboss-text {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28rpx;
+    font-weight: 700;
+    pointer-events: none;
+  }
+
+  /* 深绿字：仅未淹没区（顶部）可见，随填充被裁掉 */
+  .emboss-text--base {
+    z-index: 2;
+    color: var(--g5);
+    -webkit-clip-path: polygon(
+      0 0,
+      100% 0,
+      100% calc((1 - var(--fill, 0)) * 100%),
+      0 calc((1 - var(--fill, 0)) * 100%)
+    );
+    clip-path: polygon(
+      0 0,
+      100% 0,
+      100% calc((1 - var(--fill, 0)) * 100%),
+      0 calc((1 - var(--fill, 0)) * 100%)
+    );
+    transition: clip-path 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* 白字：仅淹没区（底部）可见，随填充显出 */
+  .emboss-text--top {
+    z-index: 3;
+    color: #fff;
+    -webkit-clip-path: polygon(
+      0 calc((1 - var(--fill, 0)) * 100%),
+      100% calc((1 - var(--fill, 0)) * 100%),
+      100% 100%,
+      0 100%
+    );
+    clip-path: polygon(
+      0 calc((1 - var(--fill, 0)) * 100%),
+      100% calc((1 - var(--fill, 0)) * 100%),
+      100% 100%,
+      0 100%
+    );
+    transition: clip-path 0.6s cubic-bezier(0.22, 1, 0.36, 1);
   }
 }
 
