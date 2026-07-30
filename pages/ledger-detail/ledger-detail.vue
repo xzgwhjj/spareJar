@@ -2,22 +2,36 @@
   <view class="detail-page" data-cmp="LedgerDetail">
     <view class="topbar">
       <view class="back-btn" @click="goBack"><text>←</text></view>
-      <text class="topbar-title">账本详情</text>
     </view>
 
-    <scroll-view
-      class="page-scroll"
-      scroll-y
-      enhanced
-      :show-scrollbar="false"
-      style="flex: 1"
-    >
+    <!-- 顶部 4:3 封面横幅 -->
+    <view class="cover-banner">
+      <image
+        v-if="coverSrc"
+        :src="coverSrc"
+        mode="aspectFill"
+        class="cover-banner-img"
+      />
+      <view v-else class="cover-banner-fallback"></view>
+    </view>
+
+    <!-- 内容矩形：顶部左右大圆角，向上与封面重叠 1/3 高度。
+         将原先分离的“封面渐隐遮罩 / 磨砂玻璃层 / 纯白背景”合并为单一连续过渡层，
+         用 background 渐变 + backdrop-filter 模糊一次性完成，避免多层叠加造成生硬分层。 -->
+    <view class="content-sheet">
+      <scroll-view
+        class="sheet-scroll"
+        scroll-y
+        enhanced
+        :show-scrollbar="false"
+      >
       <!-- 账本信息：头像 + 名称/类型 + 成员/记录 + 余额 + 本月收支 -->
       <view class="detail-card" style="padding: 0rpx; margin-top: 32rpx">
-        <view class="detail-card-glow"></view>
+        <view class="detail-card-glow" :style="detailCardGlowStyle"></view>
         <view
           class="glass-thin-2 card-in-1 detail-card-1"
           style="padding: 20px 20px 16px"
+          :style="detailCardStyle"
         >
           <!-- 右上角操作菜单：竖向“...” ⇄ 横向“...”，展开删除/编辑 -->
           <view v-if="!ledger.is_system" class="card-actions" :class="{ open: menuOpen }">
@@ -34,13 +48,7 @@
           <!-- 头部：头像 + 名称/类型 + 成员/记录 -->
           <view class="hero-header">
             <view class="hero-avatar">
-              <image
-                v-if="ledger.cover"
-                :src="coverSrc"
-                mode="aspectFill"
-                class="hero-cover-img"
-              />
-              <text v-else>{{ ledger.emoji }}</text>
+              <text>{{ ledger.emoji || '📒' }}</text>
             </view>
             <view class="hero-head-main">
               <view class="hero-name-row">
@@ -102,7 +110,7 @@
 
       <!-- 时间筛选 -->
       <!-- 时间筛选：可折叠卡片，含日/月/年维度切换与日历视图 -->
-      <view class="glass-thin-2 filter-card">
+      <view class="filter-card">
         <view class="filter-head" @click="filterExpanded = !filterExpanded">
           <view class="seg">
             <view
@@ -140,6 +148,43 @@
             :year-expense-map="calMaps.yearExpense"
             :year-income-map="calMaps.yearIncome"
           />
+        </view>
+        <!-- 待:加一个小狗坐着看日历的图 -->
+        <!-- 右下悬浮预算概览：复刻 BudgetGaugeCard 的 panel-float -->
+        <view
+          class="period-hud"
+          :style="{
+            outline:
+              periodPct >= 100
+                ? '2rpx solid rgba(255,107,107,0.18)'
+                : '2rpx solid rgba(37,204,93,0.18)',
+            boxShadow:
+              periodPct >= 100
+                ? '0 16rpx 56rpx rgba(255,107,107,0.14),0 2px 8px rgba(0,0,0,0.05), inset 0 1.5px 0 rgba(255,255,255,0.98)'
+                : '0 16rpx 56rpx rgba(37,204,93,0.2),0 2px 8px rgba(0,0,0,0.07), inset 0 1.5px 0 rgba(255,255,255,0.98)',
+          }"
+        >
+          <view class="hud-inner">
+            <text class="hud-label">{{ budgetWord(timeDim) }}</text>
+            <text class="hud-amount" :class="{ 'over-amount': periodPct >= 100 }"
+              >剩余 ¥{{ fmt(Math.max(periodBudget - periodSpent, 0)) }}</text
+            >
+            <text class="hud-spent"
+              >¥{{ fmt(periodSpent) }} / ¥{{ fmt(periodBudget) }} ({{ periodPct }}%)</text
+            >
+            <view class="hud-bar" :class="{ 'over-bar': periodPct >= 100 }">
+              <view
+                class="bar-grow-inner"
+                :style="{
+                  width: periodPct + '%',
+                  background:
+                    periodPct >= 100
+                      ? 'linear-gradient(90deg,#ffb3b3,#ff6b6b)'
+                      : 'linear-gradient(90deg,#89e59c,#25cc5d)',
+                }"
+              />
+            </view>
+          </view>
         </view>
       </view>
 
@@ -197,9 +242,9 @@
               <text class="bar-name">{{ c.name }}</text>
               <text class="bar-amt">¥{{ fmt(c.amount) }}</text>
             </view>
-            <view class="bar-track"
-              ><view class="bar-fill" :style="{ width: c.width + '%' }"
-            /></view>
+            <view class="bar-track">
+              <view class="bar-fill" :style="{ width: c.width + '%' }" />
+            </view>
           </view>
           <text class="bar-pct">{{ c.pct }}%</text>
         </view>
@@ -256,12 +301,15 @@
       <view v-if="!ledger.is_system" class="danger-btn" @click="openDelete"
         >删除账本</view
       >
-    </scroll-view>
+      </scroll-view>
+    </view>
 
     <!-- 编辑弹窗 -->
     <view v-if="showEdit" class="sheet-overlay" @click="showEdit = false">
       <view class="sheet-panel" @click.stop>
-        <view class="sheet-handle"><view class="handle-bar" /></view>
+        <view class="sheet-handle">
+          <view class="handle-bar" />
+        </view>
         <text class="sheet-title">编辑账本</text>
         <input class="sheet-input" v-model="editName" placeholder="账本名称" />
         <view class="icon-grid">
@@ -340,6 +388,41 @@ const memberCount = ref(0);
 const typeBadgeStyle = computed(() => {
   if (ledger.type === "master" || !ledger.theme_color) return null;
   return { background: hexToRgba(ledger.theme_color, 0.12), color: ledger.theme_color };
+});
+/** 卡片辉光背景：跟随接口返回的账本主题色动态着色；
+ * 接口未返回 theme_color（如主账本/缺失）时回退到品牌绿 DEFAULT_THEME。
+ * 依赖 ledger.theme_color（在 loadAll 中赋值），挂载/数据更新均实时响应。 */
+const DEFAULT_THEME = "#25cc5d";
+const detailCardGlowStyle = computed(() => {
+  const c = ledger.theme_color || DEFAULT_THEME;
+  return {
+    background: [
+      `radial-gradient(120% 90% at 0% 0%, ${hexToRgba(c, 0.45)} 0%, ${hexToRgba(
+        c,
+        0
+      )} 55%)`,
+      `radial-gradient(120% 90% at 100% 0%, ${hexToRgba(c, 0.14)} 0%, ${hexToRgba(
+        c,
+        0
+      )} 55%)`,
+      `radial-gradient(140% 120% at 100% 100%, ${hexToRgba(c, 0.18)} 0%, ${hexToRgba(
+        c,
+        0
+      )} 60%)`,
+      `linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(253, 255, 253, 0.84))`,
+    ].join(", "),
+  };
+});
+/** 卡片浮雕阴影：外部投影与底部内阴影使用账本主题色的淡色版本。
+ * 通过 CSS 变量（--shadow-outer / --shadow-inner-bottom）下发给 .glass-thin-2.detail-card-1 的
+ * box-shadow 引用；颜色由 ledger.theme_color 经 hexToRgba 降低透明度淡化，缺色时回退品牌绿。
+ * 外投影与底部内阴影使用不同的淡化参数，配置相互独立、清晰区分。 */
+const detailCardStyle = computed(() => {
+  const c = ledger.theme_color || DEFAULT_THEME;
+  return {
+    "--shadow-outer": hexToRgba(c, 0.18),
+    "--shadow-inner-bottom": hexToRgba(c, 0.24),
+  };
 });
 /** 属于本账本的全部未删除交易（加载一次，后续客户端筛选） */
 const ledgerTxs = ref([]);
@@ -692,13 +775,19 @@ const goBack = () => uni.navigateBack();
   width: 750rpx;
   height: 100vh;
   margin: 0 auto;
-  // background: var(--g0);
+  background: #fff;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
 }
 
 .topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -709,6 +798,7 @@ const goBack = () => uni.navigateBack();
     font-weight: 700;
     color: var(--ink);
   }
+
   .back-btn,
   .edit-btn {
     width: 72rpx;
@@ -719,13 +809,70 @@ const goBack = () => uni.navigateBack();
     cursor: pointer;
     font-size: 32rpx;
   }
+
   .back-btn {
     color: var(--ink3);
   }
 }
+
 .edit-btn.disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+/* ===== 全屏布局：顶部 4:3 封面横幅 + 融合内容层 ===== */
+/* 封面横幅：宽高比 4:3（高 = 宽 × 3/4）；在小程序/web 以 aspect-ratio 精准还原 */
+.cover-banner {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  flex-shrink: 0;
+  overflow: hidden;
+  background: #eef7ef;
+}
+
+.cover-banner-img {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* 无封面时的渐变兜底，避免破图 */
+.cover-banner-fallback {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #d8f0dc, #bfe6c8);
+}
+
+/* 内容层：单一融合层，向上与封面重叠 1/3 高度，并承载下方页面内容。
+   将原先分离的“封面渐隐遮罩 / 磨砂玻璃层 / 纯白背景”合并为单一连续渐变背景，
+   配合 backdrop-filter 模糊，实现封面从清晰 → 磨砂虚化 → 自然渐隐为纯白背景。
+   层级间没有硬边界，结构与视觉都更平滑连贯。
+   4:3 封面高 = 750rpx × 3/4 = 562.5rpx；重叠 1/3 = 187.5rpx。 */
+.content-sheet {
+  flex: 1;
+  min-height: 0;
+  margin-top: -187.5rpx;
+  border-radius: 40rpx 40rpx 0 0;
+  overflow: hidden;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0) 0,
+    rgba(255, 255, 255, 0) 40rpx,
+    rgba(255, 255, 255, 0.22) 90rpx,
+    rgba(255, 255, 255, 0.65) 150rpx,
+    rgba(255, 255, 255, 0.95) 190rpx,
+    #ffffff 200rpx,
+    #ffffff 100%
+  );
+  backdrop-filter: blur(20rpx);
+  -webkit-backdrop-filter: blur(20rpx);
+}
+
+/* 内容滚动区：内容从纯白背景区开始，避免压在过渡带上 */
+.sheet-scroll {
+  height: 100%;
+  padding-top: 200rpx;
+  box-sizing: border-box;
 }
 
 /* 账本详情头部卡片（参考示例 GlassCard 设计） */
@@ -735,6 +882,7 @@ const goBack = () => uni.navigateBack();
   gap: 28rpx;
   margin-bottom: 36rpx;
 }
+
 .hero-avatar {
   width: 104rpx;
   height: 104rpx;
@@ -751,10 +899,12 @@ const goBack = () => uni.navigateBack();
     display: block;
   }
 }
+
 .hero-head-main {
   flex: 1;
   min-width: 0;
 }
+
 .hero-name-row {
   display: flex;
   align-items: center;
@@ -766,6 +916,7 @@ const goBack = () => uni.navigateBack();
     font-weight: 800;
     color: var(--ink);
   }
+
   .hero-type {
     font-size: 18rpx;
     font-weight: 700;
@@ -776,6 +927,7 @@ const goBack = () => uni.navigateBack();
     flex-shrink: 0;
   }
 }
+
 .hero-sub {
   display: flex;
   align-items: center;
@@ -786,9 +938,11 @@ const goBack = () => uni.navigateBack();
     align-items: center;
     gap: 6rpx;
   }
+
   .hero-sub-ico {
     font-size: 22rpx;
   }
+
   .hero-sub-txt {
     font-size: 22rpx;
     color: var(--ink4);
@@ -805,6 +959,7 @@ const goBack = () => uni.navigateBack();
     color: var(--ink4);
     margin-bottom: 8rpx;
   }
+
   .hero-balance-val {
     display: block;
     font-size: 80rpx;
@@ -823,6 +978,7 @@ const goBack = () => uni.navigateBack();
     flex: 1;
     text-align: center;
   }
+
   .hero-stat-label {
     display: flex;
     align-items: center;
@@ -832,57 +988,71 @@ const goBack = () => uni.navigateBack();
     font-size: 20rpx;
     color: var(--ink4);
   }
+
   .hero-stat-ico {
     font-size: 24rpx;
   }
+
   .ico-income {
     color: var(--g5);
   }
+
   .ico-expense {
     color: var(--red-soft);
   }
+
   // .ico-net { color: var(--blue); }
   .hero-stat-val {
     font-size: 28rpx;
     font-weight: 700;
     color: var(--ink);
   }
+
   .val-income {
     color: var(--g5);
   }
+
   .val-expense {
     color: var(--red-soft);
   }
+
   // .val-net { color: var(--blue); }
 }
+
 /* 卡片入场动画（参考示例 detailCardIn） */
 @keyframes detailCardIn {
   from {
     opacity: 0;
     transform: translateY(24rpx) scale(0.97);
   }
+
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
 }
+
 .detail-card {
   position: relative;
   // height: 550rpx;
 }
 
-/* 右下角绿色光晕：垫在卡片下方的背景层（参考 ledger.vue 的 overview-card） */
+/* 圆角矩形浮雕垫层：铺满卡片、置于 detail-card-1 之下，
+   整体下移使仅下边缘露出一点，其余被 detail-card-1 遮挡覆盖 */
 .detail-card-glow {
   position: absolute;
-  right: -12rpx;
-  bottom: -12rpx;
-  width: 40%;
-  height: 36%;
-  border-radius: 50%;
-  background: var(--glow);
-  // background: #000;
-  filter: blur(80rpx);
-  opacity: 0.45;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 28rpx;
+  /* 浮雕质感：上缘内高光 + 下缘内阴影 + 外部柔和落影；
+     背景色改为动态绑定（见 template 上的 :style="detailCardGlowStyle"），
+     跟随 ledger.theme_color 实时着色，缺色时回退品牌绿。 */
+  // box-shadow: inset 6rpx 6rpx 12rpx rgba(206, 232, 218, 0.3),
+  //   inset -6rpx -6rpx 12rpx rgba(255, 255, 255, 0.6);
+  /* 仅下边缘露出一小条：下移后顶部/左右均被 detail-card-1 覆盖 */
+  transform: translateY(16rpx);
   pointer-events: none;
   z-index: 1;
 }
@@ -891,6 +1061,41 @@ const goBack = () => uni.navigateBack();
   position: relative;
   z-index: 2;
   animation: detailCardIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) 0.05s both;
+}
+
+/* 浮雕质感：在保留 glass-thin-2 的毛玻璃模糊与透明度的前提下，
+   通过光影层次（外投影 + 顶部内高光 + 底部内阴影）叠加立体凹凸；
+   不改变 background / backdrop-filter，故底层内容的模糊穿透不受影响。
+   用组合选择器提升特异性，确保覆盖 .glass-thin-2 的 box-shadow。 */
+.glass-thin-2.detail-card-1 {
+  border-color: rgba(255, 255, 255, 0.6);
+  box-shadow:
+    /* 外投影：账本主题色淡色版（远处柔光晕，alpha 0.18 降低透明度淡化） */ 0
+      6rpx 40rpx var(--shadow-outer),
+    0 10rpx 16rpx rgba(255, 255, 255, 0.1),
+    /* 顶部内高光：上缘受光，形成凸起亮边 */ inset 0 2rpx 0 rgba(255, 255, 255, 0.95),
+    inset 0 8rpx 16rpx rgba(255, 255, 255, 0.3),
+    /* 底部内阴影：账本主题色淡色版（下缘背光，alpha 0.24，比外投影略深以强化凹陷暗边） */
+      inset 0 -3rpx 6rpx var(--shadow-inner-bottom),
+    inset 0 -10rpx 22rpx rgba(255, 255, 255, 0.1);
+
+  /* 顶部受光斜面 + 底部背光斜面：极轻渐变强化凹凸边缘，
+     置于内容之下（z-index:-1），不遮挡文字、不影响模糊穿透 */
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    z-index: -1;
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.22) 0%,
+      rgba(255, 255, 255, 0) 22%,
+      rgba(255, 255, 255, 0) 78%,
+      rgba(255, 255, 255, 0.06) 100%
+    );
+  }
 }
 
 /* 右上角操作菜单：竖向“...”⇄横向“...” + 展开删除/编辑 */
@@ -985,9 +1190,11 @@ const goBack = () => uni.navigateBack();
 
 /* 时间筛选：可折叠卡片（含维度切换 + 日历视图） */
 .filter-card {
+  position: relative;
   margin: 0 32rpx 32rpx;
-  padding: 20rpx 28rpx;
+  padding: 20rpx 28rpx 150rpx 28rpx;
   cursor: pointer;
+  box-shadow: var(--shadow-light);
 }
 
 .filter-head {
@@ -995,11 +1202,13 @@ const goBack = () => uni.navigateBack();
   align-items: center;
   justify-content: space-between;
 }
+
 .filter-head-right {
   display: flex;
   align-items: center;
   gap: 8rpx;
 }
+
 .period-pick {
   font-size: 26rpx;
   font-weight: 700;
@@ -1008,6 +1217,7 @@ const goBack = () => uni.navigateBack();
   background: color-mix(in sRGB, var(--g0) 80%, transparent);
   border-radius: 20rpx;
 }
+
 .caret {
   color: var(--g5);
   font-size: 24rpx;
@@ -1017,9 +1227,48 @@ const goBack = () => uni.navigateBack();
     transform: rotate(180deg);
   }
 }
+
 .filter-body {
   margin-top: 16rpx;
 }
+
+/* 周期预算进度条：复用 ledger 列表的浮雕点状风格，高度较列表(12rpx)加大 */
+.period-bar {
+  --light: color-mix(in sRGB, var(--base) 35%, #fff);
+  --dark: color-mix(in sRGB, var(--base) 90%, #000);
+  --transparent: transparent;
+  position: relative;
+  height: 22rpx;
+  border-radius: 22rpx;
+  overflow: hidden;
+  margin-top: 20rpx;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.85) 2rpx, transparent 3rpx) 0
+      0 / 22rpx 22rpx,
+    linear-gradient(transparent 70%, var(--dark) 100%), var(--light);
+  box-shadow: inset 2rpx 2rpx 4rpx rgba(206, 232, 218, 0.35),
+    inset -2rpx -2rpx 4rpx rgba(255, 255, 255, 0.65);
+
+  .period-bar-fill {
+    position: relative;
+    height: 100%;
+    border-radius: 0 22rpx 22rpx 0;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.85) 2rpx, transparent 3rpx)
+        0 0 / 22rpx 22rpx,
+      linear-gradient(
+        90deg,
+        color-mix(in sRGB, var(--base) 80%, #fff),
+        var(--transparent) 24rpx
+      ),
+      linear-gradient(transparent 82%, var(--dark) 100%),
+      color-mix(in sRGB, var(--base) 60%, #fff);
+    transition: width 0.6s ease;
+
+    &.is-over {
+      background: linear-gradient(90deg, var(--red-soft), #ff9b9b);
+    }
+  }
+}
+
 .seg {
   display: flex;
   background: color-mix(in sRGB, var(--g2) 25%, transparent);
@@ -1048,15 +1297,18 @@ const goBack = () => uni.navigateBack();
   justify-content: space-between;
   margin-bottom: 16rpx;
 }
+
 .budget-spent {
   font-size: 26rpx;
   font-weight: 600;
   color: var(--ink);
 }
+
 .budget-total {
   font-size: 26rpx;
   color: var(--ink4);
 }
+
 .budget-bar {
   height: 16rpx;
   border-radius: 10rpx;
@@ -1075,6 +1327,82 @@ const goBack = () => uni.navigateBack();
     }
   }
 }
+
+/* 右下悬浮预算概览：复刻 BudgetGaugeCard 的 panel-float；
+   right 用负数让悬浮框探出卡片右缘约 20rpx（卡内边距盒约 690rpx、卡片右缘 718rpx、
+   屏幕右缘 750rpx），控制在屏幕内以免被 .page-scroll 的 overflow-x:hidden 裁掉 */
+.period-hud {
+  position: absolute;
+  right: -15rpx;
+  bottom: 16rpx;
+  z-index: 10;
+  width: 260rpx;
+  padding: 20rpx 22rpx 16rpx;
+  border-radius: 36rpx;
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18rpx);
+  border: 2rpx solid rgba(255, 255, 255, 0.9);
+  outline-offset: -1;
+  animation: period-hud-float 4.5s ease-in-out infinite;
+}
+
+@keyframes period-hud-float {
+  0% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6rpx);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+.hud-label {
+  font-size: 20rpx;
+  color: #9bb8a8;
+  font-weight: 500;
+  margin-bottom: 4rpx;
+  display: block;
+}
+
+.hud-amount {
+  font-size: 40rpx;
+  font-weight: 900;
+  color: #25cc5d;
+  letter-spacing: -2rpx;
+  line-height: 1.1;
+  display: block;
+}
+.hud-amount.over-amount {
+  color: #ff6b6b;
+}
+
+.hud-spent {
+  font-size: 21rpx;
+  color: #828a99;
+  font-weight: 500;
+  display: block;
+  margin-bottom: 14rpx;
+}
+
+.hud-bar {
+  height: 10rpx;
+  border-radius: 6rpx;
+  background: rgba(37, 204, 93, 0.14);
+  overflow: hidden;
+}
+.hud-bar.over-bar {
+  background: rgba(255, 107, 107, 0.14);
+}
+
+.bar-grow-inner {
+  height: 100%;
+  border-radius: 6rpx;
+  transition: width 0.8s cubic-bezier(0.34, 1.2, 0.64, 1);
+}
+
 .budget-remain {
   font-size: 20rpx;
   color: var(--g5);
@@ -1087,28 +1415,34 @@ const goBack = () => uni.navigateBack();
   margin: 0 32rpx 32rpx;
   padding: 36rpx;
 }
+
 .sum-row {
   display: flex;
   justify-content: space-between;
 }
+
 .sum-cell {
   flex: 1;
   text-align: center;
 }
+
 .sum-label {
   font-size: 22rpx;
   color: var(--ink4);
   display: block;
   margin-bottom: 8rpx;
 }
+
 .sum-val {
   font-size: 32rpx;
   font-weight: 800;
   color: var(--ink);
 }
+
 .sum-val.income {
   color: var(--g5);
 }
+
 .sum-val.expense {
   color: var(--red-soft);
 }
@@ -1118,15 +1452,18 @@ const goBack = () => uni.navigateBack();
   margin: 0 32rpx 32rpx;
   padding: 36rpx;
 }
+
 .chart-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 28rpx;
 }
+
 .chart-head .section-title {
   margin-bottom: 0;
 }
+
 .chart-toggle {
   display: flex;
   background: color-mix(in sRGB, var(--g2) 25%, transparent);
@@ -1147,6 +1484,7 @@ const goBack = () => uni.navigateBack();
     }
   }
 }
+
 .bar-row {
   display: flex;
   align-items: center;
@@ -1158,29 +1496,35 @@ const goBack = () => uni.navigateBack();
   &.active {
     background: color-mix(in sRGB, var(--g5) 10%, transparent);
   }
+
   .bar-icon {
     font-size: 36rpx;
     width: 44rpx;
     text-align: center;
   }
+
   .bar-main {
     flex: 1;
   }
+
   .bar-top {
     display: flex;
     justify-content: space-between;
     margin-bottom: 10rpx;
   }
+
   .bar-name {
     font-size: 26rpx;
     font-weight: 600;
     color: var(--ink);
   }
+
   .bar-amt {
     font-size: 24rpx;
     font-weight: 700;
     color: var(--ink);
   }
+
   .bar-track {
     height: 14rpx;
     border-radius: 8rpx;
@@ -1194,6 +1538,7 @@ const goBack = () => uni.navigateBack();
       transition: width 0.5s ease;
     }
   }
+
   .bar-pct {
     font-size: 22rpx;
     color: var(--ink4);
@@ -1207,15 +1552,18 @@ const goBack = () => uni.navigateBack();
   margin: 0 32rpx 48rpx;
   padding: 36rpx;
 }
+
 .detail-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 20rpx;
 }
+
 .detail-head .section-title {
   margin-bottom: 0;
 }
+
 .filter-chip {
   font-size: 22rpx;
   font-weight: 600;
@@ -1225,12 +1573,14 @@ const goBack = () => uni.navigateBack();
   border-radius: 20rpx;
   cursor: pointer;
 }
+
 .sort-ctrl {
   display: flex;
   align-items: center;
   gap: 16rpx;
   margin-bottom: 12rpx;
 }
+
 .sort-item {
   font-size: 24rpx;
   font-weight: 600;
@@ -1244,6 +1594,7 @@ const goBack = () => uni.navigateBack();
     background: color-mix(in sRGB, var(--g5) 10%, transparent);
   }
 }
+
 .sort-dir {
   font-size: 28rpx;
   font-weight: 700;
@@ -1262,29 +1613,35 @@ const goBack = () => uni.navigateBack();
   &.last {
     border-bottom: none;
   }
+
   .record-left {
     display: flex;
     align-items: center;
     gap: 20rpx;
   }
+
   .record-icon {
     font-size: 36rpx;
   }
+
   .record-name {
     font-size: 26rpx;
     font-weight: 600;
     color: var(--ink);
     display: block;
   }
+
   .record-time {
     font-size: 20rpx;
     color: var(--ink4);
   }
+
   .record-amount {
     font-size: 28rpx;
     font-weight: 700;
     color: var(--g5);
   }
+
   .record-amount.expense {
     color: var(--red-soft);
   }
@@ -1305,6 +1662,7 @@ const goBack = () => uni.navigateBack();
   @include sj-flex-center;
   align-items: flex-end;
 }
+
 .sheet-panel {
   width: 750rpx;
   background: linear-gradient(
@@ -1319,12 +1677,14 @@ const goBack = () => uni.navigateBack();
     @include sj-flex-center;
     padding: 24rpx 0 16rpx;
   }
+
   .handle-bar {
     width: 76rpx;
     height: 8rpx;
     border-radius: 6rpx;
     background: color-mix(in sRGB, var(--g2) 80%, transparent);
   }
+
   .sheet-title {
     font-size: 32rpx;
     font-weight: 800;
@@ -1332,6 +1692,7 @@ const goBack = () => uni.navigateBack();
     display: block;
     margin-bottom: 28rpx;
   }
+
   .sheet-input {
     width: 100%;
     height: 88rpx;
@@ -1342,6 +1703,7 @@ const goBack = () => uni.navigateBack();
     font-size: 28rpx;
     margin-bottom: 28rpx;
   }
+
   .save-btn {
     padding: 28rpx;
     border-radius: 32rpx;
@@ -1353,6 +1715,7 @@ const goBack = () => uni.navigateBack();
     cursor: pointer;
   }
 }
+
 .danger-btn {
   margin: 0 32rpx 48rpx;
   padding: 28rpx;
@@ -1365,12 +1728,14 @@ const goBack = () => uni.navigateBack();
   font-weight: 700;
   cursor: pointer;
 }
+
 .icon-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 16rpx;
   margin-bottom: 32rpx;
 }
+
 .icon-cell {
   width: 80rpx;
   height: 80rpx;
