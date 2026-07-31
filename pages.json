@@ -160,10 +160,6 @@
         "text": "账本"
       },
       {
-        "pagePath": "pages/add-record/add-record",
-        "text": "记一笔"
-      },
-      {
         "pagePath": "pages/challenge/challenge",
         "text": "挑战"
       },

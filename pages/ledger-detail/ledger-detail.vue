@@ -51,7 +51,12 @@
         <view class="ledger-info">
           <!-- 行1：大号名称 + 类型徽章 -->
           <view class="hero-title-row">
-            <text class="hero-name-lg">{{ ledger.name }}</text>
+            <text class="hero-name-lg" @click="showIntro = true">{{ ledger.name }}</text>
+            <!-- 点击查看账本简介 -->
+            <!-- 待：图标要替换 -->
+            <view class="hero-intro-ico" @click="showIntro = true">
+              <text class="hero-intro-ico-txt">ⓘ</text>
+            </view>
             <text
               v-if="ledger.type === 'master'"
               class="hero-type master"
@@ -76,8 +81,9 @@
               v-for="(m, i) in displayMembers"
               :key="m.user_id"
               class="member-avatar"
-              :class="{ self: m.is_self }"
+              :class="{ self: m.is_self, excluded: excludedMembers.includes(m.user_id) }"
               :style="{ zIndex: displayMembers.length - i }"
+              @click="toggleMember(m.user_id)"
             >
               <image
                 v-if="m.avatar_url"
@@ -95,17 +101,24 @@
           <!-- 行4：账本余额 / 账本消费 -->
           <!-- 行4：账本余额 / 账本消费 —— 双区域淡色背景，白色间隙分隔 -->
           <view class="hero-figures">
-            <!-- 左侧：g0~g2 预设淡色，仅左侧上下圆角 -->
+            <!-- 左：账本总余额（g0~g2 预设淡色，仅左侧上下圆角） -->
             <view class="figure-pane figure-left" :style="leftPaneStyle">
               <text class="hero-figure-label">账本余额</text>
               <text class="hero-figure-val">¥{{ fmt(ledger.balance) }}</text>
             </view>
             <!-- 中间白色间隙 -->
             <view class="figure-gap"></view>
-            <!-- 右侧：动态账本主色调淡色（与左侧同梯度），仅右侧上下圆角 -->
-            <view class="figure-pane figure-right" :style="rightPaneStyle">
-              <text class="hero-figure-label">账本消费</text>
+            <!-- 中：周期支出（随日/月/年切换） -->
+            <view class="figure-pane figure-mid">
+              <text class="hero-figure-label">{{ periodWord }}支出</text>
               <text class="hero-figure-val">¥{{ fmt(ledgerExpense) }}</text>
+            </view>
+            <!-- 中间白色间隙 -->
+            <view class="figure-gap"></view>
+            <!-- 右：周期收入（动态账本主色调淡色，仅右侧上下圆角） -->
+            <view class="figure-pane figure-right" :style="rightPaneStyle">
+              <text class="hero-figure-label">{{ periodWord }}收入</text>
+              <text class="hero-figure-val income">¥{{ fmt(ledgerIncome) }}</text>
             </view>
           </view>
 
@@ -182,33 +195,25 @@
             />
           </view>
           <!-- 待:加一个小狗坐着看日历的图 -->
-          <!-- 右下悬浮预算概览：复刻 BudgetGaugeCard 的 panel-float -->
-          <view
-            class="period-hud"
-            :style="{
-              outline:
-                periodPct >= 100
-                  ? '2rpx solid rgba(255,107,107,0.18)'
-                  : '2rpx solid rgba(37,204,93,0.18)',
-              boxShadow:
-                periodPct >= 100
-                  ? '0 16rpx 56rpx rgba(255,107,107,0.14),0 2px 8px rgba(0,0,0,0.05), inset 0 1.5px 0 rgba(255,255,255,0.98)'
-                  : '0 16rpx 56rpx rgba(37,204,93,0.2),0 2px 8px rgba(0,0,0,0.07), inset 0 1.5px 0 rgba(255,255,255,0.98)',
-            }"
-          >
-            <view class="hud-inner">
-              <text class="hud-label">{{ budgetWord(timeDim) }}</text>
-              <text class="hud-amount" :class="{ 'over-amount': periodPct >= 100 }"
+        </view>
+
+        <!-- 预算概览大卡片：左侧预算进度 + 右侧收支结余，底部居中悬浮百分比圆 -->
+        <view class="budget-overview-card" :class="{ 'is-over': periodPct >= 100 }">
+          <view class="bov-body">
+            <!-- 左侧：预算进度 -->
+            <view class="bov-left">
+              <text class="bov-label">{{ budgetWord(timeDim) }}</text>
+              <text class="bov-remain" :class="{ 'is-over': periodPct >= 100 }"
                 >剩余 ¥{{ fmt(Math.max(periodBudget - periodSpent, 0)) }}</text
               >
-              <text class="hud-spent"
+              <text class="bov-spent"
                 >¥{{ fmt(periodSpent) }} / ¥{{ fmt(periodBudget) }} ({{
                   periodPct
                 }}%)</text
               >
-              <view class="hud-bar" :class="{ 'over-bar': periodPct >= 100 }">
+              <view class="bov-bar" :class="{ 'is-over': periodPct >= 100 }">
                 <view
-                  class="bar-grow-inner"
+                  class="bov-bar-fill"
                   :style="{
                     width: periodPct + '%',
                     background:
@@ -222,29 +227,10 @@
           </view>
         </view>
 
-        <!-- 预算（随所选时间维度 / 周期联动） -->
-        <view class="glass-thin-2" style="margin: 0 16px 16px; padding: 18px">
-          <text class="section-title">📊 {{ budgetWord(timeDim) }}</text>
-          <view class="budget-row">
-            <text class="budget-spent">已花 ¥{{ fmt(periodSpent) }}</text>
-            <text class="budget-total">预算 ¥{{ fmt(periodBudget) }}</text>
-          </view>
-          <view class="budget-bar">
-            <view
-              class="budget-bar-fill"
-              :class="{ 'is-over': periodPct >= 100 }"
-              :style="{ width: periodPct + '%' }"
-            />
-          </view>
-          <text class="budget-remain"
-            >剩余 ¥{{ fmt(Math.max(periodBudget - periodSpent, 0)) }}</text
-          >
-        </view>
-
         <!-- 分类统计图表 -->
         <view class="glass-mid chart-card">
           <view class="chart-head">
-            <text class="section-title">分类统计</text>
+            <text class="section-title">{{ periodWord }}分类统计</text>
             <view class="chart-toggle">
               <text
                 class="ct-item"
@@ -295,6 +281,31 @@
             >
               已筛选：{{ filterName }} ✕
             </view>
+            <view
+              v-if="excludedMembers.length"
+              class="filter-chip"
+              @click="excludedMembers = []"
+            >
+              排除 {{ excludedMembers.length }} 人 ✕
+            </view>
+          </view>
+          <!-- 按成员联动：点击头像切换计入/排除，排除者变灰不计入全局汇总 -->
+          <view v-if="displayMembers.length > 1" class="member-filter">
+            <view
+              v-for="m in displayMembers"
+              :key="m.user_id"
+              class="member-avatar"
+              :class="{ excluded: excludedMembers.includes(m.user_id), self: m.is_self }"
+              @click="toggleMember(m.user_id)"
+            >
+              <image
+                v-if="m.avatar_url"
+                class="member-avatar-img"
+                :src="m.avatar_url"
+                mode="aspectFill"
+              />
+              <text v-else>{{ m.nickname.slice(0, 1) }}</text>
+            </view>
           </view>
           <view class="sort-ctrl">
             <text
@@ -338,10 +349,6 @@
           </view>
           <view v-if="detailList.length === 0" class="empty-hint">该时段暂无记录</view>
         </view>
-
-        <view v-if="!ledger.is_system" class="danger-btn" @click="openDelete"
-          >删除账本</view
-        >
       </scroll-view>
     </view>
 
@@ -366,12 +373,22 @@
         <view class="save-btn" @click="saveEdit"><text>保存</text></view>
       </view>
     </view>
+
+    <!-- 账本简介弹窗：通用可复用组件 -->
+    <BaseModal
+      :show="showIntro"
+      title="账本简介"
+      :content="ledgerIntro"
+      :empty="!hasIntro"
+      @close="showIntro = false"
+    />
   </view>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted } from "vue";
 import { useUserStore, setFavoriteLedgerAction } from "@/stores/user.js";
+import BaseModal from "@/components/BaseModal.vue";
 import {
   updateLedger as apiUpdateLedger,
   getLedgerDetail,
@@ -414,6 +431,7 @@ const ledger = reactive({
   spent: 0,
   pct: 0,
   records: 0,
+  intro: "", // 接口返回的账本简介（字段名 desc）
 });
 /** 用户上传封面存 cloud:// fileID，需经 getTempFileURL 解析为临时 URL 才能显示 */
 const ledgerCoverUrl = ref("");
@@ -438,10 +456,9 @@ const displayMembers = computed(() => {
   const others = members.value.filter((m) => m.user_id !== state.uid);
   return [self, ...others];
 });
-/** 账本累计消费：全部交易中支出类金额之和 */
-const ledgerExpense = computed(() =>
-  ledgerTxs.value.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0)
-);
+/** hero 支出/收入：随所选周期（日/月/年）联动，取当前周期汇总（与下方预算卡/图表同周期） */
+const ledgerExpense = computed(() => summary.value.expense);
+const ledgerIncome = computed(() => summary.value.income);
 
 /** 行4 双区域背景：左侧从预设 g0~g2 梯度选一种淡色（可切换），
  * 右侧读取账本主题色并淡化为与左侧同一梯度的版本，保证左右淡度一致。 */
@@ -526,6 +543,8 @@ const selectedKey = ref(formatMonthKey(new Date()));
 const filterExpanded = ref(true); // 时间筛选区是否展开日历视图
 const chartType = ref("expense"); // 'expense' | 'income'
 const categoryFilter = ref(null); // category_id 或 null
+// 成员排除集合：默认空（全部计入）。点击头像把该成员加入 → 全局联动排除
+const excludedMembers = ref([]);
 const sortBy = ref("time"); // 'time' | 'amount'
 const sortDir = ref("desc"); // 'desc' | 'asc'
 
@@ -560,6 +579,11 @@ const periodLabel = computed(() => {
 // 预算周期命名：随上方所选日期维度联动（天→天预算 / 月→月度预算 / 年→年度预算）
 const budgetWord = (dim) =>
   dim === "day" ? "天预算" : dim === "year" ? "年度预算" : "月度预算";
+
+// 周期前缀：日/月/年，供 hero 与图表标题统一加前缀（账本余额保持总余额不加前缀）
+const periodWord = computed(() =>
+  timeDim.value === "day" ? "日" : timeDim.value === "year" ? "年" : "月"
+);
 
 // 日历视图收支汇总（按日/月/年三套 key 聚合全部交易，供日历组件显示收/支小字）
 const calMaps = computed(() => {
@@ -635,8 +659,6 @@ function onChartClick(c) {
   categoryFilter.value = categoryFilter.value === c.category_id ? null : c.category_id;
 }
 
-const periodTxs = computed(() => ledgerTxs.value.filter(inRange));
-
 const summary = computed(() => {
   let income = 0,
     expense = 0;
@@ -699,6 +721,20 @@ const filterName = computed(() => {
   const c = categoryMap.value[String(categoryFilter.value)];
   return c ? c.name : "未知分类";
 });
+
+// 切换某成员是否计入联动：点击头像在“计入/排除”间切换
+function toggleMember(uid) {
+  const i = excludedMembers.value.indexOf(uid);
+  if (i >= 0) excludedMembers.value.splice(i, 1);
+  else excludedMembers.value.push(uid);
+}
+
+// 周期交易：先按排除成员过滤，全局联动（hero/预算卡/图表/明细同源）
+const periodTxs = computed(() =>
+  ledgerTxs.value.filter(
+    (t) => inRange(t) && !excludedMembers.value.includes(t.user_id)
+  )
+);
 
 const detailList = computed(() => {
   let list = periodTxs.value;
@@ -775,6 +811,7 @@ async function loadAll() {
       spent,
       pct,
       records: txs.length,
+      intro: l.desc || "", // 接口返回的账本简介（字段名为 desc）
     });
     // 用户上传封面为 cloud:// fileID，解析为临时访问 URL
     ledgerCoverUrl.value =
@@ -829,6 +866,11 @@ async function saveEdit() {
     uni.showToast({ title: "保存失败", icon: "none" });
   }
 }
+
+// 账本简介弹窗
+const showIntro = ref(false);
+const ledgerIntro = computed(() => (ledger.intro || "").trim());
+const hasIntro = computed(() => ledgerIntro.value.length > 0);
 
 // 删除
 function openDelete() {
@@ -1110,6 +1152,32 @@ const goBack = () => uni.navigateBack();
     font-weight: 800;
     color: var(--ink);
     line-height: 1.2;
+    cursor: pointer;
+  }
+
+  /* 简介提示图标：点击入口，增强可点性 */
+  .hero-intro-ico {
+    flex-shrink: 0;
+    width: 40rpx;
+    height: 40rpx;
+    border-radius: 50%;
+    // background: rgba(var(--brand-rgb), 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.2s ease, background 0.2s ease;
+
+    .hero-intro-ico-txt {
+      font-size: 26rpx;
+      font-weight: 700;
+      // color: var(--g5);
+      line-height: 1;
+    }
+  }
+  .hero-intro-ico:active {
+    transform: scale(0.9);
+    background: rgba(var(--brand-rgb), 0.2);
   }
 
   .hero-type {
@@ -1237,6 +1305,11 @@ const goBack = () => uni.navigateBack();
     border-radius: 24rpx 0 0 24rpx;
   }
 
+  /* 中间栏无需圆角 */
+  .figure-mid {
+    border-radius: 0;
+  }
+
   /* 右侧仅右侧上下圆角 */
   .figure-right {
     border-radius: 0 24rpx 24rpx 0;
@@ -1248,10 +1321,18 @@ const goBack = () => uni.navigateBack();
   }
 
   .hero-figure-val {
-    font-size: 40rpx;
+    font-size: 34rpx;
     font-weight: 800;
     color: var(--ink);
-    letter-spacing: -2rpx;
+    letter-spacing: -1rpx;
+
+    &.income {
+      color: var(--g5);
+    }
+
+    &.expense {
+      color: #ff6b6b;
+    }
   }
 }
 
@@ -1319,7 +1400,8 @@ const goBack = () => uni.navigateBack();
   flex: 1;
   height: 76rpx;
   border-radius: 38rpx;
-  background: #25cc5d;
+  /* 以品牌绿 g4 → g5 做渐变背景 */
+  background: linear-gradient(135deg, var(--g4), var(--g5));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1327,7 +1409,7 @@ const goBack = () => uni.navigateBack();
   color: #fff;
   font-size: 28rpx;
   font-weight: 700;
-  box-shadow: 0 6rpx 16rpx rgba(37, 204, 93, 0.28);
+  box-shadow: 0 6rpx 16rpx color-mix(in sRGB, var(--g5) 28%, transparent);
   transition: transform 0.15s ease;
 }
 
@@ -1357,8 +1439,8 @@ const goBack = () => uni.navigateBack();
 /* 时间筛选：可折叠卡片（含维度切换 + 日历视图） */
 .filter-card {
   position: relative;
-  margin: 0 32rpx 32rpx;
-  padding: 20rpx 28rpx 150rpx 28rpx;
+  margin: 32rpx 32rpx 32rpx;
+  padding: 20rpx 28rpx;
   cursor: pointer;
   box-shadow: var(--shadow-light);
 }
@@ -1457,123 +1539,105 @@ const goBack = () => uni.navigateBack();
   }
 }
 
-/* 预算 */
-.budget-row {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 16rpx;
-}
-
-.budget-spent {
-  font-size: 26rpx;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.budget-total {
-  font-size: 26rpx;
-  color: var(--ink4);
-}
-
-.budget-bar {
-  height: 16rpx;
-  border-radius: 10rpx;
-  background: color-mix(in sRGB, var(--g2) 30%, transparent);
-  overflow: hidden;
-  margin-bottom: 8rpx;
-
-  .budget-bar-fill {
-    height: 100%;
-    border-radius: 10rpx;
-    background: linear-gradient(90deg, var(--g3), var(--g5));
-    transition: width 0.6s ease;
-
-    &.is-over {
-      background: linear-gradient(90deg, var(--red-soft), #ff9b9b);
-    }
-  }
-}
-
-/* 右下悬浮预算概览：复刻 BudgetGaugeCard 的 panel-float；
-   right 用负数让悬浮框探出卡片右缘约 20rpx（卡内边距盒约 690rpx、卡片右缘 718rpx、
-   屏幕右缘 750rpx），控制在屏幕内以免被 .page-scroll 的 overflow-x:hidden 裁掉 */
-.period-hud {
-  position: absolute;
-  right: -15rpx;
-  bottom: 16rpx;
-  z-index: 10;
-  width: 260rpx;
-  padding: 20rpx 22rpx 16rpx;
-  border-radius: 36rpx;
+/* 预算概览：悬浮面板（参考 BudgetGaugeCard 的 panel-float 外观与动效） */
+.budget-overview-card {
+  position: relative;
+  z-index: 5; /* 上叠 hero、下叠分类卡片时压在上方 */
+  margin: -22rpx 140rpx -18rpx; /* 上下各与相邻卡片重叠一点点；左右边距加大→宽度更窄 */
+  padding: 28rpx 28rpx 30rpx;
+  border-radius: 32rpx;
   background: rgba(255, 255, 255, 0.75);
   backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18rpx);
+  -webkit-backdrop-filter: blur(18px);
   border: 2rpx solid rgba(255, 255, 255, 0.9);
+  outline: 2rpx solid rgba(37, 204, 93, 0.18);
   outline-offset: -1;
-  animation: period-hud-float 4.5s ease-in-out infinite;
+  box-shadow: 0 16rpx 56rpx rgba(37, 204, 93, 0.2), 0 2px 8px rgba(0, 0, 0, 0.07),
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.98);
+  transform: rotate(-3deg);
+  animation: budget-card-kf 4.5s ease-in-out infinite;
+  overflow: hidden;
+
+  &.is-over {
+    outline: 2rpx solid rgba(255, 107, 107, 0.18);
+    box-shadow: 0 16rpx 56rpx rgba(255, 107, 107, 0.14), 0 2px 8px rgba(0, 0, 0, 0.05),
+      inset 0 1.5px 0 rgba(255, 255, 255, 0.98);
+  }
 }
 
-@keyframes period-hud-float {
-  0% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-6rpx);
-  }
-  100% {
-    transform: translateY(0);
-  }
+.bov-body {
+  display: flex;
+  align-items: stretch;
+  gap: 20rpx;
 }
 
-.hud-label {
+/* 左侧：预算进度 */
+.bov-left {
+  flex: 1.4;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+.bov-label {
   font-size: 20rpx;
-  color: #9bb8a8;
-  font-weight: 500;
-  margin-bottom: 4rpx;
+  font-weight: 600;
+  color: var(--ink4);
+  margin-bottom: 8rpx;
   display: block;
 }
 
-.hud-amount {
+.bov-remain {
   font-size: 40rpx;
   font-weight: 900;
-  color: #25cc5d;
+  color: var(--g5);
   letter-spacing: -2rpx;
   line-height: 1.1;
+  margin-bottom: 8rpx;
   display: block;
-}
-.hud-amount.over-amount {
-  color: #ff6b6b;
+
+  &.is-over {
+    color: #ff6b6b;
+  }
 }
 
-.hud-spent {
-  font-size: 21rpx;
-  color: #828a99;
+.bov-spent {
+  font-size: 20rpx;
+  color: var(--ink3);
   font-weight: 500;
-  display: block;
   margin-bottom: 14rpx;
+  display: block;
 }
 
-.hud-bar {
-  height: 10rpx;
-  border-radius: 6rpx;
+.bov-bar {
+  height: 14rpx;
+  border-radius: 10rpx;
   background: rgba(37, 204, 93, 0.14);
   overflow: hidden;
-}
-.hud-bar.over-bar {
-  background: rgba(255, 107, 107, 0.14);
+
+  &.is-over {
+    background: rgba(255, 107, 107, 0.14);
+  }
 }
 
-.bar-grow-inner {
+.bov-bar-fill {
   height: 100%;
-  border-radius: 6rpx;
+  border-radius: 10rpx;
   transition: width 0.8s cubic-bezier(0.34, 1.2, 0.64, 1);
 }
 
-.budget-remain {
-  font-size: 20rpx;
-  color: var(--g5);
-  font-weight: 600;
-  display: block;
+/* 悬浮面板弹跳动效（与 BudgetGaugeCard 一致）：轻微倾斜 + 上下浮动 */
+@keyframes budget-card-kf {
+  0% {
+    transform: rotate(-3deg) translateY(0);
+  }
+  50% {
+    transform: rotate(-3deg) translateY(-6rpx);
+  }
+  100% {
+    transform: rotate(-3deg) translateY(0);
+  }
 }
 
 /* 汇总 */
@@ -1738,6 +1802,21 @@ const goBack = () => uni.navigateBack();
   padding: 8rpx 20rpx;
   border-radius: 20rpx;
   cursor: pointer;
+}
+
+/* 明细卡：按成员筛选头像行 */
+.member-filter {
+  display: flex;
+  align-items: center;
+  padding: 4rpx 0 14rpx;
+}
+
+/* 被排除的成员：变灰、降低不透明度，表示不计入全局联动 */
+.member-avatar.excluded {
+  filter: grayscale(1);
+  opacity: 0.4;
+  border-color: #d8d8d8;
+  box-shadow: none;
 }
 
 .sort-ctrl {

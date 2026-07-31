@@ -130,6 +130,11 @@ const switchTab = (index) => {
     uni.navigateTo({ url: `/pages/login/login?redirect=${encodeURIComponent(tab.path)}` });
     return;
   }
+  // 中间「记一笔」按钮已从 tabBar 移除，使用 navigateTo 进入（可带 ledger_id 预选账本）
+  if (tab.key === 'record') {
+    uni.navigateTo({ url: tab.path });
+    return;
+  }
   uni.switchTab({ url: tab.path });
 };
 </script>
