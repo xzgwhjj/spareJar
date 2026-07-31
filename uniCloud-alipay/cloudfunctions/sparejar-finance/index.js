@@ -83,6 +83,12 @@ exports.main = async (event, context) => {
         if (!data.ledger_id) return fail('ledger_id is required')
         return ok(await dbApi.deleteLedger(userId, data.ledger_id, data.mode || 'transfer'))
 
+      case 'setFavoriteLedger':
+        if (!data.ledger_id || typeof data.favorite !== 'boolean') {
+          return fail('ledger_id and favorite are required')
+        }
+        return ok(await dbApi.setFavoriteLedger(userId, data.ledger_id, data.favorite))
+
       case 'listCategories':
         return ok(await dbApi.listCategories(userId, {
           type: data.type,

@@ -750,7 +750,10 @@ onMounted(async () => {
   const cur = pages[pages.length - 1]
   const editId = cur && cur.options ? cur.options.id : ''
   const mealIdOpt = cur && cur.options ? cur.options.mealId : ''
+  const ledgerIdOpt = cur && cur.options ? cur.options.ledger_id : ''
   await Promise.all([loadCategories(), loadLedgers(), loadOriginalExpenses(), loadStickers(), userStore.loadAssetAccounts()])
+  // 从账本详情“记一笔”进入：预选当前账本
+  if (ledgerIdOpt && !editId && !mealIdOpt) draft.ledgerId = ledgerIdOpt
   if (editId) {
     await loadTransactionForEdit(editId)
   } else if (mealIdOpt) {

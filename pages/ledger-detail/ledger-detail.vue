@@ -1,306 +1,347 @@
 <template>
-  <view class="detail-page" data-cmp="LedgerDetail">
+  <view class="detail-page" data-cmp="LedgerDetail" :style="pageStyle">
     <view class="topbar">
-      <view class="back-btn" @click="goBack"><text>←</text></view>
+      <view class="topbar-left">
+        <view class="back-btn" @click="goBack"><text>←</text></view>
+        <!-- 收藏：置于返回键右侧；微信小程序不支持页面内联 svg，改用 <image> 引入静态 .svg 文件 -->
+        <view
+          class="fav-tooltip"
+          :class="{
+            faved: isFaved,
+            entering: favAnim === 'entering',
+            leaving: favAnim === 'leaving',
+          }"
+        >
+          <view class="fav-trigger" @click="toggleFav">
+            <image
+              class="fav-heart fav-heart-outline"
+              :class="{ hide: isFaved }"
+              src="/static/fav/fav-heart-outline.svg"
+              mode="aspectFit"
+            />
+            <image
+              class="fav-heart fav-heart-filled"
+              :class="{ show: isFaved }"
+              src="/static/fav/fav-heart-filled.svg"
+              mode="aspectFit"
+            />
+          </view>
+        </view>
+      </view>
     </view>
 
-    <!-- 顶部 4:3 封面横幅 -->
+    <!-- 顶部 4:3 封面横幅：fixed 固定、顶到屏幕最顶部，不参与页面滚动 -->
     <view class="cover-banner">
-      <image
-        v-if="coverSrc"
-        :src="coverSrc"
-        mode="aspectFill"
-        class="cover-banner-img"
-      />
+      <image v-if="coverSrc" :src="coverSrc" mode="aspectFill" class="cover-banner-img" />
       <view v-else class="cover-banner-fallback"></view>
     </view>
 
-    <!-- 内容矩形：顶部左右大圆角，向上与封面重叠 1/3 高度。
-         将原先分离的“封面渐隐遮罩 / 磨砂玻璃层 / 纯白背景”合并为单一连续过渡层，
-         用 background 渐变 + backdrop-filter 模糊一次性完成，避免多层叠加造成生硬分层。 -->
+    <!-- 待：右上角一个小狗双手交叉靠在上面，然后下巴贴在上面，然后向下看，然后点击切换成闭眼状态 -->
+    <!-- 内容矩形：sticky 吸顶，初始交叠封面底部 1/3；开始滚动即上移到胶囊下方 50rpx 吸住，
+         吸顶后内部 scroll-view 独立纵向滚动，封面始终固定。 -->
     <view class="content-sheet">
       <scroll-view
         class="sheet-scroll"
         scroll-y
         enhanced
         :show-scrollbar="false"
+        :bounces="false"
       >
-      <!-- 账本信息：头像 + 名称/类型 + 成员/记录 + 余额 + 本月收支 -->
-      <view class="detail-card" style="padding: 0rpx; margin-top: 32rpx">
-        <view class="detail-card-glow" :style="detailCardGlowStyle"></view>
-        <view
-          class="glass-thin-2 card-in-1 detail-card-1"
-          style="padding: 20px 20px 16px"
-          :style="detailCardStyle"
-        >
-          <!-- 右上角操作菜单：竖向“...” ⇄ 横向“...”，展开删除/编辑 -->
-          <view v-if="!ledger.is_system" class="card-actions" :class="{ open: menuOpen }">
-            <view class="act-item act-delete" @click.stop="onMenuDelete">删除</view>
-            <view class="act-item act-edit" @click.stop="onMenuEdit">编辑</view>
-            <view class="act-toggle" @click.stop="toggleMenu">
-              <view class="dots">
-                <view class="dot"></view>
-                <view class="dot"></view>
-                <view class="dot"></view>
-              </view>
-            </view>
+        <!-- 账本信息：扁平展示，去掉卡片框，紧贴内容矩形顶部下方 -->
+        <view class="ledger-info">
+          <!-- 行1：大号名称 + 类型徽章 -->
+          <view class="hero-title-row">
+            <text class="hero-name-lg">{{ ledger.name }}</text>
+            <text
+              v-if="ledger.type === 'master'"
+              class="hero-type master"
+              :style="typeBadgeStyle"
+              >主</text
+            >
           </view>
-          <!-- 头部：头像 + 名称/类型 + 成员/记录 -->
-          <view class="hero-header">
-            <view class="hero-avatar">
-              <text>{{ ledger.emoji || '📒' }}</text>
-            </view>
-            <view class="hero-head-main">
-              <view class="hero-name-row">
-                <text class="hero-name">{{ ledger.name }}</text>
-                <text
-                  v-if="ledger.type === 'master'"
-                  class="hero-type master"
-                  :style="typeBadgeStyle"
-                  >主</text
-                >
-              </view>
-              <!-- 待：替换图标 -->
-              <view class="hero-sub">
-                <view class="hero-sub-item">
-                  <text class="hero-sub-ico">👥</text>
-                  <text class="hero-sub-txt">{{ memberCount }} 位成员</text>
-                </view>
-                <view class="hero-sub-item">
-                  <text class="hero-sub-ico">📅</text>
-                  <text class="hero-sub-txt">{{ ledger.records }} 条记录</text>
-                </view>
-              </view>
+
+          <!-- 待：图标要替换 -->
+          <!-- 行2：小字 成员数 和 记录数（图标 + 成员数，空格分开 记录数） -->
+          <view class="hero-meta">
+            <text class="hero-meta-ico">👥</text>
+            <text class="hero-meta-txt">{{ memberCount }}位成员</text>
+            <text class="hero-meta-txt hero-meta-rec"
+              ><text class="hero-meta-ico">📅</text>{{ ledger.records }}条记录</text
+            >
+          </view>
+
+          <!-- 行3：成员头像横向排列，交叠 1/4，首位为自己 -->
+          <view class="hero-members" v-if="displayMembers.length">
+            <view
+              v-for="(m, i) in displayMembers"
+              :key="m.user_id"
+              class="member-avatar"
+              :class="{ self: m.is_self }"
+              :style="{ zIndex: displayMembers.length - i }"
+            >
+              <image
+                v-if="m.avatar_url"
+                :src="m.avatar_url"
+                mode="aspectFill"
+                class="member-avatar-img"
+              />
+              <text v-else class="member-avatar-fallback">{{
+                (m.nickname || "我").slice(0, 1)
+              }}</text>
+              <text v-if="m.is_self" class="member-self-tag">我</text>
             </view>
           </view>
 
-          <!-- 余额大字 -->
-          <view class="hero-balance">
-            <text class="hero-balance-label">账本余额</text>
-            <text class="hero-balance-val">¥{{ fmt(ledger.balance) }}</text>
+          <!-- 行4：账本余额 / 账本消费 -->
+          <!-- 行4：账本余额 / 账本消费 —— 双区域淡色背景，白色间隙分隔 -->
+          <view class="hero-figures">
+            <!-- 左侧：g0~g2 预设淡色，仅左侧上下圆角 -->
+            <view class="figure-pane figure-left" :style="leftPaneStyle">
+              <text class="hero-figure-label">账本余额</text>
+              <text class="hero-figure-val">¥{{ fmt(ledger.balance) }}</text>
+            </view>
+            <!-- 中间白色间隙 -->
+            <view class="figure-gap"></view>
+            <!-- 右侧：动态账本主色调淡色（与左侧同梯度），仅右侧上下圆角 -->
+            <view class="figure-pane figure-right" :style="rightPaneStyle">
+              <text class="hero-figure-label">账本消费</text>
+              <text class="hero-figure-val">¥{{ fmt(ledgerExpense) }}</text>
+            </view>
           </view>
 
-          <!-- 本月收支三列 -->
-          <!-- 待：替换图标 -->
-          <view class="hero-stats">
-            <view class="hero-stat">
-              <view class="hero-stat-label">
-                <text class="hero-stat-ico ico-income">↗</text>
-                <text>本月收入</text>
-              </view>
-              <text class="hero-stat-val val-income">+¥{{ fmt(summary.income) }}</text>
-            </view>
-            <view class="hero-stat">
-              <view class="hero-stat-label">
-                <text class="hero-stat-ico ico-expense">↘</text>
-                <text>本月支出</text>
-              </view>
-              <text class="hero-stat-val val-expense">-¥{{ fmt(summary.expense) }}</text>
-            </view>
-            <view class="hero-stat">
-              <view class="hero-stat-label">
-                <text class="hero-stat-ico ico-net">🐷</text>
-                <text>月结余</text>
-              </view>
-              <text class="hero-stat-val val-net">¥{{ fmt(summary.net) }}</text>
-            </view>
-          </view>
-        </view>
-      </view>
-
-      <!-- 时间筛选 -->
-      <!-- 时间筛选：可折叠卡片，含日/月/年维度切换与日历视图 -->
-      <view class="filter-card">
-        <view class="filter-head" @click="filterExpanded = !filterExpanded">
-          <view class="seg">
+          <!-- 行5：操作行 —— 圆形删除 / 圆形编辑 / 圆角记一笔 -->
+          <view class="ledger-actions">
             <view
-              class="seg-item"
-              :class="{ active: timeDim === 'day' }"
-              @click.stop="setDim('day')"
-              >日</view
+              v-if="!ledger.is_system"
+              class="round-btn act-delete"
+              @click="onMenuDelete"
             >
-            <view
-              class="seg-item"
-              :class="{ active: timeDim === 'month' }"
-              @click.stop="setDim('month')"
-              >月</view
-            >
-            <view
-              class="seg-item"
-              :class="{ active: timeDim === 'year' }"
-              @click.stop="setDim('year')"
-              >年</view
-            >
-          </view>
-          <view class="filter-head-right">
-            <text class="period-pick">{{ periodLabel }}</text>
-            <text class="caret" :class="{ up: !filterExpanded }">▾</text>
-          </view>
-        </view>
-        <view v-show="filterExpanded" class="filter-body">
-          <calendar-period-picker
-            v-model="selectedKey"
-            :dim="timeDim"
-            :day-expense-map="calMaps.dayExpense"
-            :day-income-map="calMaps.dayIncome"
-            :month-expense-map="calMaps.monthExpense"
-            :month-income-map="calMaps.monthIncome"
-            :year-expense-map="calMaps.yearExpense"
-            :year-income-map="calMaps.yearIncome"
-          />
-        </view>
-        <!-- 待:加一个小狗坐着看日历的图 -->
-        <!-- 右下悬浮预算概览：复刻 BudgetGaugeCard 的 panel-float -->
-        <view
-          class="period-hud"
-          :style="{
-            outline:
-              periodPct >= 100
-                ? '2rpx solid rgba(255,107,107,0.18)'
-                : '2rpx solid rgba(37,204,93,0.18)',
-            boxShadow:
-              periodPct >= 100
-                ? '0 16rpx 56rpx rgba(255,107,107,0.14),0 2px 8px rgba(0,0,0,0.05), inset 0 1.5px 0 rgba(255,255,255,0.98)'
-                : '0 16rpx 56rpx rgba(37,204,93,0.2),0 2px 8px rgba(0,0,0,0.07), inset 0 1.5px 0 rgba(255,255,255,0.98)',
-          }"
-        >
-          <view class="hud-inner">
-            <text class="hud-label">{{ budgetWord(timeDim) }}</text>
-            <text class="hud-amount" :class="{ 'over-amount': periodPct >= 100 }"
-              >剩余 ¥{{ fmt(Math.max(periodBudget - periodSpent, 0)) }}</text
-            >
-            <text class="hud-spent"
-              >¥{{ fmt(periodSpent) }} / ¥{{ fmt(periodBudget) }} ({{ periodPct }}%)</text
-            >
-            <view class="hud-bar" :class="{ 'over-bar': periodPct >= 100 }">
-              <view
-                class="bar-grow-inner"
-                :style="{
-                  width: periodPct + '%',
-                  background:
-                    periodPct >= 100
-                      ? 'linear-gradient(90deg,#ffb3b3,#ff6b6b)'
-                      : 'linear-gradient(90deg,#89e59c,#25cc5d)',
-                }"
+              <image
+                class="round-btn-ico"
+                src="/static/images/icon-delete.svg"
+                mode="aspectFit"
               />
             </view>
+            <view v-if="!ledger.is_system" class="round-btn act-edit" @click="onMenuEdit">
+              <image
+                class="round-btn-ico"
+                src="/static/images/icon-edit.svg"
+                mode="aspectFit"
+              />
+            </view>
+            <view class="record-btn" @click="onRecord">
+              <image
+                class="record-btn-ico"
+                src="/static/images/icon_record.png"
+                mode="aspectFit"
+              />
+              <text class="record-btn-txt">记一笔</text>
+            </view>
           </view>
         </view>
-      </view>
 
-      <!-- 预算（随所选时间维度 / 周期联动） -->
-      <view class="glass-thin-2" style="margin: 0 16px 16px; padding: 18px">
-        <text class="section-title">📊 {{ budgetWord(timeDim) }}</text>
-        <view class="budget-row">
-          <text class="budget-spent">已花 ¥{{ fmt(periodSpent) }}</text>
-          <text class="budget-total">预算 ¥{{ fmt(periodBudget) }}</text>
-        </view>
-        <view class="budget-bar">
+        <!-- 时间筛选 -->
+        <!-- 时间筛选：可折叠卡片，含日/月/年维度切换与日历视图 -->
+        <view class="filter-card">
+          <view class="filter-head" @click="filterExpanded = !filterExpanded">
+            <view class="seg">
+              <view
+                class="seg-item"
+                :class="{ active: timeDim === 'day' }"
+                @click.stop="setDim('day')"
+                >日</view
+              >
+              <view
+                class="seg-item"
+                :class="{ active: timeDim === 'month' }"
+                @click.stop="setDim('month')"
+                >月</view
+              >
+              <view
+                class="seg-item"
+                :class="{ active: timeDim === 'year' }"
+                @click.stop="setDim('year')"
+                >年</view
+              >
+            </view>
+            <view class="filter-head-right">
+              <text class="period-pick">{{ periodLabel }}</text>
+              <text class="caret" :class="{ up: !filterExpanded }">▾</text>
+            </view>
+          </view>
+          <view v-show="filterExpanded" class="filter-body">
+            <calendar-period-picker
+              v-model="selectedKey"
+              :dim="timeDim"
+              :day-expense-map="calMaps.dayExpense"
+              :day-income-map="calMaps.dayIncome"
+              :month-expense-map="calMaps.monthExpense"
+              :month-income-map="calMaps.monthIncome"
+              :year-expense-map="calMaps.yearExpense"
+              :year-income-map="calMaps.yearIncome"
+            />
+          </view>
+          <!-- 待:加一个小狗坐着看日历的图 -->
+          <!-- 右下悬浮预算概览：复刻 BudgetGaugeCard 的 panel-float -->
           <view
-            class="budget-bar-fill"
-            :class="{ 'is-over': periodPct >= 100 }"
-            :style="{ width: periodPct + '%' }"
-          />
-        </view>
-        <text class="budget-remain"
-          >剩余 ¥{{ fmt(Math.max(periodBudget - periodSpent, 0)) }}</text
-        >
-      </view>
-
-      <!-- 分类统计图表 -->
-      <view class="glass-mid chart-card">
-        <view class="chart-head">
-          <text class="section-title">分类统计</text>
-          <view class="chart-toggle">
-            <text
-              class="ct-item"
-              :class="{ active: chartType === 'expense' }"
-              @click="setChartType('expense')"
-              >支出</text
-            >
-            <text
-              class="ct-item"
-              :class="{ active: chartType === 'income' }"
-              @click="setChartType('income')"
-              >收入</text
-            >
-          </view>
-        </view>
-        <view v-if="chartData.length === 0" class="empty-hint"
-          >该时段暂无{{ chartType === "expense" ? "支出" : "收入" }}记录</view
-        >
-        <view
-          v-for="(c, i) in chartData"
-          :key="i"
-          class="bar-row"
-          :class="{ active: categoryFilter === c.category_id }"
-          @click="onChartClick(c)"
-        >
-          <text class="bar-icon">{{ c.icon }}</text>
-          <view class="bar-main">
-            <view class="bar-top">
-              <text class="bar-name">{{ c.name }}</text>
-              <text class="bar-amt">¥{{ fmt(c.amount) }}</text>
-            </view>
-            <view class="bar-track">
-              <view class="bar-fill" :style="{ width: c.width + '%' }" />
+            class="period-hud"
+            :style="{
+              outline:
+                periodPct >= 100
+                  ? '2rpx solid rgba(255,107,107,0.18)'
+                  : '2rpx solid rgba(37,204,93,0.18)',
+              boxShadow:
+                periodPct >= 100
+                  ? '0 16rpx 56rpx rgba(255,107,107,0.14),0 2px 8px rgba(0,0,0,0.05), inset 0 1.5px 0 rgba(255,255,255,0.98)'
+                  : '0 16rpx 56rpx rgba(37,204,93,0.2),0 2px 8px rgba(0,0,0,0.07), inset 0 1.5px 0 rgba(255,255,255,0.98)',
+            }"
+          >
+            <view class="hud-inner">
+              <text class="hud-label">{{ budgetWord(timeDim) }}</text>
+              <text class="hud-amount" :class="{ 'over-amount': periodPct >= 100 }"
+                >剩余 ¥{{ fmt(Math.max(periodBudget - periodSpent, 0)) }}</text
+              >
+              <text class="hud-spent"
+                >¥{{ fmt(periodSpent) }} / ¥{{ fmt(periodBudget) }} ({{
+                  periodPct
+                }}%)</text
+              >
+              <view class="hud-bar" :class="{ 'over-bar': periodPct >= 100 }">
+                <view
+                  class="bar-grow-inner"
+                  :style="{
+                    width: periodPct + '%',
+                    background:
+                      periodPct >= 100
+                        ? 'linear-gradient(90deg,#ffb3b3,#ff6b6b)'
+                        : 'linear-gradient(90deg,#89e59c,#25cc5d)',
+                  }"
+                />
+              </view>
             </view>
           </view>
-          <text class="bar-pct">{{ c.pct }}%</text>
         </view>
-      </view>
 
-      <!-- 明细 -->
-      <view class="glass-mid detail-card">
-        <view class="detail-head">
-          <text class="section-title">明细 ({{ detailList.length }})</text>
-          <view v-if="categoryFilter" class="filter-chip" @click="categoryFilter = null">
-            已筛选：{{ filterName }} ✕
+        <!-- 预算（随所选时间维度 / 周期联动） -->
+        <view class="glass-thin-2" style="margin: 0 16px 16px; padding: 18px">
+          <text class="section-title">📊 {{ budgetWord(timeDim) }}</text>
+          <view class="budget-row">
+            <text class="budget-spent">已花 ¥{{ fmt(periodSpent) }}</text>
+            <text class="budget-total">预算 ¥{{ fmt(periodBudget) }}</text>
           </view>
-        </view>
-        <view class="sort-ctrl">
-          <text
-            class="sort-item"
-            :class="{ active: sortBy === 'time' }"
-            @click="setSort('time')"
-            >时间</text
+          <view class="budget-bar">
+            <view
+              class="budget-bar-fill"
+              :class="{ 'is-over': periodPct >= 100 }"
+              :style="{ width: periodPct + '%' }"
+            />
+          </view>
+          <text class="budget-remain"
+            >剩余 ¥{{ fmt(Math.max(periodBudget - periodSpent, 0)) }}</text
           >
-          <text
-            class="sort-item"
-            :class="{ active: sortBy === 'amount' }"
-            @click="setSort('amount')"
-            >金额</text
-          >
-          <text class="sort-dir" @click="sortDir = sortDir === 'desc' ? 'asc' : 'desc'">{{
-            sortDir === "desc" ? "↓" : "↑"
-          }}</text>
         </view>
 
-        <view
-          v-for="(r, i) in detailList"
-          :key="r._id"
-          class="record-item"
-          :class="{ last: i === detailList.length - 1 }"
-        >
-          <view class="record-left">
-            <text class="record-icon">{{ r.icon }}</text>
-            <view>
-              <text class="record-name">{{ r.name }}</text>
-              <text class="record-time"
-                >{{ r.date }} {{ r.time }}<text v-if="r.note"> · {{ r.note }}</text></text
+        <!-- 分类统计图表 -->
+        <view class="glass-mid chart-card">
+          <view class="chart-head">
+            <text class="section-title">分类统计</text>
+            <view class="chart-toggle">
+              <text
+                class="ct-item"
+                :class="{ active: chartType === 'expense' }"
+                @click="setChartType('expense')"
+                >支出</text
+              >
+              <text
+                class="ct-item"
+                :class="{ active: chartType === 'income' }"
+                @click="setChartType('income')"
+                >收入</text
               >
             </view>
           </view>
-          <text class="record-amount" :class="{ expense: r.isExpense }"
-            >{{ r.amount >= 0 ? "+" : "" }}¥{{ fmt(Math.abs(r.amount)) }}</text
+          <view v-if="chartData.length === 0" class="empty-hint"
+            >该时段暂无{{ chartType === "expense" ? "支出" : "收入" }}记录</view
           >
+          <view
+            v-for="(c, i) in chartData"
+            :key="i"
+            class="bar-row"
+            :class="{ active: categoryFilter === c.category_id }"
+            @click="onChartClick(c)"
+          >
+            <text class="bar-icon">{{ c.icon }}</text>
+            <view class="bar-main">
+              <view class="bar-top">
+                <text class="bar-name">{{ c.name }}</text>
+                <text class="bar-amt">¥{{ fmt(c.amount) }}</text>
+              </view>
+              <view class="bar-track">
+                <view class="bar-fill" :style="{ width: c.width + '%' }" />
+              </view>
+            </view>
+            <text class="bar-pct">{{ c.pct }}%</text>
+          </view>
         </view>
-        <view v-if="detailList.length === 0" class="empty-hint">该时段暂无记录</view>
-      </view>
 
-      <view v-if="!ledger.is_system" class="danger-btn" @click="openDelete"
-        >删除账本</view
-      >
+        <!-- 明细 -->
+        <view class="glass-mid detail-card">
+          <view class="detail-head">
+            <text class="section-title">明细 ({{ detailList.length }})</text>
+            <view
+              v-if="categoryFilter"
+              class="filter-chip"
+              @click="categoryFilter = null"
+            >
+              已筛选：{{ filterName }} ✕
+            </view>
+          </view>
+          <view class="sort-ctrl">
+            <text
+              class="sort-item"
+              :class="{ active: sortBy === 'time' }"
+              @click="setSort('time')"
+              >时间</text
+            >
+            <text
+              class="sort-item"
+              :class="{ active: sortBy === 'amount' }"
+              @click="setSort('amount')"
+              >金额</text
+            >
+            <text
+              class="sort-dir"
+              @click="sortDir = sortDir === 'desc' ? 'asc' : 'desc'"
+              >{{ sortDir === "desc" ? "↓" : "↑" }}</text
+            >
+          </view>
+
+          <view
+            v-for="(r, i) in detailList"
+            :key="r._id"
+            class="record-item"
+            :class="{ last: i === detailList.length - 1 }"
+          >
+            <view class="record-left">
+              <text class="record-icon">{{ r.icon }}</text>
+              <view>
+                <text class="record-name">{{ r.name }}</text>
+                <text class="record-time"
+                  >{{ r.date }} {{ r.time
+                  }}<text v-if="r.note"> · {{ r.note }}</text></text
+                >
+              </view>
+            </view>
+            <text class="record-amount" :class="{ expense: r.isExpense }"
+              >{{ r.amount >= 0 ? "+" : "" }}¥{{ fmt(Math.abs(r.amount)) }}</text
+            >
+          </view>
+          <view v-if="detailList.length === 0" class="empty-hint">该时段暂无记录</view>
+        </view>
+
+        <view v-if="!ledger.is_system" class="danger-btn" @click="openDelete"
+          >删除账本</view
+        >
       </scroll-view>
     </view>
 
@@ -330,7 +371,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from "vue";
-import { useUserStore } from "@/stores/user.js";
+import { useUserStore, setFavoriteLedgerAction } from "@/stores/user.js";
 import {
   updateLedger as apiUpdateLedger,
   getLedgerDetail,
@@ -384,46 +425,98 @@ const coverSrc = computed(() =>
 );
 /** 成员总数（来自云函数 ledger_members 统计，异常时降级为 0） */
 const memberCount = ref(0);
+/** 成员列表（来自云函数，含 user_id/nickname/avatar_url/is_self） */
+const members = ref([]);
+/** 展示用成员：始终包含自己（置于首位），用于头像交叠行 */
+const displayMembers = computed(() => {
+  const self = {
+    user_id: state.uid,
+    nickname: (state.user && state.user.nickname) || "我",
+    avatar_url: (state.user && state.user.avatar_url) || "",
+    is_self: true,
+  };
+  const others = members.value.filter((m) => m.user_id !== state.uid);
+  return [self, ...others];
+});
+/** 账本累计消费：全部交易中支出类金额之和 */
+const ledgerExpense = computed(() =>
+  ledgerTxs.value.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0)
+);
+
+/** 行4 双区域背景：左侧从预设 g0~g2 梯度选一种淡色（可切换），
+ * 右侧读取账本主题色并淡化为与左侧同一梯度的版本，保证左右淡度一致。 */
+const leftTone = ref("g1"); // 可选 'g0' | 'g1' | 'g2'
+/** 各梯度对应的淡化强度：g0 最淡 → g2 略深，使右侧主色淡化后与左侧视觉同梯度 */
+const TONE_ALPHA = { g0: 0.06, g1: 0.09, g2: 0.14 };
+const leftPaneStyle = computed(() => ({
+  background: `var(--${leftTone.value})`,
+}));
+const rightPaneStyle = computed(() => ({
+  background: hexToRgba(ledger.theme_color || "#25cc5d", TONE_ALPHA[leftTone.value]),
+}));
+
+/** 收藏按钮（Uiverse like 动效）：本地持久化，避免与全局底部胶囊冲突。
+ * 生产环境如需多端同步，可将此处改为云函数写入 ledger_members 或独立 favorites 表。 */
+const FAV_KEY = (id) => `sparejar_fav_${id}`;
+const isFaved = ref(false);
+const favAnim = ref(""); // '' | 'entering' | 'leaving'
+onMounted(() => {
+  if (ledger._id) {
+    isFaved.value = uni.getStorageSync(FAV_KEY(ledger._id)) === 1;
+  }
+});
+async function toggleFav() {
+  if (!ledger._id) return;
+  const prev = isFaved.value;
+  const next = !prev;
+  // 乐观更新 + 本地缓存（未登录时也作为临时态兜底）
+  isFaved.value = next;
+  uni.setStorageSync(FAV_KEY(ledger._id), next ? 1 : 0);
+  // 播放绕圈动画：收藏为进入、取消为离开（离开期间由 .leaving 保持填充与粉色边框）
+  favAnim.value = next ? "entering" : "leaving";
+  setTimeout(() => {
+    favAnim.value = "";
+  }, 700);
+  if (!state.uid) return; // 未登录：仅本地收藏
+  try {
+    const res = await setFavoriteLedgerAction(ledger._id, next);
+    if (res && typeof res.favorited === "boolean") {
+      isFaved.value = res.favorited;
+      uni.setStorageSync(FAV_KEY(ledger._id), res.favorited ? 1 : 0);
+      // 云端结果与本地乐观不一致时，停止动画以贴合真实态
+      if (res.favorited !== next) favAnim.value = "";
+    }
+  } catch (e) {
+    // 云端同步失败：回滚到切换前状态
+    isFaved.value = prev;
+    favAnim.value = "";
+    uni.setStorageSync(FAV_KEY(ledger._id), prev ? 1 : 0);
+    uni.showToast({ title: "收藏同步失败", icon: "none" });
+  }
+}
 /** 类型徽标配色：主账本沿用 CSS 绿渐变；子账本使用接口返回的主题色（无则回退默认样式） */
 const typeBadgeStyle = computed(() => {
   if (ledger.type === "master" || !ledger.theme_color) return null;
   return { background: hexToRgba(ledger.theme_color, 0.12), color: ledger.theme_color };
 });
-/** 卡片辉光背景：跟随接口返回的账本主题色动态着色；
- * 接口未返回 theme_color（如主账本/缺失）时回退到品牌绿 DEFAULT_THEME。
- * 依赖 ledger.theme_color（在 loadAll 中赋值），挂载/数据更新均实时响应。 */
-const DEFAULT_THEME = "#25cc5d";
-const detailCardGlowStyle = computed(() => {
-  const c = ledger.theme_color || DEFAULT_THEME;
-  return {
-    background: [
-      `radial-gradient(120% 90% at 0% 0%, ${hexToRgba(c, 0.45)} 0%, ${hexToRgba(
-        c,
-        0
-      )} 55%)`,
-      `radial-gradient(120% 90% at 100% 0%, ${hexToRgba(c, 0.14)} 0%, ${hexToRgba(
-        c,
-        0
-      )} 55%)`,
-      `radial-gradient(140% 120% at 100% 100%, ${hexToRgba(c, 0.18)} 0%, ${hexToRgba(
-        c,
-        0
-      )} 60%)`,
-      `linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(253, 255, 253, 0.84))`,
-    ].join(", "),
-  };
-});
-/** 卡片浮雕阴影：外部投影与底部内阴影使用账本主题色的淡色版本。
- * 通过 CSS 变量（--shadow-outer / --shadow-inner-bottom）下发给 .glass-thin-2.detail-card-1 的
- * box-shadow 引用；颜色由 ledger.theme_color 经 hexToRgba 降低透明度淡化，缺色时回退品牌绿。
- * 外投影与底部内阴影使用不同的淡化参数，配置相互独立、清晰区分。 */
-const detailCardStyle = computed(() => {
-  const c = ledger.theme_color || DEFAULT_THEME;
-  return {
-    "--shadow-outer": hexToRgba(c, 0.18),
-    "--shadow-inner-bottom": hexToRgba(c, 0.24),
-  };
-});
+
+// 内容矩形吸顶位置：滚动到微信小程序右上角胶囊按钮下方 50rpx（用户需求）
+function resolveStickyTop() {
+  try {
+    const menuButton = uni.getMenuButtonBoundingClientRect();
+    if (menuButton?.bottom > 0) {
+      const gap = uni.upx2px(50);
+      return `${menuButton.bottom + gap}px`;
+    }
+  } catch (_) {}
+  const { statusBarHeight = 0 } = uni.getSystemInfoSync();
+  return `${statusBarHeight + uni.upx2px(138)}px`;
+}
+const stickyTop = ref(resolveStickyTop());
+const pageStyle = computed(() => ({
+  "--sticky-top": stickyTop.value,
+}));
+
 /** 属于本账本的全部未删除交易（加载一次，后续客户端筛选） */
 const ledgerTxs = ref([]);
 
@@ -689,6 +782,12 @@ async function loadAll() {
         ? await getCloudTempUrl(l.cover)
         : "";
     memberCount.value = (data && data.memberCount) || 0;
+    members.value = (data && data.members) || [];
+    // 登录态下以云端收藏态为准，校正本地缓存（多端一致）
+    if (state.uid && data && typeof data.is_favorited === "boolean") {
+      isFaved.value = data.is_favorited;
+      uni.setStorageSync(FAV_KEY(ledger._id), data.is_favorited ? 1 : 0);
+    }
   } catch (err) {
     console.error("[ledger-detail] load failed", err);
   }
@@ -766,6 +865,15 @@ function onMenuDelete() {
   openDelete();
   menuOpen.value = false;
 }
+// 记一笔：跳转记账页，带出当前账本
+function onRecord() {
+  const id = ledger._id;
+  uni.navigateTo({
+    url: id
+      ? `/pages/add-record/add-record?ledger_id=${id}`
+      : "/pages/add-record/add-record",
+  });
+}
 
 const goBack = () => uni.navigateBack();
 </script>
@@ -773,17 +881,19 @@ const goBack = () => uni.navigateBack();
 <style scoped lang="scss">
 .detail-page {
   width: 750rpx;
-  height: 100vh;
   margin: 0 auto;
   background: #fff;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
   position: relative;
+  /* 整页可滚动：封面 fixed 固定不动；
+     内容矩形用 position:sticky 吸顶到胶囊下方 50rpx（--sticky-top），
+     page 滚动使其上移吸顶，吸顶后其内部 scroll-view 独立滚动。 */
+  min-height: 100vh;
+  overscroll-behavior-y: none;
+  box-sizing: border-box;
 }
 
 .topbar {
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
   right: 0;
@@ -792,6 +902,12 @@ const goBack = () => uni.navigateBack();
   align-items: center;
   justify-content: space-between;
   padding: 88rpx 32rpx 20rpx;
+
+  /* 左侧分组：返回键 + 收藏按钮并排，避免收藏被 space-between 推到右上角胶囊下方被遮挡 */
+  .topbar-left {
+    display: flex;
+    align-items: center;
+  }
 
   .topbar-title {
     font-size: 34rpx;
@@ -813,6 +929,97 @@ const goBack = () => uni.navigateBack();
   .back-btn {
     color: var(--ink3);
   }
+
+  /* 收藏按钮（image 引入静态 svg，规避微信小程序内联 svg 不支持）：置于返回键右侧 */
+  .fav-tooltip {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 72rpx;
+    height: 72rpx;
+    margin-left: 16rpx;
+    --cl: #ff5c8a;
+    --bg: var(--white-75);
+    --sizer: 44rpx;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .fav-trigger {
+    position: relative;
+    background: var(--bg);
+    border-radius: 50%;
+    width: 72rpx;
+    height: 72rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1rpx solid transparent;
+    box-shadow: rgba(95, 95, 115, 0.25) 0 2rpx 5rpx -1rpx,
+      rgba(255, 255, 255, 0.3) 0 1rpx 3rpx -1rpx;
+    transition: border-color 0.35s ease;
+  }
+
+  /* 收藏后 / 取消动画期间：背景圆边框保持粉色 */
+  .fav-tooltip.faved .fav-trigger,
+  .fav-tooltip.leaving .fav-trigger {
+    border-color: #ff5c8a;
+  }
+
+  /* 收藏或取消瞬间：一圈粉色边框绕圆旋转一周后淡出 */
+  .fav-tooltip.entering .fav-trigger::after,
+  .fav-tooltip.leaving .fav-trigger::after {
+    content: "";
+    position: absolute;
+    top: -6rpx;
+    right: -6rpx;
+    bottom: -6rpx;
+    left: -6rpx;
+    border-radius: 50%;
+    border: 3rpx solid transparent;
+    border-top-color: #ff5c8a;
+    border-right-color: #ff5c8a;
+    animation: favRing 0.7s ease-in-out forwards;
+  }
+
+  @keyframes favRing {
+    from {
+      transform: rotate(0deg);
+      opacity: 1;
+    }
+    to {
+      transform: rotate(360deg);
+      opacity: 0;
+    }
+  }
+
+  .fav-heart {
+    width: 44rpx;
+    height: 44rpx;
+    transition: all 0.2s ease;
+  }
+
+  /* 未收藏：显示描边爱心；收藏后：淡出描边、淡入实心 */
+  .fav-heart-outline {
+    display: block;
+  }
+
+  .fav-tooltip.faved .fav-heart-outline,
+  .fav-tooltip.leaving .fav-heart-outline {
+    display: none;
+  }
+
+  .fav-heart-filled {
+    display: none;
+  }
+
+  .fav-tooltip.faved .fav-heart-filled,
+  .fav-tooltip.leaving .fav-heart-filled {
+    display: block;
+  }
+
+  /* 对勾圆环与文字已移除：点击收藏后只显示填充的粉色爱心 + 旋转的粉色边框圈 */
 }
 
 .edit-btn.disabled {
@@ -823,13 +1030,20 @@ const goBack = () => uni.navigateBack();
 /* ===== 全屏布局：顶部 4:3 封面横幅 + 融合内容层 ===== */
 /* 封面横幅：宽高比 4:3（高 = 宽 × 3/4）；在小程序/web 以 aspect-ratio 精准还原 */
 .cover-banner {
+  /* 需求1：封面固定不动，不参与滚动，直接顶到屏幕最顶部（top:0）。
+     微信小程序右上角胶囊为原生层，会浮在封面之上，属预期的大图封面效果。 */
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
   width: 100%;
+  /* 显式高度：750rpx × 3/4 = 562.5rpx；避免纯 aspect-ratio 在 fixed 容器内塌陷为 0。 */
+  height: 562.5rpx;
   aspect-ratio: 4 / 3;
-  flex-shrink: 0;
   overflow: hidden;
   background: #eef7ef;
+  z-index: 1;
 }
-
 .cover-banner-img {
   width: 100%;
   height: 100%;
@@ -843,78 +1057,59 @@ const goBack = () => uni.navigateBack();
   background: linear-gradient(135deg, #d8f0dc, #bfe6c8);
 }
 
-/* 内容层：单一融合层，向上与封面重叠 1/3 高度，并承载下方页面内容。
-   将原先分离的“封面渐隐遮罩 / 磨砂玻璃层 / 纯白背景”合并为单一连续渐变背景，
-   配合 backdrop-filter 模糊，实现封面从清晰 → 磨砂虚化 → 自然渐隐为纯白背景。
-   层级间没有硬边界，结构与视觉都更平滑连贯。
-   4:3 封面高 = 750rpx × 3/4 = 562.5rpx；重叠 1/3 = 187.5rpx。 */
+/* 内容矩形：sticky 吸顶。一进来交叠在封面（margin-top:375rpx 起、向上交叠封面底部 1/3），
+   封面顶部清晰露出；开始滚动后整体上移，吸顶到胶囊按钮下方 50rpx（--sticky-top），
+   吸顶后占满“视口高 - 吸顶位”，内部 scroll-view 独立纵向滚动，封面始终固定不动。 */
 .content-sheet {
-  flex: 1;
-  min-height: 0;
-  margin-top: -187.5rpx;
+  position: sticky;
+  /* 吸顶位置：胶囊按钮下方 50rpx（由 JS 注入 --sticky-top，兜底 120rpx） */
+  top: var(--sticky-top, 120rpx);
+  /* 初始交叠：封面 fixed 不占文档流，故内容矩形从 450rpx 起、向上交叠封面底部约 112.5rpx（交叠较少） */
+  margin-top: 450rpx;
+  /* 吸顶后高度 = 视口高 - 吸顶位，使内部 scroll-view 填满并独立滚动 */
+  height: calc(100vh - var(--sticky-top, 120rpx));
+  z-index: 2;
   border-radius: 40rpx 40rpx 0 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  /* 顶部 112.5rpx 为交叠磨砂区（对应屏幕 450~562.5rpx 的封面底部），
+     透明→磨砂→纯白，与固定封面自然融合；之后纯白承载滚动内容。 */
   background: linear-gradient(
     to bottom,
     rgba(255, 255, 255, 0) 0,
-    rgba(255, 255, 255, 0) 40rpx,
-    rgba(255, 255, 255, 0.22) 90rpx,
-    rgba(255, 255, 255, 0.65) 150rpx,
-    rgba(255, 255, 255, 0.95) 190rpx,
-    #ffffff 200rpx,
+    rgba(255, 255, 255, 0) 36rpx,
+    rgba(255, 255, 255, 0.3) 72rpx,
+    rgba(255, 255, 255, 0.8) 102rpx,
+    #ffffff 112.5rpx,
     #ffffff 100%
   );
   backdrop-filter: blur(20rpx);
   -webkit-backdrop-filter: blur(20rpx);
 }
 
-/* 内容滚动区：内容从纯白背景区开始，避免压在过渡带上 */
+/* 内容滚动区：填满 content-sheet，独立纵向滚动；
+   flex:1 + min-height:0 保证在 flex 容器内可被压缩并真正滚动。
+   padding-top 让滚到最顶时，内容与矩形上沿（胶囊下方）之间留一点间隔，更美观。 */
 .sheet-scroll {
-  height: 100%;
-  padding-top: 200rpx;
-  box-sizing: border-box;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  padding-top: 32rpx;
 }
 
 /* 账本详情头部卡片（参考示例 GlassCard 设计） */
-.hero-header {
-  display: flex;
-  align-items: flex-start;
-  gap: 28rpx;
-  margin-bottom: 36rpx;
-}
-
-.hero-avatar {
-  width: 104rpx;
-  height: 104rpx;
-  border-radius: 32rpx;
-  background: color-mix(in sRGB, var(--g5) 12%, transparent);
-  @include sj-flex-center;
-  font-size: 52rpx;
-  flex-shrink: 0;
-  overflow: hidden;
-
-  .hero-cover-img {
-    width: 100%;
-    height: 100%;
-    display: block;
-  }
-}
-
-.hero-head-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.hero-name-row {
+/* 行1：大号名称 + 类型徽章 */
+.hero-title-row {
   display: flex;
   align-items: center;
-  gap: 12rpx;
-  margin-bottom: 6rpx;
+  gap: 14rpx;
 
-  .hero-name {
-    font-size: 32rpx;
+  .hero-name-lg {
+    font-size: 44rpx;
     font-weight: 800;
     color: var(--ink);
+    line-height: 1.2;
   }
 
   .hero-type {
@@ -928,95 +1123,136 @@ const goBack = () => uni.navigateBack();
   }
 }
 
-.hero-sub {
+/* 行2：小字 成员数 和 记录数 */
+.hero-meta {
   display: flex;
   align-items: center;
-  gap: 20rpx;
+  margin-top: 12rpx;
 
-  .hero-sub-item {
-    display: flex;
-    align-items: center;
-    gap: 6rpx;
-  }
-
-  .hero-sub-ico {
+  .hero-meta-ico {
     font-size: 22rpx;
+    margin-right: 8rpx;
   }
 
-  .hero-sub-txt {
+  .hero-meta-txt {
     font-size: 22rpx;
     color: var(--ink4);
   }
-}
 
-.hero-balance {
-  text-align: center;
-  margin-bottom: 36rpx;
-
-  .hero-balance-label {
-    display: block;
-    font-size: 22rpx;
-    color: var(--ink4);
-    margin-bottom: 8rpx;
-  }
-
-  .hero-balance-val {
-    display: block;
-    font-size: 80rpx;
-    font-weight: 900;
-    color: var(--ink);
-    letter-spacing: -4rpx;
+  /* 记录数与成员数之间留空格分开 */
+  .hero-meta-rec {
+    margin-left: 20rpx;
   }
 }
 
-.hero-stats {
+/* 行3：成员头像横向排列，交叠 1/4，首位为自己 */
+.hero-members {
   display: flex;
-  padding-top: 28rpx;
-  border-top: 2rpx solid color-mix(in sRGB, var(--ink) 6%, transparent);
+  align-items: center;
+  margin-top: 28rpx;
+  /* 容器左内缩，给首个头像留白边不被裁切 */
+  padding-left: 4rpx;
+}
 
-  .hero-stat {
-    flex: 1;
-    text-align: center;
+.member-avatar {
+  position: relative;
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 50%;
+  background: color-mix(in sRGB, var(--g5) 12%, transparent);
+  border: 3rpx solid #fff;
+  overflow: visible;
+  flex-shrink: 0;
+  /* 除首位外，每个头像向左偏移 1/4 宽度，形成 1/4 交叠 */
+  margin-left: -18rpx;
+  @include sj-flex-center;
+  font-size: 30rpx;
+  color: var(--ink);
+
+  &:first-child {
+    margin-left: 0;
   }
 
-  .hero-stat-label {
+  .member-avatar-img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    display: block;
+  }
+
+  .member-avatar-fallback {
+    font-size: 30rpx;
+    font-weight: 700;
+  }
+
+  /* 自己：主题色描边 + 右下角“我”角标，便于识别默认付款人 */
+  &.self {
+    border-color: var(--g5);
+
+    .member-self-tag {
+      position: absolute;
+      right: -6rpx;
+      bottom: -6rpx;
+      min-width: 28rpx;
+      height: 28rpx;
+      padding: 0 4rpx;
+      border-radius: 14rpx;
+      background: var(--g5);
+      color: #fff;
+      font-size: 18rpx;
+      line-height: 28rpx;
+      text-align: center;
+      border: 2rpx solid #fff;
+    }
+  }
+}
+
+/* 行4：账本余额 / 账本消费 —— 双区域淡色背景，白色间隙分隔 */
+.hero-figures {
+  display: flex;
+  align-items: stretch;
+  margin-top: 32rpx;
+  /* 容器白底，中间 gap 透出纯白，与左右淡色自然衔接 */
+  background: #fff;
+  border-radius: 24rpx;
+  overflow: hidden;
+
+  /* 中间白色间隙 */
+  .figure-gap {
+    width: 16rpx;
+    flex-shrink: 0;
+    background: #fff;
+  }
+
+  .figure-pane {
+    flex: 1;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6rpx;
-    margin-bottom: 6rpx;
-    font-size: 20rpx;
+    flex-direction: column;
+    gap: 8rpx;
+    padding: 24rpx 28rpx;
+  }
+
+  /* 左侧仅左侧上下圆角 */
+  .figure-left {
+    border-radius: 24rpx 0 0 24rpx;
+  }
+
+  /* 右侧仅右侧上下圆角 */
+  .figure-right {
+    border-radius: 0 24rpx 24rpx 0;
+  }
+
+  .hero-figure-label {
+    font-size: 22rpx;
     color: var(--ink4);
   }
 
-  .hero-stat-ico {
-    font-size: 24rpx;
-  }
-
-  .ico-income {
-    color: var(--g5);
-  }
-
-  .ico-expense {
-    color: var(--red-soft);
-  }
-
-  // .ico-net { color: var(--blue); }
-  .hero-stat-val {
-    font-size: 28rpx;
-    font-weight: 700;
+  .hero-figure-val {
+    font-size: 40rpx;
+    font-weight: 800;
     color: var(--ink);
+    letter-spacing: -2rpx;
   }
-
-  .val-income {
-    color: var(--g5);
-  }
-
-  .val-expense {
-    color: var(--red-soft);
-  }
-
-  // .val-net { color: var(--blue); }
 }
 
 /* 卡片入场动画（参考示例 detailCardIn） */
@@ -1032,152 +1268,82 @@ const goBack = () => uni.navigateBack();
   }
 }
 
-.detail-card {
+/* 账本信息：扁平展示（无卡片框），紧贴内容矩形顶部下方；
+   position: relative 供右上角操作菜单绝对定位。 */
+.ledger-info {
   position: relative;
-  // height: 550rpx;
+  padding: 24rpx 40rpx 8rpx 40rpx;
 }
 
-/* 圆角矩形浮雕垫层：铺满卡片、置于 detail-card-1 之下，
-   整体下移使仅下边缘露出一点，其余被 detail-card-1 遮挡覆盖 */
-.detail-card-glow {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  border-radius: 28rpx;
-  /* 浮雕质感：上缘内高光 + 下缘内阴影 + 外部柔和落影；
-     背景色改为动态绑定（见 template 上的 :style="detailCardGlowStyle"），
-     跟随 ledger.theme_color 实时着色，缺色时回退品牌绿。 */
-  // box-shadow: inset 6rpx 6rpx 12rpx rgba(206, 232, 218, 0.3),
-  //   inset -6rpx -6rpx 12rpx rgba(255, 255, 255, 0.6);
-  /* 仅下边缘露出一小条：下移后顶部/左右均被 detail-card-1 覆盖 */
-  transform: translateY(16rpx);
-  pointer-events: none;
-  z-index: 1;
-}
-
-.detail-card-1 {
-  position: relative;
-  z-index: 2;
-  animation: detailCardIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) 0.05s both;
-}
-
-/* 浮雕质感：在保留 glass-thin-2 的毛玻璃模糊与透明度的前提下，
-   通过光影层次（外投影 + 顶部内高光 + 底部内阴影）叠加立体凹凸；
-   不改变 background / backdrop-filter，故底层内容的模糊穿透不受影响。
-   用组合选择器提升特异性，确保覆盖 .glass-thin-2 的 box-shadow。 */
-.glass-thin-2.detail-card-1 {
-  border-color: rgba(255, 255, 255, 0.6);
-  box-shadow:
-    /* 外投影：账本主题色淡色版（远处柔光晕，alpha 0.18 降低透明度淡化） */ 0
-      6rpx 40rpx var(--shadow-outer),
-    0 10rpx 16rpx rgba(255, 255, 255, 0.1),
-    /* 顶部内高光：上缘受光，形成凸起亮边 */ inset 0 2rpx 0 rgba(255, 255, 255, 0.95),
-    inset 0 8rpx 16rpx rgba(255, 255, 255, 0.3),
-    /* 底部内阴影：账本主题色淡色版（下缘背光，alpha 0.24，比外投影略深以强化凹陷暗边） */
-      inset 0 -3rpx 6rpx var(--shadow-inner-bottom),
-    inset 0 -10rpx 22rpx rgba(255, 255, 255, 0.1);
-
-  /* 顶部受光斜面 + 底部背光斜面：极轻渐变强化凹凸边缘，
-     置于内容之下（z-index:-1），不遮挡文字、不影响模糊穿透 */
-  &::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    pointer-events: none;
-    z-index: -1;
-    background: linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.22) 0%,
-      rgba(255, 255, 255, 0) 22%,
-      rgba(255, 255, 255, 0) 78%,
-      rgba(255, 255, 255, 0.06) 100%
-    );
-  }
-}
-
-/* 右上角操作菜单：竖向“...”⇄横向“...” + 展开删除/编辑 */
-.card-actions {
-  position: absolute;
-  top: -24rpx;
-  right: 22rpx;
+/* 行5：操作行 —— 圆形删除 / 圆形编辑 / 圆角记一笔 */
+.ledger-actions {
   display: flex;
   align-items: center;
-  z-index: 5;
+  gap: 24rpx;
+  margin-top: 32rpx;
 }
 
-.card-actions .act-item {
-  max-width: 0;
-  opacity: 0;
-  margin-right: 0;
-  padding: 0;
-  height: 56rpx;
-  border-radius: 28rpx;
-  font-size: 24rpx;
-  font-weight: 600;
+/* 圆形操作按钮（删除 / 编辑） */
+.round-btn {
+  width: 76rpx;
+  height: 76rpx;
+  border-radius: 50%;
+  background: #f3f4f6;
   display: flex;
   align-items: center;
   justify-content: center;
-  white-space: nowrap;
-  overflow: hidden;
-  pointer-events: none;
-  transition: max-width 0.28s ease, opacity 0.22s ease, margin 0.28s ease,
-    padding 0.28s ease;
+  border: 1rpx solid #e6e8eb;
+  transition: transform 0.15s ease, background 0.2s ease;
 }
 
-.card-actions.open .act-item {
-  max-width: 200rpx;
-  opacity: 1;
-  margin-right: 12rpx;
-  padding: 0 26rpx;
-  pointer-events: auto;
+.round-btn:active {
+  transform: scale(0.92);
+  background: #eaecef;
 }
 
+.round-btn-ico {
+  width: 38rpx;
+  height: 38rpx;
+}
+
+/* 圆形删除按钮：粉色浅底（--p1），与红色图标协调 */
 .act-delete {
-  background: rgba(255, 107, 107, 0.14);
-  color: var(--red-soft);
+  background: var(--p1);
+  // border-color: #ffd6e7;
 }
-
-.act-edit {
-  background: rgba(37, 204, 93, 0.14);
-  color: var(--g4);
+.act-delete:active {
+  background: var(--p2);
 }
-
-.act-toggle {
-  width: 56rpx;
-  height: 56rpx;
-  border-radius: 50%;
-  background: var(--white-75);
+/* 记一笔：圆角主按钮，占据剩余宽度 */
+.record-btn {
+  flex: 1;
+  height: 76rpx;
+  border-radius: 38rpx;
+  background: #25cc5d;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 4rpx 14rpx rgba(0, 0, 0, 0.08);
+  gap: 10rpx;
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 700;
+  box-shadow: 0 6rpx 16rpx rgba(37, 204, 93, 0.28);
+  transition: transform 0.15s ease;
 }
 
-.dots {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6rpx;
-  transition: all 0.25s ease;
+.record-btn:active {
+  transform: scale(0.97);
 }
 
-.card-actions .dots {
-  flex-direction: column;
+.record-btn-ico {
+  width: 32rpx;
+  height: 32rpx;
 }
 
-.card-actions.open .dots {
-  flex-direction: row;
-}
-
-.dot {
-  width: 7rpx;
-  height: 7rpx;
-  border-radius: 50%;
-  background: var(--ink);
+.record-btn-txt {
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 700;
 }
 
 .section-title {

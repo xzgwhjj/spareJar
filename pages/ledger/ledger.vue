@@ -267,16 +267,16 @@
                 </label>
                 <!-- 底层内容：封面 + 信息 + 操作入口（始终渲染，正常态显示） -->
                 <!-- 封面图：列表模式作为左侧封面块 -->
-                  <image
-                    :src="
-                      coverErrors[l._id]
-                        ? defaultCoverUrl
-                        : coverDisplay(l) || defaultCoverUrl
-                    "
-                    mode="aspectFill"
-                    class="ledger-cover"
-                    @error="onCoverError(l)"
-                  ></image>
+                <image
+                  :src="
+                    coverErrors[l._id]
+                      ? defaultCoverUrl
+                      : coverDisplay(l) || defaultCoverUrl
+                  "
+                  mode="aspectFill"
+                  class="ledger-cover"
+                  @error="onCoverError(l)"
+                ></image>
                 <!-- 右侧内容栏：名称+类型 与 收支同处一行（左名右收支），进度条在下方 -->
                 <view class="ledger-body">
                   <!-- 毛玻璃面板容器，收纳名称/收支/进度条等字段 -->
@@ -608,18 +608,12 @@
             <view class="icon-grid">
               <view
                 v-for="ic in LEDGER_ICONS"
-                :key="ic"
+                :key="ic.id"
                 class="icon-cell"
-                :class="{ active: newLedgerIcon === ic }"
+                :class="{ active: newLedgerIcon === ic.id }"
                 @click="pickSystemIcon(ic, 'new')"
               >
-                <image
-                  v-if="isImg(ic)"
-                  class="icon-img"
-                  :src="resolveCover(ic)"
-                  mode="aspectFill"
-                />
-                <text v-else>{{ ic }}</text>
+                <image class="icon-img" :src="resolveCover(ic.img43)" mode="aspectFill" />
               </view>
             </view>
           </view>
@@ -629,11 +623,7 @@
         <view class="form-label">主题色</view>
         <view class="color-opts">
           <!-- 自定义颜色选择器 -->
-          <view
-            class="color-opt"
-            :class="{ active: true }"
-            @click="openCustomColor"
-          >
+          <view class="color-opt" :class="{ active: true }" @click="openCustomColor">
             <view class="color-opt-ico" :style="{ background: newLedgerColor }"> </view>
             <text class="color-opt-label">自定义</text>
           </view>
@@ -662,7 +652,12 @@
           @blur="descFocused = false"
         />
 
-        <view class="sheet-btn" :class="{ 'is-full': fillComplete }" :style="{ '--fill': fillRatio }" @click="onSubmit">
+        <view
+          class="sheet-btn"
+          :class="{ 'is-full': fillComplete }"
+          :style="{ '--fill': fillRatio }"
+          @click="onSubmit"
+        >
           <text class="sheet-btn__base">创建账本</text>
           <view class="sheet-btn__fill">
             <view class="sheet-btn__fill-txt">创建账本</view>
@@ -705,13 +700,57 @@
       </view>
     </view>
 
-    <!-- 图片裁剪弹窗：非 3:4 图片交互式裁剪为 3:4 -->
+    <!-- 比例选择：选图后先提供 3:4 与 4:3 两种形态预览 -->
+    <view v-if="showRatioPicker" class="ratio-overlay" @click.stop>
+      <view class="ratio-panel" @click.stop>
+        <view class="crop-head">选择裁剪比例</view>
+        <view class="ratio-row">
+          <view
+            class="ratio-card"
+            :class="{ done: cropDone('34') }"
+            @click="enterCrop(0.75)"
+          >
+            <view class="ratio-thumb ratio-34">
+              <image class="ratio-thumb-img" :src="crop34 && crop34.temp ? crop34.temp : pendingCropSrc" mode="aspectFill" />
+              <view v-if="cropDone('34')" class="ratio-done">✓</view>
+            </view>
+            <text class="ratio-label">3 : 4</text>
+          </view>
+          <view
+            class="ratio-card"
+            :class="{ done: cropDone('43') }"
+            @click="enterCrop(4 / 3)"
+          >
+            <view class="ratio-thumb ratio-43">
+              <image class="ratio-thumb-img" :src="crop43 && crop43.temp ? crop43.temp : pendingCropSrc" mode="aspectFill" />
+              <view v-if="cropDone('43')" class="ratio-done">✓</view>
+            </view>
+            <text class="ratio-label">4 : 3</text>
+          </view>
+        </view>
+        <view class="ratio-tip" v-if="!(cropDone('34') || cropDone('43'))"
+          >点击比例可裁剪对应形态</view
+        >
+        <view class="crop-actions">
+          <view class="crop-btn crop-cancel" @click="cancelRatio"><text>取消</text></view>
+          <view
+            class="crop-btn crop-ok"
+            :class="{ disabled: !(cropDone('34') || cropDone('43')) }"
+            @click="finishCrop"
+            ><text>完成</text></view
+          >
+        </view>
+      </view>
+    </view>
+
+    <!-- 图片裁剪弹窗：支持 3:4 / 4:3，双指缩放图片、拖动/四角调整裁剪框 -->
     <view v-if="showCropper" class="crop-overlay" @click.stop>
       <view class="crop-panel" @click.stop>
-        <view class="crop-head">裁剪为 3:4</view>
+        <view class="crop-head">裁剪为 {{ cropRatioLabel }}</view>
 
-        <!-- 舞台：图片居中显示，3:4 裁剪框可拖动 -->
+        <!-- 舞台：图片居中显示；单指拖动裁剪框移动，四角缩放尺寸，双指缩放图片 -->
         <view
+          id="cropStage"
           class="crop-stage"
           :style="stageStyle"
           @touchstart="onCropTouchStart"
@@ -721,28 +760,17 @@
           <image class="crop-img" :src="cropSrc" :style="imgStyle" />
           <view class="crop-box" :style="boxStyle">
             <view class="crop-grid" />
+            <view class="crop-handle tl"></view>
+            <view class="crop-handle tr"></view>
+            <view class="crop-handle bl"></view>
+            <view class="crop-handle br"></view>
           </view>
-        </view>
-
-        <!-- 缩放 -->
-        <view class="crop-row">
-          <text class="crop-row-label">缩放</text>
-          <slider
-            class="crop-slider"
-            :value="zoom"
-            min="0"
-            max="100"
-            block-size="18"
-            active-color="#8ae99b"
-            @changing="onCropZoom"
-            @change="onCropZoom"
-          />
         </view>
 
         <!-- 预览 -->
         <view class="crop-row">
           <text class="crop-row-label">预览</text>
-          <view class="crop-prev">
+          <view class="crop-prev" :style="previewBoxStyle">
             <image class="crop-prev-img" :src="cropSrc" :style="previewStyle" />
           </view>
         </view>
@@ -809,18 +837,12 @@
             <view class="icon-grid">
               <view
                 v-for="ic in LEDGER_ICONS"
-                :key="ic"
+                :key="ic.id"
                 class="icon-cell"
-                :class="{ active: editIcon === ic }"
+                :class="{ active: editIcon === ic.id }"
                 @click="pickSystemIcon(ic, 'edit')"
               >
-                <image
-                  v-if="isImg(ic)"
-                  class="icon-img"
-                  :src="resolveCover(ic)"
-                  mode="aspectFill"
-                />
-                <text v-else>{{ ic }}</text>
+                <image class="icon-img" :src="resolveCover(ic.img43)" mode="aspectFill" />
               </view>
             </view>
           </view>
@@ -829,11 +851,7 @@
         <!-- 主题色 -->
         <view class="form-label">主题色</view>
         <view class="color-opts">
-          <view
-            class="color-opt"
-            :class="{ active: true }"
-            @click="openEditCustomColor"
-          >
+          <view class="color-opt" :class="{ active: true }" @click="openEditCustomColor">
             <view class="color-opt-ico" :style="{ background: editColor }"> </view>
             <text class="color-opt-label">自定义</text>
           </view>
@@ -904,7 +922,7 @@ import {
 } from "@/utils/coverColor.js";
 import { formatDateKey, formatMonthKey } from "@/utils/date.js";
 import { onShow } from "@dcloudio/uni-app";
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 
 const PAGE_TABS = [
   { key: "ledger", label: "账本", icon: "📖" },
@@ -947,9 +965,14 @@ function resetNewLedger() {
   newLedgerIcon.value = "";
   newLedgerCover.value = "";
   newLedgerCoverRel.value = "";
+  newLedgerCover34.value = "";
+  newLedgerCoverRel34.value = "";
   newLedgerDesc.value = "";
   newLedgerColor.value = "#25cc5d";
   autoPaletteNew.value = [];
+  crop34.value = null;
+  crop43.value = null;
+  activeUploads = [];
   pendingCover.value = null;
   coverUploading = null;
 }
@@ -1006,17 +1029,33 @@ async function onSubmit() {
 const newLedgerIcon = ref("");
 const newLedgerCover = ref(""); // 预览地址（显示/取色用）
 const newLedgerCoverRel = ref(""); // 落库值：系统图为 /app_static/...，用户上传为 cloud:// fileID
+const newLedgerCover34 = ref(""); // 3:4 副比例预览地址
+const newLedgerCoverRel34 = ref(""); // 3:4 副比例落库值（cloud:// fileID）
 let coverUploading = null; // 自定义封面上传中的 promise
+let activeUploads = []; // 进行中的封面上传 promise 集合（双比例可能并行）
 const pendingCover = ref(null); // 已上传未提交的临时文件 { target, rel, fileID }
 // 上传令牌：每次 applyCover 自增并记入闭包。上传完成回调比对当前令牌，
 // 若已被替换/移除/取消（令牌失效），立即删除孤儿文件，不再写入 pendingCover。
 const currentUploadToken = ref({ new: 0, edit: 0 });
 const newLedgerDesc = ref("");
-// 系统默认图：预设图片图标库（3:4 网格），仅存相对路径，回显时拼接 CDN 域名
+// 系统默认图：每个图标同时包含 4:3 与 3:4 两种比例的资源（后续替换为对应图片文件）。
+// 网格展示统一使用 4:3（img43）；落库封面也存 4:3 资源路径。
 const LEDGER_ICONS = [
-  "/app_static/images/icon_cover.png",
-  "/app_static/images/icon_sunny.png",
-  "/app_static/images/icon_surplus.png",
+  {
+    id: "cover",
+    img43: "/app_static/images/icon_cover.png",
+    img34: "/app_static/images/icon_cover.png",
+  },
+  {
+    id: "sunny",
+    img43: "/app_static/images/icon_sunny.png",
+    img34: "/app_static/images/icon_sunny.png",
+  },
+  {
+    id: "surplus",
+    img43: "/app_static/images/icon_surplus.png",
+    img34: "/app_static/images/icon_surplus.png",
+  },
 ];
 // 默认封面相对路径（封面为空时兜底展示）
 const DEFAULT_COVER_REL = "/app_static/images/icon_cover.png";
@@ -1029,12 +1068,13 @@ const coverErrors = reactive({});
 // 云存储封面（用户上传，存 cloud:// fileID）解析后的临时访问 URL，按账本 _id 记录。
 // 云存储与网页托管不互通，fileID 不能直接拼 CDN 域名，必须经 getTempFileURL 换临时链。
 const coverUrlMap = reactive({});
-// 封面显示：cloud:// → 用预解析的临时链；/app_static → 拼 CDN；/ledger_img（旧数据，文件已不可达）→ 留空走默认图
+// 封面显示：优先展示 3:4 版本（cover34），无则回退主封面 cover（4:3）。
+// cloud:// → 用预解析的临时链（按 fileID 存）；/app_static → 拼 CDN；/ledger_img（旧数据）→ 留空走默认图
 function coverDisplay(l) {
-  const c = String(l.cover || '');
-  if (!c) return '';
-  if (c.startsWith('cloud://')) return coverUrlMap[l._id] || '';
-  if (c.startsWith('/ledger_img/')) return '';
+  const c = String(l.cover34 || l.cover || "");
+  if (!c) return "";
+  if (c.startsWith("cloud://")) return coverUrlMap[c] || "";
+  if (c.startsWith("/ledger_img/")) return "";
   return resolveCover(c);
 }
 function onCoverError(item) {
@@ -1053,11 +1093,15 @@ function isImg(v) {
 
 // cropTarget：裁剪结果写入目标，'new'=新建账本封面 / 'edit'=编辑账本封面
 const cropTarget = ref("new");
+// 两种比例的裁剪结果：{ temp: 预览地址, fileID: 云存储ID, rel: 落库值 }；null 表示未裁剪
+const crop34 = ref(null);
+const crop43 = ref(null);
 
 // 封面默认占位图（3:4），封面为空时优先展示
 const COVER_PLACEHOLDER = DEFAULT_COVER_REL;
 
-// 封面：从本地相册选取；非 3:4 比例则进入交互式裁剪。target: 'new' | 'edit'
+// 封面：从本地相册选取；选图后先提供 3:4 / 4:3 两种形态预览，用户选择比例后再进入对应裁剪。
+// target: 'new' | 'edit'
 function chooseCover(target = "new") {
   uni.chooseImage({
     count: 1,
@@ -1067,13 +1111,14 @@ function chooseCover(target = "new") {
       uni.getImageInfo({
         src: path,
         success: (info) => {
-          // 已是 3:4（宽高比≈0.75，容差 2%）直接采用，跳过裁剪
-          if (Math.abs(info.width / info.height - CROP_RATIO) < 0.02) {
-            applyCover(target, path);
-            return;
-          }
-          cropTarget.value = target;
-          initCropper(path, info);
+          // 重新选图：清空上一轮两个比例的裁剪结果
+          crop34.value = null;
+          crop43.value = null;
+          activeUploads = [];
+          pendingCropTarget.value = target;
+          pendingCropSrc.value = path;
+          pendingCropInfo.value = info;
+          showRatioPicker.value = true;
         },
         fail: () => {
           applyCover(target, path);
@@ -1093,6 +1138,7 @@ async function clearPending(target) {
 function removeCover(target = "new") {
   // 作废进行中的上传（令牌失效），上传完成回调会删除孤儿文件
   currentUploadToken.value[target]++;
+  activeUploads = [];
   if (target === "edit") {
     editLedgerCover.value = "";
     editLedgerCoverRel.value = "";
@@ -1136,18 +1182,19 @@ function applyCover(target, path) {
     coverUploading = run;
   });
 }
-// 选择系统默认图：存相对路径，回显时拼接 CDN 域名（target: 'new' | 'edit'）
+// 选择系统默认图：存图标 id 与 4:3 资源路径（网格/落库统一用 4:3）。
+// target: 'new' | 'edit'
 function pickSystemIcon(ic, target) {
   // 选系统图 → 放弃自定义上传：作废进行中的上传，清理临时文件
   currentUploadToken.value[target]++;
   if (target === "edit") {
-    editIcon.value = ic;
-    editLedgerCover.value = resolveCover(ic);
-    editLedgerCoverRel.value = ic;
+    editIcon.value = ic.id;
+    editLedgerCover.value = resolveCover(ic.img43);
+    editLedgerCoverRel.value = ic.img43;
   } else {
-    newLedgerIcon.value = ic;
-    newLedgerCover.value = resolveCover(ic);
-    newLedgerCoverRel.value = ic;
+    newLedgerIcon.value = ic.id;
+    newLedgerCover.value = resolveCover(ic.img43);
+    newLedgerCoverRel.value = ic.img43;
   }
   clearPending(target); // 选了系统图 → 清理之前可能上传的自定义临时图
   autoExtract(target); // 选封面后自动提取色板（展示在主题色区底部）
@@ -1270,10 +1317,13 @@ function onHueMove(e) {
   pickerHue.value = Math.round(x * 360);
 }
 
-// ===== 图片裁剪（3:4）=====
-const CROP_RATIO = 0.75; // 目标宽高比 宽/高 = 3/4
-const OUT_W = 600,
-  OUT_H = 800; // 导出分辨率（固定 3:4）
+// ===== 图片裁剪（支持 3:4 与 4:3）=====
+const showRatioPicker = ref(false); // 选图后先选择裁剪比例
+const pendingCropSrc = ref(""); // 待裁剪原图路径
+const pendingCropInfo = ref(null); // 原图尺寸信息
+const pendingCropTarget = ref("new"); // 裁剪结果写入目标
+const cropRatio = ref(0.75); // 目标宽高比 宽/高（0.75=3:4，4/3=4:3）
+const OUT_W = 600; // 导出宽度固定，高度按 cropRatio 计算
 
 const showCropper = ref(false);
 const cropSrc = ref("");
@@ -1281,14 +1331,16 @@ const stageW = ref(300);
 const stageH = ref(300);
 const imgW = ref(0);
 const imgH = ref(0);
-const dispScale = ref(1); // 自然尺寸 → 显示尺寸 比例
+const baseScale = ref(1); // 自然尺寸 → 初始 fit 显示比例
+const imgScale = ref(1); // 用户双指缩放因子
+const dispScale = computed(() => baseScale.value * imgScale.value); // 综合显示比例
 const imgX = ref(0); // 显示图中左上角在舞台中的坐标
 const imgY = ref(0);
 const boxW = ref(0); // 裁剪框（显示坐标）
 const boxH = ref(0);
 const boxX = ref(0);
 const boxY = ref(0);
-const zoom = ref(50); // 0~100，越大裁剪框越小（越"放大"）
+const stageRectVal = ref({ left: 0, top: 0 }); // 舞台在视口中的位置（v-if 打开后异步查询）
 
 const stageStyle = computed(() => ({
   width: stageW.value + "px",
@@ -1317,8 +1369,22 @@ const previewStyle = computed(() => {
     top: -((boxY.value - imgY.value) * k) + "px",
   };
 });
+// 预览容器：按当前裁剪比例设定宽高，保证预览不变形
+const previewBoxStyle = computed(() => {
+  const PW = 96;
+  return { width: PW + "px", height: PW / cropRatio.value + "px" };
+});
+const cropRatioLabel = computed(() =>
+  Math.abs(cropRatio.value - 0.75) < 0.001 ? "3 : 4" : "4 : 3"
+);
+// 模板辅助：该比例是否已裁剪完成
+function cropDone(key) {
+  return key === "34" ? !!crop34.value : !!crop43.value;
+}
 
-function initCropper(path, info) {
+function initCropper(path, info, ratio) {
+  cropRatio.value = ratio;
+  cropTarget.value = pendingCropTarget.value;
   const sys = uni.getSystemInfoSync();
   // 舞台宽度严格受面板内容区约束（面板 width:100% / max-width:680rpx，左右 padding 32rpx），避免超出弹窗右侧
   const rpxPx = sys.windowWidth / 750;
@@ -1328,20 +1394,29 @@ function initCropper(path, info) {
   stageH.value = w;
   imgW.value = info.width;
   imgH.value = info.height;
-  const s = Math.min(stageW.value / imgW.value, stageH.value / imgH.value);
-  dispScale.value = s;
-  const dw = imgW.value * s,
-    dh = imgH.value * s;
+  baseScale.value = Math.min(stageW.value / imgW.value, stageH.value / imgH.value);
+  imgScale.value = 1;
+  const dw = imgW.value * baseScale.value,
+    dh = imgH.value * baseScale.value;
   imgX.value = (stageW.value - dw) / 2;
   imgY.value = (stageH.value - dh) / 2;
-  const bw = Math.min(dw, dh * CROP_RATIO); // 裁剪框最大可容纳尺寸
+  const bw = Math.min(dw, dh * cropRatio.value); // 裁剪框最大可容纳尺寸（保持目标比例）
   boxW.value = bw;
-  boxH.value = bw / CROP_RATIO;
+  boxH.value = bw / cropRatio.value;
   boxX.value = imgX.value + (dw - bw) / 2;
   boxY.value = imgY.value + (dh - boxH.value) / 2;
-  zoom.value = 50;
   cropSrc.value = path;
   showCropper.value = true;
+  // 打开后查询舞台在视口中的位置，供触摸坐标换算为舞台局部坐标（小程序无 getBoundingClientRect）
+  nextTick(() => {
+    uni
+      .createSelectorQuery()
+      .select("#cropStage")
+      .boundingClientRect((r) => {
+        if (r) stageRectVal.value = { left: r.left, top: r.top };
+      })
+      .exec();
+  });
 }
 
 // 将裁剪框约束在图片显示范围内
@@ -1354,36 +1429,178 @@ function clampBox(nx, ny) {
   boxY.value = Math.max(minY, Math.min(maxY, ny));
 }
 
-let cropDrag = null;
-function onCropTouchStart(e) {
-  const t = e.touches[0];
-  cropDrag = { x: t.clientX, y: t.clientY, bx: boxX.value, by: boxY.value };
+// ===== 裁剪手势：单指拖动裁剪框移动 / 四角拖动改尺寸（保持比例）/ 双指缩放图片 =====
+let cropMode = null; // 'move' | 'resize-tl' | 'resize-tr' | 'resize-bl' | 'resize-br' | 'pinch'
+let moveOffset = { x: 0, y: 0 };
+let pinchDist0 = 0;
+let pinchScale0 = 1;
+const HANDLE_HIT = 26; // 四角命中半径(px)
+const MIN_BOX = 40; // 裁剪框最小边长(px)
+
+function stageRect() {
+  // 返回已缓存的舞台视口位置（initCropper 打开后用 selector 查询写入）
+  return stageRectVal.value;
 }
-function onCropTouchMove(e) {
-  if (!cropDrag) return;
+function localPoint(e) {
+  const rect = stageRectVal.value;
   const t = e.touches[0];
-  clampBox(
-    cropDrag.bx + (t.clientX - cropDrag.x),
-    cropDrag.by + (t.clientY - cropDrag.y)
+  return { x: t.clientX - rect.left, y: t.clientY - rect.top };
+}
+function hitCorner(x, y) {
+  const corners = {
+    tl: [boxX.value, boxY.value],
+    tr: [boxX.value + boxW.value, boxY.value],
+    bl: [boxX.value, boxY.value + boxH.value],
+    br: [boxX.value + boxW.value, boxY.value + boxH.value],
+  };
+  for (const k in corners) {
+    if (Math.hypot(x - corners[k][0], y - corners[k][1]) <= HANDLE_HIT) return k;
+  }
+  return null;
+}
+function insideBox(x, y) {
+  return (
+    x >= boxX.value &&
+    x <= boxX.value + boxW.value &&
+    y >= boxY.value &&
+    y <= boxY.value + boxH.value
   );
 }
-function onCropTouchEnd() {
-  cropDrag = null;
+// 双指缩放：以图片中心为锚点缩放显示尺寸
+function setImgScale(s) {
+  imgScale.value = Math.max(1, Math.min(5, s));
+  const f = baseScale.value * imgScale.value;
+  const dw = imgW.value * f,
+    dh = imgH.value * f;
+  imgX.value = (stageW.value - dw) / 2;
+  imgY.value = (stageH.value - dh) / 2;
+  clampBox(boxX.value, boxY.value); // 框仍约束在图片内
+}
+// 四角拖动：固定对角，保持比例，约束在图片显示范围内
+function doResize(corner, px, py) {
+  const ratio = cropRatio.value;
+  const left0 = boxX.value,
+    top0 = boxY.value,
+    right0 = boxX.value + boxW.value,
+    bottom0 = boxY.value + boxH.value;
+  const fx = corner.includes("l") ? right0 : left0; // 固定角 x
+  const fy = corner.includes("t") ? bottom0 : top0; // 固定角 y
+  let w = Math.abs(px - fx);
+  let h = w / ratio;
+  const maxW = corner.includes("l")
+    ? fx - imgX.value
+    : imgX.value + imgW.value * dispScale.value - fx;
+  const maxH = corner.includes("t")
+    ? fy - imgY.value
+    : imgY.value + imgH.value * dispScale.value - fy;
+  w = Math.max(MIN_BOX, Math.min(w, maxW, maxH * ratio));
+  h = w / ratio;
+  const left = corner.includes("l") ? fx - w : fx;
+  const right = corner.includes("l") ? fx : fx + w;
+  const top = corner.includes("t") ? fy - h : fy;
+  const bottom = corner.includes("t") ? fy : fy + h;
+  boxX.value = left;
+  boxY.value = top;
+  boxW.value = right - left;
+  boxH.value = bottom - top;
+}
+function onCropTouchStart(e) {
+  if (e.touches.length >= 2) {
+    const [a, b] = e.touches;
+    pinchDist0 = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1;
+    pinchScale0 = imgScale.value;
+    cropMode = "pinch";
+    return;
+  }
+  const p = localPoint(e);
+  const corner = hitCorner(p.x, p.y);
+  if (corner) {
+    cropMode = "resize-" + corner;
+  } else if (insideBox(p.x, p.y)) {
+    cropMode = "move";
+    moveOffset = { x: boxX.value - p.x, y: boxY.value - p.y };
+  } else {
+    cropMode = null;
+  }
+}
+function onCropTouchMove(e) {
+  if (cropMode === "pinch" && e.touches.length >= 2) {
+    const [a, b] = e.touches;
+    const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1;
+    setImgScale(pinchScale0 * (d / pinchDist0));
+    return;
+  }
+  if (e.touches.length >= 2) return; // 多指期间忽略单指逻辑
+  const p = localPoint(e);
+  if (cropMode === "move") {
+    clampBox(moveOffset.x + p.x, moveOffset.y + p.y);
+  } else if (cropMode && cropMode.startsWith("resize-")) {
+    doResize(cropMode.slice(7), p.x, p.y);
+  }
+}
+function onCropTouchEnd(e) {
+  cropMode = null; // 抬起后重置，避免跳变
 }
 
-// 缩放：调整裁剪框显示尺寸（保持 3:4），中心不变
-function onCropZoom(e) {
-  zoom.value = e.detail.value;
-  const dw = imgW.value * dispScale.value,
-    dh = imgH.value * dispScale.value;
-  const maxBw = Math.min(dw, dh * CROP_RATIO);
-  const minBw = Math.min(50, maxBw);
-  const bw = minBw + (maxBw - minBw) * (zoom.value / 100);
-  const cx = boxX.value + boxW.value / 2;
-  const cy = boxY.value + boxH.value / 2;
-  boxW.value = bw;
-  boxH.value = bw / CROP_RATIO;
-  clampBox(cx - bw / 2, cy - boxH.value / 2);
+// 比例选择：选图后从 3:4 / 4:3 预览进入对应裁剪
+function enterCrop(ratio) {
+  showRatioPicker.value = false;
+  initCropper(pendingCropSrc.value, pendingCropInfo.value, ratio);
+}
+// 单比例裁剪结果上传（复用云存储，带令牌防孤儿），并合并进 coverUploading 供保存 await
+function uploadCrop(storeRef, target) {
+  const myToken = ++currentUploadToken.value[target];
+  const path = storeRef.value.temp;
+  const p = uploadLedgerCover(path)
+    .then(({ rel, fileID }) => {
+      if (currentUploadToken.value[target] !== myToken) {
+        return deleteLedgerCover(fileID); // 令牌失效 → 删孤儿
+      }
+      storeRef.value = { ...storeRef.value, fileID, rel };
+      syncCoverPreview();
+    })
+    .catch((e) => {
+      console.error("[ledger] 封面上传失败:", e);
+      uni.showToast({ title: "封面上传失败", icon: "none" });
+    });
+  activeUploads.push(p);
+  coverUploading = Promise.all(activeUploads.slice());
+}
+// 把已裁剪的比例同步到表单封面字段：主封面优先 4:3（与系统图/网格一致），3:4 作为副比例落库
+function syncCoverPreview() {
+  const t = cropTarget.value;
+  const main = crop43.value || crop34.value; // 主封面（优先 4:3）
+  const sec = crop34.value; // 副比例固定 3:4
+  if (t === "edit") {
+    editLedgerCover.value = main ? main.temp : "";
+    editLedgerCoverRel.value = main ? main.fileID || main.rel : "";
+    editLedgerCover34.value = sec ? sec.temp : "";
+    editLedgerCoverRel34.value = sec ? sec.fileID || sec.rel : "";
+  } else {
+    newLedgerCover.value = main ? main.temp : "";
+    newLedgerCoverRel.value = main ? main.fileID || main.rel : "";
+    newLedgerCover34.value = sec ? sec.temp : "";
+    newLedgerCoverRel34.value = sec ? sec.fileID || sec.rel : "";
+  }
+  autoExtract(t);
+}
+// 比例选择"完成"：把已裁剪比例写入封面字段并关闭
+function finishCrop() {
+  syncCoverPreview();
+  showRatioPicker.value = false;
+  pendingCropSrc.value = "";
+  pendingCropInfo.value = null;
+}
+// 取消：已裁剪任一比例则保留结果（等同完成），否则作废
+function cancelRatio() {
+  if (crop34.value || crop43.value) {
+    finishCrop();
+    return;
+  }
+  currentUploadToken.value[pendingCropTarget.value]++;
+  showRatioPicker.value = false;
+  pendingCropSrc.value = "";
+  pendingCropInfo.value = null;
 }
 
 function cancelCrop() {
@@ -1393,10 +1610,12 @@ function cancelCrop() {
 
 // 确认裁剪：用 Canvas 2D 把裁剪区域绘制到 600x800 画布并导出
 function confirmCrop() {
-  const sx = (boxX.value - imgX.value) / dispScale.value;
-  const sy = (boxY.value - imgY.value) / dispScale.value;
-  const sw = boxW.value / dispScale.value;
-  const sh = boxH.value / dispScale.value;
+  const factor = dispScale.value;
+  const sx = (boxX.value - imgX.value) / factor;
+  const sy = (boxY.value - imgY.value) / factor;
+  const sw = boxW.value / factor;
+  const sh = boxH.value / factor;
+  const outH = OUT_W / cropRatio.value;
   uni
     .createSelectorQuery()
     .select("#cropExport")
@@ -1411,22 +1630,28 @@ function confirmCrop() {
       const img = canvas.createImage();
       img.onload = () => {
         canvas.width = OUT_W;
-        canvas.height = OUT_H;
-        ctx.clearRect(0, 0, OUT_W, OUT_H);
-        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, OUT_W, OUT_H);
+        canvas.height = outH;
+        ctx.clearRect(0, 0, OUT_W, outH);
+        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, OUT_W, outH);
         uni.canvasToTempFilePath({
           canvas,
           x: 0,
           y: 0,
           width: OUT_W,
-          height: OUT_H,
+          height: outH,
           destWidth: OUT_W,
-          destHeight: OUT_H,
+          destHeight: outH,
           fileType: "png",
           success: (r) => {
-            applyCover(cropTarget.value, r.tempFilePath);
+            // 按当前比例写入对应裁剪结果（3:4→crop34 / 4:3→crop43），随后回到比例选择，可继续裁剪另一比例
+            const is34 = Math.abs(cropRatio.value - 0.75) < 0.001;
+            const storeRef = is34 ? crop34 : crop43;
+            storeRef.value = { temp: r.tempFilePath, fileID: null, rel: "" };
+            uploadCrop(storeRef, cropTarget.value);
+            syncCoverPreview();
             showCropper.value = false;
             cropSrc.value = "";
+            showRatioPicker.value = true;
           },
           fail: () => uni.showToast({ title: "裁剪失败", icon: "none" }),
         });
@@ -1442,6 +1667,8 @@ const editTarget = ref(null);
 const editName = ref("");
 const editIcon = ref("");
 const editLedgerCover = ref(""); // 预览地址
+const editLedgerCover34 = ref(""); // 3:4 副比例预览地址
+const editLedgerCoverRel34 = ref(""); // 3:4 副比例落库值
 const editLedgerCoverRel = ref(""); // 落库值：系统图为 /app_static/...，用户上传为 cloud:// fileID
 const editOldCoverFileID = ref(""); // 编辑前已有的用户封面 fileID，替换成功后清理旧文件
 const editLedgerDesc = ref(""); // 简介（与新建字段一致）
@@ -1869,16 +2096,15 @@ async function loadData() {
     );
     ledgers.value = list;
     transactions.value = txData;
-    // 预解析云存储封面（用户上传，存 cloud:// fileID）为临时访问 URL，填入 coverUrlMap
+    // 预解析云存储封面（用户上传，存 cloud:// fileID）为临时访问 URL。
+    // 同时解析 3:4 版本 cover34 与 4:3 主封面 cover，按 fileID 存入 coverUrlMap 供 coverDisplay 取用
     const cloudCovers = list
-      .filter((l) => l.cover && String(l.cover).startsWith("cloud://"))
-      .map((l) => l.cover);
+      .flatMap((l) => [l.cover, l.cover34])
+      .filter((x) => x && String(x).startsWith("cloud://"));
     if (cloudCovers.length) {
       const map = await getCloudTempUrls(cloudCovers);
-      for (const l of list) {
-        if (l.cover && String(l.cover).startsWith("cloud://") && map[l.cover]) {
-          coverUrlMap[l._id] = map[l.cover];
-        }
+      for (const f of cloudCovers) {
+        if (map[f]) coverUrlMap[f] = map[f];
       }
     }
     if (list.length === 0) {
@@ -2003,6 +2229,7 @@ async function createLedger() {
       name,
       icon: finalIcon || LEDGER_ICONS[0],
       cover: finalCover,
+      cover34: newLedgerCoverRel34.value,
       desc: newLedgerDesc.value,
       monthly_budget: 0,
       sort_order: ledgers.value.length,
@@ -2030,7 +2257,7 @@ async function openEdit(l) {
   editTarget.value = l;
   editName.value = l.name;
   // 仅当现有图标在图片库中才选中，否则不预选（避免强制选中首项）
-  editIcon.value = l.icon && LEDGER_ICONS.includes(l.icon) ? l.icon : "";
+  editIcon.value = l.icon && LEDGER_ICONS.some((x) => x.id === l.icon) ? l.icon : "";
   // 落库值兼容系统图(/app_static)与云存储(cloud://)
   editLedgerCoverRel.value =
     l.cover && (String(l.cover).startsWith("/") || String(l.cover).startsWith("cloud://"))
@@ -2042,8 +2269,27 @@ async function openEdit(l) {
   } else {
     editLedgerCover.value = resolveCover(l.cover);
   }
+  // 3:4 副比例：与主封面同理加载，保证编辑保存时不丢失已存的 cover34
+  const cover34 = l.cover34 || "";
+  editLedgerCoverRel34.value =
+    cover34 && (String(cover34).startsWith("/") || String(cover34).startsWith("cloud://"))
+      ? cover34
+      : "";
+  if (cover34 && String(cover34).startsWith("cloud://")) {
+    editLedgerCover34.value = await getCloudTempUrl(cover34);
+  } else {
+    editLedgerCover34.value = resolveCover(cover34);
+  }
+  // 还原已裁剪比例，避免保存时 syncCoverPreview 误将 cover34 清空
+  crop43.value = l.cover
+    ? { temp: editLedgerCover.value, fileID: String(l.cover).startsWith("cloud://") ? l.cover : null, rel: l.cover }
+    : null;
+  crop34.value = cover34
+    ? { temp: editLedgerCover34.value, fileID: String(cover34).startsWith("cloud://") ? cover34 : null, rel: cover34 }
+    : null;
   // 记录编辑前的用户封面 fileID，替换成功后删旧文件，避免云存储冗余
-  editOldCoverFileID.value = l.cover && String(l.cover).startsWith("cloud://") ? l.cover : "";
+  editOldCoverFileID.value =
+    l.cover && String(l.cover).startsWith("cloud://") ? l.cover : "";
   // 简介：与新建字段一致
   editLedgerDesc.value = l.desc || "";
   // 主题色：保留已持久化的颜色
@@ -2126,8 +2372,9 @@ async function saveEdit() {
     const themeColor = editColor.value;
     await apiUpdateLedger(editTarget.value._id, {
       name,
-      icon: editIcon.value || LEDGER_ICONS[0],
+      icon: editIcon.value || LEDGER_ICONS[0].id,
       cover: newCover,
+      cover34: editLedgerCoverRel34.value,
       desc: editLedgerDesc.value,
       theme_color: themeColor,
     });
@@ -2166,9 +2413,14 @@ async function closeEditLedger(committed = false) {
   editIcon.value = "";
   editLedgerCover.value = "";
   editLedgerCoverRel.value = "";
+  editLedgerCover34.value = "";
+  editLedgerCoverRel34.value = "";
   editLedgerDesc.value = "";
   editColor.value = "#25cc5d";
   autoPaletteEdit.value = [];
+  crop34.value = null;
+  crop43.value = null;
+  activeUploads = [];
   showEdit.value = false;
 }
 
@@ -3900,8 +4152,121 @@ $coverGrad: linear-gradient(135deg, rgba(242, 252, 242, 0.4) 0%, #ffffff 50%);
   width: 72rpx;
 }
 
-.crop-slider {
-  flex: 1 1 auto;
+/* 比例选择弹窗 */
+.ratio-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.ratio-panel {
+  width: 600rpx;
+  max-width: 92vw;
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 32rpx;
+  box-sizing: border-box;
+}
+.ratio-row {
+  display: flex;
+  gap: 28rpx;
+  margin: 28rpx 0;
+}
+.ratio-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12rpx;
+  padding: 20rpx 0;
+  border-radius: 16rpx;
+  // background: var(--g0);
+  transition: transform 0.12s ease;
+}
+.ratio-card:active {
+  transform: scale(0.96);
+}
+.ratio-thumb {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 12rpx;
+  background: #eef6f0;
+}
+/* 两种比例缩略图容器：3:4 与 4:3，统一宽度、按高度差异呈现形态差异 */
+/* 两种比例缩略图：用 aspect-ratio 保证视觉比例正确（3:4 竖长、4:3 横扁） */
+.ratio-34 {
+  aspect-ratio: 3 / 4;
+  height: auto;
+}
+.ratio-43 {
+  aspect-ratio: 4 / 3;
+  height: auto;
+}
+.ratio-thumb-img {
+  width: 100%;
+  height: 100%;
+}
+.ratio-label {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: var(--ink2);
+}
+.ratio-done {
+  position: absolute;
+  right: 8rpx;
+  bottom: 8rpx;
+  width: 36rpx;
+  height: 36rpx;
+  border-radius: 50%;
+  background: var(--g5);
+  color: #fff;
+  font-size: 24rpx;
+  line-height: 36rpx;
+  text-align: center;
+  box-shadow: 0 1rpx 4rpx rgba(0, 0, 0, 0.2);
+}
+.ratio-tip {
+  text-align: center;
+  font-size: 24rpx;
+  color: var(--ink3);
+  margin-bottom: 8rpx;
+}
+.crop-btn.disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* 裁剪框四角手柄（手势在 stage 层按落点 proximity 识别，此处仅视觉） */
+.crop-handle {
+  position: absolute;
+  width: 28rpx;
+  height: 28rpx;
+  border-radius: 50%;
+  background: #fff;
+  border: 3rpx solid var(--g5);
+  box-shadow: 0 1rpx 4rpx rgba(0, 0, 0, 0.25);
+}
+.crop-handle.tl {
+  left: -14rpx;
+  top: -14rpx;
+}
+.crop-handle.tr {
+  right: -14rpx;
+  top: -14rpx;
+}
+.crop-handle.bl {
+  left: -14rpx;
+  bottom: -14rpx;
+}
+.crop-handle.br {
+  right: -14rpx;
+  bottom: -14rpx;
 }
 
 .crop-prev {

@@ -233,6 +233,7 @@ async function createLedger(userId, data = {}) {
     name,
     icon: (data.icon || '📒').toString(),
     cover: data.cover ? data.cover.toString() : '',
+    cover34: data.cover34 ? data.cover34.toString() : '',
     desc: data.desc ? data.desc.toString() : '',
     // 持久化主题色：创建时即落库为具体 hex（封面取色/预设/自定义三种来源统一），避免后续重复提取
     theme_color: data.theme_color ? data.theme_color.toString() : '',
@@ -270,6 +271,7 @@ async function updateLedger(userId, ledgerId, patch = {}) {
   }
   if (patch.icon !== undefined) update.icon = String(patch.icon)
   if (patch.cover !== undefined) update.cover = String(patch.cover)
+  if (patch.cover34 !== undefined) update.cover34 = patch.cover34 ? String(patch.cover34) : ''
   if (patch.desc !== undefined) update.desc = String(patch.desc)
   if (patch.theme_color !== undefined) update.theme_color = patch.theme_color ? String(patch.theme_color) : ''
   if (patch.monthly_budget !== undefined) update.monthly_budget = Number(patch.monthly_budget) || 0
@@ -1846,6 +1848,40 @@ async function deleteLedger(userId, ledgerId, mode = 'transfer') {
   return { deleted: true, ledger_id: ledgerId, mode }
 }
 
+/**
+ * 设置账本收藏状态（云端）。
+ * favorite=true 创建收藏记录（已存在则幂等返回）；false 删除收藏记录。
+ * 收藏以 (user_id, ledger_id) 唯一绑定，互不影响。
+ * @param {string} userId
+ * @param {string} ledgerId
+ * @param {boolean} favorite 期望的收藏状态
+ * @returns {Promise<{ favorited: boolean, favorite_id: string|null }>}
+ */
+async function setFavoriteLedger(userId, ledgerId, favorite) {
+  const db = getDb()
+  const ledgerRes = await db.collection('ledgers').doc(ledgerId).get()
+  const ledger = ledgerRes.data && ledgerRes.data[0]
+  if (!ledger || ledger.is_deleted) throw new Error('ledger not found')
+
+  const where = { user_id: userId, ledger_id: ledgerId }
+  const existingRes = await db.collection('favorite_ledgers').where(where).limit(1).get()
+  const existing = existingRes.data && existingRes.data[0]
+  const want = !!favorite
+
+  if (want) {
+    if (existing) return { favorited: true, favorite_id: existing._id }
+    const ts = nowTs()
+    const doc = { user_id: userId, ledger_id: ledgerId, created_at: ts, updated_at: ts }
+    const addRes = await db.collection('favorite_ledgers').add(doc)
+    return { favorited: true, favorite_id: addRes.id }
+  }
+
+  if (existing) {
+    await db.collection('favorite_ledgers').where(where).remove()
+  }
+  return { favorited: false, favorite_id: null }
+}
+
 /** 自定义分类上限 */
 const MAX_CUSTOM_CATEGORIES = 20
 
@@ -3054,15 +3090,48 @@ async function getLedgerWithTransactions(userId, ledgerId) {
   ])
   const l = lRes.data && lRes.data[0]
   if (!l || l.user_id !== userId) return null
-  // 成员总数：统计 ledger_members 中该账本的成员（异常时降级为 0，不影响主流程）
+  // 成员列表：ledger_members 关联 users，返回头像/昵称并标记自己（异常时降级为空数组）
   let memberCount = 0
+  let members = []
   try {
-    const mRes = await db.collection('ledger_members').where({ ledger_id: ledgerId }).count()
-    memberCount = (mRes && mRes.total) || 0
+    const mRes = await db.collection('ledger_members').where({ ledger_id: ledgerId }).get()
+    const rows = mRes.data || []
+    memberCount = rows.length
+    const userMap = {}
+    if (rows.length) {
+      const userIds = rows.map((m) => m.user_id)
+      const uRes = await db
+        .collection('users')
+        .where({ user_id: db.command.in(userIds) })
+        .get()
+      ;(uRes.data || []).forEach((u) => { userMap[u.user_id] = u })
+    }
+    members = rows.map((m) => {
+      const u = userMap[m.user_id] || {}
+      return {
+        user_id: m.user_id,
+        nickname: u.nickname || '',
+        avatar_url: u.avatar_url || '',
+        is_self: m.user_id === userId,
+      }
+    })
   } catch (e) {
     memberCount = 0
+    members = []
   }
-  return { ledger: l, transactions: txRes.data || [], memberCount }
+
+  // 当前用户是否收藏该账本（favorite_ledgers 未建表时查询返回空，安全降级为 false）
+  let isFavorited = false
+  try {
+    const favRes = await db.collection('favorite_ledgers')
+      .where({ user_id: userId, ledger_id: ledgerId })
+      .limit(1)
+      .get()
+    isFavorited = !!(favRes.data && favRes.data[0])
+  } catch (e) {
+    isFavorited = false
+  }
+  return { ledger: l, transactions: txRes.data || [], memberCount, members, is_favorited: isFavorited }
 }
 
 /** 单笔交易（用于编辑 / 退款关联）。 */
@@ -3152,6 +3221,7 @@ module.exports = {
   softDeleteTransaction,
   updateTransaction,
   deleteLedger,
+  setFavoriteLedger,
   listCategories,
   createCategory,
   updateCategory,

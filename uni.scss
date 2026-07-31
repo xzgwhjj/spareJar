@@ -87,6 +87,17 @@ $sj-g5: #25cc5d !default;   // malachite-700（品牌主色）
 $sj-g6: #29c35a !default;   // malachite-800
 $sj-g7: #0e923f !default;   // malachite-900
 $sj-g8: #00580c !default;   // malachite-950
+$sj-p0: #fff2f6 !default;   // pink-50
+$sj-p1: #ffeaf3 !default;   // pink-100
+$sj-p2: #ffe1ee !default;   // pink-200
+$sj-p2-0: #ffd6e7 !default; // pink-300
+$sj-p2-1: #ffc4dd !default; // pink-400
+$sj-p3: #ffb0d2 !default;   // pink-500
+$sj-p4: #ff97c4 !default;   // pink-600
+$sj-p5: #ff5c8a !default;   // pink-700（爱心主色，对应 malachite-700）
+$sj-p6: #f1497c !default;   // pink-800
+$sj-p7: #d62461 !default;   // pink-900
+$sj-p8: #a81247 !default;   // pink-950
 $sj-ink: #0f1c14 !default;
 $sj-ink-deep: #1a2820 !default;
 $sj-ink2: #3a5244 !default;
@@ -127,6 +138,17 @@ $sj-shadow-light: 0 2rpx 12rpx 0 rgba(0, 0, 0, 0.1) !default; // 通用浅色阴
   --g6: #{$sj-g6};
   --g7: #{$sj-g7};
   --g8: #{$sj-g8};
+  --p0: #{$sj-p0};
+  --p1: #{$sj-p1};
+  --p2: #{$sj-p2};
+  --p2-0: #{$sj-p2-0};
+  --p2-1: #{$sj-p2-1};
+  --p3: #{$sj-p3};
+  --p4: #{$sj-p4};
+  --p5: #{$sj-p5};
+  --p6: #{$sj-p6};
+  --p7: #{$sj-p7};
+  --p8: #{$sj-p8};
   --ink: #{$sj-ink};
   --ink-deep: #{$sj-ink-deep};
   --ink2: #{$sj-ink2};

@@ -45,6 +45,7 @@ export const ACTIONS = Object.freeze({
   CREATE_LEDGER: 'createLedger',
   UPDATE_LEDGER: 'updateLedger',
   DELETE_LEDGER: 'deleteLedger',
+  SET_FAVORITE_LEDGER: 'setFavoriteLedger',
   DELETE_COVER: 'deleteCover',
   ENSURE_MASTER_LEDGER: 'ensureMasterLedger',
   LIST_LEDGERS: 'listLedgers',
@@ -245,6 +246,16 @@ export function updateLedger(ledgerId, patch) {
  */
 export function deleteLedger(ledgerId, mode = 'transfer') {
   return callSparejar(ACTIONS.DELETE_LEDGER, { ledger_id: ledgerId, mode })
+}
+
+/**
+ * 设置账本收藏状态（云端同步）。favorite=true 创建收藏记录，false 删除收藏记录。
+ * @param {string} ledgerId
+ * @param {boolean} favorite
+ * @returns {Promise<{ favorited: boolean, favorite_id: string|null }>}
+ */
+export function setFavoriteLedger(ledgerId, favorite) {
+  return callSparejar(ACTIONS.SET_FAVORITE_LEDGER, { ledger_id: ledgerId, favorite })
 }
 
 export function ensureMasterLedger() {

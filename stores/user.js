@@ -31,6 +31,7 @@ import {
   updateOnboarding,
   recordSubscribeAuth,
   sendSubscribeMessage,
+  setFavoriteLedger,
   getStickers,
   createSticker,
   updateSticker,
@@ -498,6 +499,12 @@ export async function archiveWishAction(wishId) {
   const res = await archiveWish(wishId)
   await loadWishes()
   return res
+}
+
+/** 设置账本收藏状态（云端同步）。未登录时本地态由页面兜底，这里直接抛错交由页面回滚。 */
+export async function setFavoriteLedgerAction(ledgerId, favorite) {
+  if (!state.uid) throw new UserStoreError('请先登录', 'NOT_LOGGED_IN')
+  return setFavoriteLedger(ledgerId, favorite)
 }
 
 /** 读取单个心愿的攒钱流水（不进全局 state，页面本地持有）。 */
@@ -1190,6 +1197,7 @@ export function useUserStore() {
     createStickerAction,
     updateStickerAction,
     deleteStickerAction,
+    setFavoriteLedgerAction,
     consumeStickerAction,
     recognizeReceiptAction,
     loadAssetAccounts,

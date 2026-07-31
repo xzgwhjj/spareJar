@@ -266,6 +266,27 @@ writeIndex('ledger_members', [
   idx('idx_user', [{ name: 'user_id', type: 'varchar' }])
 ])
 
+// ========== favorite_ledgers ==========
+writeSchema('favorite_ledgers', {
+  bsonType: 'object',
+  required: ['user_id', 'ledger_id', 'created_at'],
+  permission: {
+    read: 'doc.user_id == auth.uid',
+    create: 'doc.user_id == auth.uid',
+    update: false,
+    delete: 'doc.user_id == auth.uid'
+  },
+  properties: {
+    _id: { description: 'PK' },
+    user_id: { ...strField(64, '收藏者 openid'), ...fk('users', 'user_id') },
+    ledger_id: { ...strField(0, '账本 ID'), ...fk('ledgers') },
+    created_at: tsField('收藏时间')
+  }
+})
+writeIndex('favorite_ledgers', [
+  idx('uk_user_ledger', [{ name: 'user_id', type: 'varchar' }, { name: 'ledger_id', type: 'varchar' }], true)
+])
+
 // ========== transactions ==========
 writeSchema('transactions', {
   bsonType: 'object',
