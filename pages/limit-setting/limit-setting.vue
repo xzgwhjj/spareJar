@@ -39,12 +39,14 @@
         />
         <view class="input-row">
           <text class="input-prefix">¥</text>
-          <input
+          <number-field
             class="limit-input"
-            type="number"
-            :value="dailyLimit"
-            @input="onInput"
+            :model-value="dailyLimit"
             placeholder="输入整数金额"
+            title="每日限额"
+            :decimal-places="0"
+            :max-integer="5"
+            @update:model-value="onInputValue"
           />
           <text class="input-unit">/天</text>
         </view>
@@ -86,7 +88,10 @@
         </view>
       </view>
     </scroll-view>
-  </view>
+      
+    <!-- 全局数字键盘（单例）：由 main.js 全局注册 -->
+    <amount-keyboard />
+</view>
 </template>
 
 <script setup>
@@ -145,8 +150,8 @@ onMounted(async () => {
 });
 
 const onSlide = (e) => { dailyLimit.value = Number(e.detail.value); };
-const onInput = (e) => {
-  const v = Number(e.detail.value);
+const onInputValue = (val) => {
+  const v = Number(val);
   if (Number.isFinite(v)) dailyLimit.value = Math.max(1, Math.min(2000, Math.floor(v)));
 };
 

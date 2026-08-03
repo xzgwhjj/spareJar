@@ -26,7 +26,8 @@
         <text class="bill-empty-text">今天还没有账单，去记一笔吧</text>
       </view>
     </view>
-  </view>
+      
+</view>
 </template>
 
 <script setup>

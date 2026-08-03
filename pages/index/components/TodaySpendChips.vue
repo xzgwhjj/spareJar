@@ -12,7 +12,8 @@
       </view>
       <text v-if="chips.length === 0" class="ts-empty">今日暂无消费</text>
     </view>
-  </view>
+      
+</view>
 </template>
 
 <script setup>

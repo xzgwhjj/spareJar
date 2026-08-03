@@ -4,7 +4,8 @@
       <!-- 存钱罐直接由 Lottie 动画呈现 -->
       <canvas type="2d" id="lottieCanvas" class="lottie-canvas" />
     </view>
-  </view>
+      
+</view>
 </template>
 
 <script setup>

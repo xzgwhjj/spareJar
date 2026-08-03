@@ -16,7 +16,7 @@
         </view>
         <view v-for="f in BASE_FIELDS" :key="f.key" class="field-row">
           <text class="field-label">{{ f.label }}</text>
-          <input class="field-input" type="digit" :placeholder="f.placeholder" v-model="form[f.key]" />
+          <number-field class="field-input" :model-value="form[f.key]" :placeholder="f.placeholder" :title="f.label" :decimal-places="0" :max-integer="4" @update:model-value="(v) => (form[f.key] = v)" />
           <text class="field-unit">{{ f.unit }}</text>
         </view>
         <text class="block-title" style="margin-top:24rpx;">活动强度</text>
@@ -53,19 +53,19 @@
         <block v-if="form.useManual">
           <view class="field-row">
             <text class="field-label">BMR</text>
-            <input class="field-input" type="digit" placeholder="0" v-model="form.manualBmr" />
+            <number-field class="field-input" :model-value="form.manualBmr" placeholder="0" title="BMR" :decimal-places="0" :max-integer="5" @update:model-value="(v) => (form.manualBmr = v)" />
             <text class="field-unit">kcal</text>
           </view>
           <view class="field-row">
             <text class="field-label">TDEE</text>
-            <input class="field-input" type="digit" placeholder="0" v-model="form.manualTdee" />
+            <number-field class="field-input" :model-value="form.manualTdee" placeholder="0" title="TDEE" :decimal-places="0" :max-integer="5" @update:model-value="(v) => (form.manualTdee = v)" />
             <text class="field-unit">kcal</text>
           </view>
         </block>
         <block v-else>
           <view class="field-row">
             <text class="field-label">目标缺口</text>
-            <input class="field-input" type="digit" placeholder="0" v-model="form.gap" />
+            <number-field class="field-input" :model-value="form.gap" placeholder="0" title="目标缺口" :decimal-places="0" :max-integer="5" @update:model-value="(v) => (form.gap = v)" />
             <text class="field-unit">kcal</text>
           </view>
           <text class="result-subtitle" style="margin-top:6rpx;">日摄入目标 = TDEE − 缺口 = {{ autoTarget || '—' }} kcal</text>
@@ -73,7 +73,7 @@
 
         <view class="field-row" style="margin-top:16rpx;">
           <text class="field-label">摄入目标</text>
-          <input class="field-input" type="digit" :placeholder="String(autoTarget || 0)" v-model="form.manualTarget" />
+          <number-field class="field-input" :model-value="form.manualTarget" :placeholder="String(autoTarget || 0)" title="摄入目标" :decimal-places="0" :max-integer="5" @update:model-value="(v) => (form.manualTarget = v)" />
           <text class="field-unit">kcal</text>
         </view>
       </view>
@@ -82,7 +82,7 @@
         <text class="block-title">今日运动消耗</text>
         <view class="field-row">
           <text class="field-label">运动</text>
-          <input class="field-input" type="digit" placeholder="0" v-model="form.exercise" />
+          <number-field class="field-input" :model-value="form.exercise" placeholder="0" title="运动消耗" :decimal-places="0" :max-integer="5" @update:model-value="(v) => (form.exercise = v)" />
           <text class="field-unit">kcal</text>
         </view>
         <text class="result-subtitle" style="margin-top:6rpx;">今日总消耗 = TDEE + 运动 = {{ totalBurn || '—' }} kcal</text>
@@ -99,7 +99,10 @@
       <view class="save-btn" @click="save"><text>保存设置</text></view>
       <view style="height:40rpx;" />
     </scroll-view>
-  </view>
+      
+    <!-- 全局数字键盘（单例）：由 main.js 全局注册 -->
+    <amount-keyboard />
+</view>
 </template>
 
 <script setup>

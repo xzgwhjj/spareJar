@@ -104,7 +104,7 @@
               <view class="op-source" :class="{ active: depositSource === 'savings' }" @click="depositSource = 'savings'">从存款池</view>
             </view>
             <view class="op-input-row">
-              <input class="op-input" v-model="depositAmount" type="digit" placeholder="金额(元)" />
+              <number-field class="op-input" :model-value="depositAmount" placeholder="金额(元)" title="存入金额" :decimal-places="2" :max-integer="9" @update:model-value="(v) => (depositAmount = v)" />
               <view class="op-confirm" @click="doDeposit"><text>存入 +</text></view>
             </view>
           </view>
@@ -113,7 +113,7 @@
           <view class="op-block">
             <text class="op-title">取出（退回累计结余池）</text>
             <view class="op-input-row">
-              <input class="op-input" v-model="withdrawAmount" type="digit" placeholder="金额(元)" />
+              <number-field class="op-input" :model-value="withdrawAmount" placeholder="金额(元)" title="取出金额" :decimal-places="2" :max-integer="9" @update:model-value="(v) => (withdrawAmount = v)" />
               <view class="op-confirm withdraw" @click="doWithdraw"><text>取回</text></view>
             </view>
           </view>
@@ -144,7 +144,7 @@
         <view class="sheet-handle"><view class="handle-bar" /></view>
         <text class="sheet-title">创建新心愿</text>
         <input class="sheet-input" v-model="newWishName" placeholder="心愿名称" />
-        <input class="sheet-input" v-model="newWishAmount" type="digit" placeholder="目标金额(元)" />
+        <number-field class="sheet-input" :model-value="newWishAmount" placeholder="目标金额(元)" title="心愿目标金额" :decimal-places="2" :max-integer="9" @update:model-value="(v) => (newWishAmount = v)" />
         <input class="sheet-input" v-model="newWishDeadline" placeholder="截止日期（如 2025-12-31，可空）" />
         <view class="save-btn" @click="createWish"><text>创建心愿</text></view>
       </view>
@@ -164,7 +164,7 @@
           <view class="op-source" :class="{ active: savingsMode === 'withdraw' }" @click="savingsMode = 'withdraw'">取出</view>
         </view>
         <view class="op-input-row" style="margin:8px 20px;">
-          <input class="op-input" v-model="savingsAmount" type="digit" placeholder="金额(元)" />
+          <number-field class="op-input" :model-value="savingsAmount" placeholder="金额(元)" title="存款池金额" :decimal-places="2" :max-integer="9" @update:model-value="(v) => (savingsAmount = v)" />
           <view class="op-confirm" :class="{ withdraw: savingsMode === 'withdraw' }" @click="doSavings">
             <text>{{ savingsMode === 'deposit' ? '存入' : '取出' }}</text>
           </view>
@@ -175,7 +175,10 @@
 
     <!-- TabBar -->
     <TabBar :current="4" />
-  </view>
+      
+    <!-- 全局数字键盘（单例）：由 main.js 全局注册 -->
+    <amount-keyboard />
+</view>
 </template>
 
 <script setup>

@@ -61,7 +61,7 @@
 
         <view class="review-card glass-mid">
           <view class="section-label">金额（元）</view>
-          <input class="amount-input" v-model="draft.amount" type="digit" placeholder="0.00" />
+          <number-field class="amount-input" :model-value="draft.amount" placeholder="0.00" title="金额" :decimal-places="2" :max-integer="9" @update:model-value="(v) => (draft.amount = v)" />
 
           <view class="section-label">商户 / 备注</view>
           <input class="note-input" v-model="draft.note" placeholder="如：盒马鲜生" maxlength="60" />
@@ -115,7 +115,10 @@
 
       <view class="scroll-bottom-gap" />
     </scroll-view>
-  </view>
+      
+    <!-- 全局数字键盘（单例）：由 main.js 全局注册 -->
+    <amount-keyboard />
+</view>
 </template>
 
 <script setup>

@@ -39,7 +39,7 @@
           <text class="form-label">月薪（元）</text>
           <view class="input-row">
             <text class="input-prefix">¥</text>
-            <input class="input-main" type="number" v-model="monthlySalary" placeholder="如 9000" />
+            <number-field class="input-main" :model-value="monthlySalary" placeholder="如 9000" title="月薪" :decimal-places="0" :max-integer="9" @update:model-value="(v) => (monthlySalary = v)" />
           </view>
           <view class="calc-hint" v-if="suggestedDaily > 0">
             <text>按 月薪 ÷ 30 估算，建议每日约 </text>
@@ -48,7 +48,7 @@
           <text class="form-label" style="margin-top:36rpx;">每日限额（元）</text>
           <view class="input-row">
             <text class="input-prefix">¥</text>
-            <input class="input-main" type="number" v-model="dailyLimit" placeholder="每日可花金额" />
+            <number-field class="input-main" :model-value="dailyLimit" placeholder="每日可花金额" title="每日限额" :decimal-places="0" :max-integer="9" @update:model-value="(v) => (dailyLimit = v)" />
           </view>
         </view>
       </view>
@@ -61,7 +61,7 @@
           <text class="form-label">金额（元）</text>
           <view class="input-row">
             <text class="input-prefix">¥</text>
-            <input class="input-main" type="digit" v-model="txAmount" placeholder="0.00" />
+            <number-field class="input-main" :model-value="txAmount" placeholder="0.00" title="金额" :decimal-places="2" :max-integer="9" @update:model-value="(v) => (txAmount = v)" />
           </view>
           <text class="form-label" style="margin-top:36rpx;">分类</text>
           <picker class="picker-row" :range="expenseCats" range-key="name" @change="onCatChange">
@@ -85,7 +85,7 @@
           <text class="form-label" style="margin-top:36rpx;">目标金额（元）</text>
           <view class="input-row">
             <text class="input-prefix">¥</text>
-            <input class="input-main" type="digit" v-model="wishAmount" placeholder="0.00" />
+            <number-field class="input-main" :model-value="wishAmount" placeholder="0.00" title="目标金额" :decimal-places="2" :max-integer="9" @update:model-value="(v) => (wishAmount = v)" />
           </view>
         </view>
       </view>
@@ -96,7 +96,10 @@
       <view v-if="step === 1" class="primary-btn" @click="next"><text>开始设置</text></view>
       <template v-else-if="step === 2">
         <view class="ghost-btn" @click="skipAll"><text>跳过引导</text></view>
-        <view class="primary-btn" @click="saveLimit"><text>保存并继续</text></view>
+        <view class="primary-btn" @click="saveLimit"><text>保存并继续</text>    
+    <!-- 全局数字键盘（单例）：由 main.js 全局注册 -->
+    <amount-keyboard />
+</view>
       </template>
       <template v-else-if="step === 3">
         <view class="ghost-btn" @click="next"><text>跳过</text></view>

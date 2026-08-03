@@ -42,13 +42,13 @@
       <!-- 囤货专属 -->
       <template v-if="form.type === 'stock'">
         <view class="section-label">单价（元）</view>
-        <input class="text-input" v-model="form.priceYuan" type="digit" placeholder="每件单价" />
+        <number-field class="text-input" :model-value="form.priceYuan" placeholder="每件单价" title="单价" :decimal-places="2" :max-integer="9" @update:model-value="(v) => (form.priceYuan = v)" />
 
         <view class="section-label">{{ isEdit ? '当前库存' : '初始库存（件）' }}</view>
-        <input class="text-input" v-model="form.stockQty" type="number" placeholder="0" />
+        <number-field class="text-input" :model-value="form.stockQty" placeholder="0" title="库存数量" :decimal-places="0" :max-integer="6" @update:model-value="(v) => (form.stockQty = v)" />
 
         <view class="section-label">低库存阈值（件）</view>
-        <input class="text-input" v-model="form.lowThreshold" type="number" placeholder="默认 1" />
+        <number-field class="text-input" :model-value="form.lowThreshold" placeholder="默认 1" title="低库存阈值" :decimal-places="0" :max-integer="6" @update:model-value="(v) => (form.lowThreshold = v)" />
 
         <!-- 同步记采购（仅新建） -->
         <view v-if="!isEdit" class="switch-row" @click="form.withPurchase = !form.withPurchase">
@@ -57,7 +57,10 @@
             <text class="switch-desc">创建时记一笔「单价×库存」支出</text>
           </view>
           <view class="switch" :class="{ on: form.withPurchase }"><view class="switch-dot" /></view>
-        </view>
+            
+    <!-- 全局数字键盘（单例）：由 main.js 全局注册 -->
+    <amount-keyboard />
+</view>
       </template>
 
       <!-- 绑定分类 -->

@@ -101,7 +101,7 @@
         </view>
 
         <text v-if="!editingAccount" class="form-label">初始余额（元）</text>
-        <input v-if="!editingAccount" class="sheet-input" v-model="form.balanceStr" type="digit" placeholder="0" />
+        <number-field v-if="!editingAccount" class="sheet-input" :model-value="form.balanceStr" placeholder="0" title="初始余额" :decimal-places="2" :max-integer="12" @update:model-value="(v) => (form.balanceStr = v)" />
 
         <block v-if="form.account_class !== 'investment'">
           <view class="toggle-row">
@@ -123,7 +123,10 @@
         </view>
       </view>
     </view>
-  </view>
+      
+    <!-- 全局数字键盘（单例）：由 main.js 全局注册 -->
+    <amount-keyboard />
+</view>
 </template>
 
 <script setup>

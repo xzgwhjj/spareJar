@@ -29,6 +29,12 @@ export default {
 };
 </script>
 
+<template>
+  <view id="app-root">
+    <router-view />
+  </view>
+</template>
+
 <style lang="scss">
 /* 相对路径：HBuilderX/Vite 下 scss 的 @/ 别名常解析失败 */
 @import './styles/app-global.scss';

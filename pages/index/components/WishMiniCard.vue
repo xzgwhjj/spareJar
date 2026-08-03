@@ -36,7 +36,8 @@
       <text class="wm-empty-text">还没心愿</text>
       <text class="wm-empty-sub">去建一个攒钱目标</text>
     </view>
-  </view>
+      
+</view>
 </template>
 
 <script setup>

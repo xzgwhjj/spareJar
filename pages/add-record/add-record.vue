@@ -36,14 +36,17 @@
       <view class="amount-card">
         <view class="amount-line1">
           <text class="amount-symbol">¥</text>
-          <input
+          <!-- 点击弹出自定义数字键盘（替代系统键盘） -->
+          <number-field
             class="amount-input"
-            type="digit"
-            v-model="draft.amount"
+            :class="{ 'is-placeholder': !draft.amount }"
+            :model-value="draft.amount"
             placeholder="0.00"
-            placeholder-class="amount-ph"
-            maxlength="12"
+            title="输入金额"
+            :decimal-places="2"
+            :max-integer="9"
             :style="{ width: inputWidth }"
+            @update:model-value="onAmountKeyInput"
           />
           <!-- 隐藏尺子：按当前内容宽度动态决定 input 宽度 -->
           <text class="amount-input-mirror">{{ amountMirrorText }}</text>
@@ -105,7 +108,10 @@
               mode="aspectFill"
             />
             <text class="pill-ledger-name">{{ ledgerNameOnly || "选择账本" }}</text>
-          </view>
+              
+    <!-- 全局数字键盘（单例）：由 main.js 全局注册 -->
+    <amount-keyboard />
+</view>
 
           <!-- 成员药丸（含默认自己，点击可切换其他成员） -->
           <view
@@ -145,6 +151,61 @@
         maxlength="200"
       />
     </view>
+
+    <!-- 快捷入口：账本分类 / 付款账户 / 消耗囤货 / 餐次与热量 -->
+    <view class="quick-entries">
+      <view
+        class="q-entry"
+        v-for="(e, i) in quickEntries"
+        :key="i"
+        @click="openQuickEntry(['category', 'account', 'stock', 'meal'][i])"
+      >
+        <!-- 待：占位大图（超出矩形上方），后续替换为真实图片 -->
+        <view class="q-thumb" :style="{ background: e.thumbBg }"></view>
+        <!-- 右侧叠加：上方超出矩形的竖矩形 -->
+        <view class="q-tag" :style="{ background: e.tagBg }"></view>
+        <!-- 居左大字 -->
+        <text class="q-title">{{ e.title }}</text>
+      </view>
+    </view>
+
+    <!-- 凭证图片 & 拍照扫描记账（两个独立卡片，自动循环展开动画） -->
+    <view class="scan-row">
+      <!-- 卡片一：凭证图片 -->
+      <view
+        class="scan-banner scan-banner--green"
+        :class="{ playing: scanPlaying }"
+        @click="onScanBannerClick('image')"
+      >
+        <view class="scan-border"></view>
+        <view class="scan-content">
+          <view class="scan-main">
+            <view class="scan-icon"><text class="scan-icon-emoji">🖼️</text></view>
+            <text class="scan-title">凭证图片</text>
+          </view>
+          <text class="scan-sub">上传 / 添加票据凭证</text>
+          <text class="scan-bottom-text">凭证管理</text>
+        </view>
+      </view>
+
+      <!-- 卡片二：拍照扫描记账 -->
+      <view
+        class="scan-banner scan-banner--green"
+        :class="{ playing: scanPlaying }"
+        @click="onScanBannerClick('scan')"
+      >
+        <view class="scan-border"></view>
+        <view class="scan-content">
+          <view class="scan-main">
+            <view class="scan-icon"><text class="scan-icon-emoji">📷</text></view>
+            <text class="scan-title">拍照扫描记账</text>
+          </view>
+          <text class="scan-sub">拍照自动识别录入</text>
+          <text class="scan-bottom-text">AI 智能识别</text>
+        </view>
+      </view>
+    </view>
+
     <!-- 账本选择弹窗 -->
     <view v-if="ledgerPickerShow" class="sheet-mask" @click="ledgerPickerShow = false">
       <view class="sheet" @click.stop>
@@ -166,10 +227,10 @@
       </view>
     </view>
 
-    <!-- 可滚动：分类（按 group 折叠）/ 账本 / 日期 -->
-    <scroll-view scroll-y enhanced :show-scrollbar="false" class="page-scroll">
-      <template v-if="draft.type !== 'refund'">
-        <view class="section-label">选择分类</view>
+    <!-- 快捷入口弹框：选择账本分类 -->
+    <view v-if="quickPopup === 'category'" class="sheet-mask" @click="closeQuickPopup">
+      <view class="sheet" @click.stop>
+        <view class="sheet-title">选择账本分类</view>
         <scroll-view scroll-x enhanced :show-scrollbar="false" class="group-tabs-scroll">
           <view class="group-tabs">
             <view
@@ -198,7 +259,10 @@
                   :key="c._id"
                   class="cat-chip"
                   :class="{ active: draft.categoryId === c._id }"
-                  @click="draft.categoryId = c._id"
+                  @click="
+                    draft.categoryId = c._id;
+                    closeQuickPopup();
+                  "
                 >
                   <text class="cat-emoji">{{ c.icon }}</text>
                   <text class="cat-name">{{ c.name }}</text>
@@ -208,9 +272,168 @@
           </swiper-item>
         </swiper>
         <view v-if="!groupedCats.length" class="empty-hint">暂无分类</view>
-      </template>
+        <view class="sheet-cancel" @click="closeQuickPopup">取消</view>
+      </view>
+    </view>
 
-      <view v-else class="refund-card">
+    <!-- 快捷入口弹框：付款账户 -->
+    <view v-if="quickPopup === 'account'" class="sheet-mask" @click="closeQuickPopup">
+      <view class="sheet" @click.stop>
+        <view class="sheet-title">付款账户（可选）</view>
+        <scroll-view scroll-y enhanced :show-scrollbar="false" class="sheet-scroll">
+          <view
+            class="sheet-item"
+            :class="{ active: !draft.accountId }"
+            @click="
+              draft.accountId = '';
+              closeQuickPopup();
+            "
+          >
+            <text class="sheet-item-name">不关联</text>
+            <text v-if="!draft.accountId" class="sheet-item-check">✓</text>
+          </view>
+          <view
+            v-for="acc in dailyAccounts"
+            :key="acc._id"
+            class="sheet-item"
+            :class="{ active: draft.accountId === acc._id }"
+            @click="
+              draft.accountId = acc._id;
+              closeQuickPopup();
+            "
+          >
+            <text class="sheet-item-icon">{{ acc.icon }}</text>
+            <text class="sheet-item-name">{{ acc.name }}</text>
+            <text v-if="draft.accountId === acc._id" class="sheet-item-check">✓</text>
+          </view>
+        </scroll-view>
+        <view class="sheet-cancel" @click="closeQuickPopup">取消</view>
+      </view>
+    </view>
+
+    <!-- 快捷入口弹框：消耗囤货（新功能，待实现） -->
+    <view v-if="quickPopup === 'stock'" class="sheet-mask" @click="closeQuickPopup">
+      <view class="sheet" @click.stop>
+        <view class="sheet-title">消耗囤货</view>
+        <view class="empty-hint">功能建设中…</view>
+        <view class="sheet-cancel" @click="closeQuickPopup">取消</view>
+      </view>
+    </view>
+
+    <!-- 快捷入口弹框：餐次与热量 -->
+    <view
+      v-if="quickPopup === 'meal' && isFoodMeal"
+      class="sheet-mask"
+      @click="closeQuickPopup"
+    >
+      <view class="sheet" @click.stop>
+        <view class="sheet-title">餐次与热量</view>
+        <scroll-view scroll-y enhanced :show-scrollbar="false" class="sheet-scroll">
+          <view class="section-label">餐次</view>
+          <view class="meal-type-row">
+            <view
+              v-for="mt in MEAL_TYPES"
+              :key="mt.id"
+              class="meal-type-chip"
+              :class="{ active: draft.mealType === mt.id }"
+              @click="draft.mealType = mt.id"
+            >
+              <text>{{ mt.label }}</text>
+            </view>
+          </view>
+
+          <view class="section-label">热量录入模式</view>
+          <view class="seg-group">
+            <view
+              class="seg-btn"
+              :class="{ active: draft.calorieMode === 'whole' }"
+              @click="draft.calorieMode = 'whole'"
+              >整餐</view
+            >
+            <view
+              class="seg-btn"
+              :class="{ active: draft.calorieMode === 'itemized' }"
+              @click="draft.calorieMode = 'itemized'"
+              >分项</view
+            >
+            <view
+              class="seg-btn"
+              :class="{ active: draft.calorieMode === 'partial' }"
+              @click="draft.calorieMode = 'partial'"
+              >部分分项</view
+            >
+          </view>
+
+          <view v-if="draft.calorieMode === 'whole'" class="field-row">
+            <text class="field-label">本餐总热量</text>
+            <number-field
+              class="field-input"
+              :model-value="draft.wholeOverride"
+              placeholder="如 600"
+              title="本餐总热量"
+              :decimal-places="0"
+              :max-integer="6"
+              @update:model-value="(v) => (draft.wholeOverride = v)"
+            />
+            <text class="field-unit">kcal</text>
+          </view>
+
+          <block v-if="draft.calorieMode !== 'whole'">
+            <view class="food-items">
+              <view v-for="(f, i) in draft.foodItems" :key="i" class="food-item">
+                <input class="food-name" placeholder="食物名" v-model="f.name" />
+                <number-field
+                  class="food-kcal"
+                  :model-value="f.calories"
+                  placeholder="热量"
+                  title="食物热量"
+                  :decimal-places="0"
+                  :max-integer="6"
+                  @update:model-value="(v) => (f.calories = v)"
+                />
+                <text class="food-kcal-unit">kcal</text>
+                <view class="food-sticker" @click="pickFoodSticker(i)">
+                  <image
+                    v-if="f.sticker_image_url"
+                    :src="f.sticker_image_url"
+                    mode="aspectFill"
+                    class="food-sticker-img"
+                  />
+                  <text v-else class="food-sticker-plus">🏷️</text>
+                </view>
+                <view class="food-del" @click="removeFoodItem(i)"><text>🗑️</text></view>
+              </view>
+            </view>
+            <view class="add-food-btn" @click="addFoodItem"
+              ><text>＋ 添加食物</text></view
+            >
+            <view
+              v-if="draft.calorieMode === 'partial'"
+              class="field-row"
+              style="margin-top: 12rpx"
+            >
+              <text class="field-label">确认总热量</text>
+              <number-field
+                class="field-input"
+                :model-value="draft.wholeOverride"
+                :placeholder="String(itemizedSum)"
+                title="确认总热量"
+                :decimal-places="0"
+                :max-integer="6"
+                @update:model-value="(v) => (draft.wholeOverride = v)"
+              />
+              <text class="field-unit">kcal</text>
+            </view>
+            <text class="food-sum" v-else>分项合计：{{ itemizedSum }} kcal</text>
+          </block>
+        </scroll-view>
+        <view class="sheet-cancel" @click="closeQuickPopup">取消</view>
+      </view>
+    </view>
+
+    <!-- 可滚动：退款关联 / 凭证图片 / 商品贴纸 -->
+    <scroll-view scroll-y enhanced :show-scrollbar="false" class="page-scroll">
+      <view v-if="draft.type === 'refund'" class="refund-card">
         <view class="section-label">关联原支出（冲减原分类）</view>
         <view v-if="!draft.relatedId" class="refund-pick" @click="openOriginalPicker">
           <text class="refund-pick-plus">＋</text>
@@ -226,120 +449,6 @@
           </view>
           <view class="refund-clear" @click.stop="clearRelated">清除</view>
         </view>
-      </view>
-
-      <view class="section-label">付款账户（可选）</view>
-      <scroll-view scroll-x enhanced :show-scrollbar="false" class="ledger-scroll">
-        <view class="ledger-row">
-          <view
-            class="ledger-chip"
-            :class="{ active: !draft.accountId }"
-            @click="draft.accountId = ''"
-            >不关联</view
-          >
-          <view
-            v-for="acc in dailyAccounts"
-            :key="acc._id"
-            class="ledger-chip"
-            :class="{ active: draft.accountId === acc._id }"
-            @click="draft.accountId = acc._id"
-          >
-            <text>{{ acc.icon }} {{ acc.name }}</text>
-          </view>
-        </view>
-      </scroll-view>
-
-      <!-- 阶段 11：餐次与热量（仅餐饮分类 + 已开启轻记录） -->
-      <view v-if="isFoodMeal" class="meal-section">
-        <view class="section-label">餐次</view>
-        <view class="meal-type-row">
-          <view
-            v-for="mt in MEAL_TYPES"
-            :key="mt.id"
-            class="meal-type-chip"
-            :class="{ active: draft.mealType === mt.id }"
-            @click="draft.mealType = mt.id"
-          >
-            <text>{{ mt.label }}</text>
-          </view>
-        </view>
-
-        <view class="section-label">热量录入模式</view>
-        <view class="seg-group">
-          <view
-            class="seg-btn"
-            :class="{ active: draft.calorieMode === 'whole' }"
-            @click="draft.calorieMode = 'whole'"
-          >
-            整餐
-          </view>
-          <view
-            class="seg-btn"
-            :class="{ active: draft.calorieMode === 'itemized' }"
-            @click="draft.calorieMode = 'itemized'"
-          >
-            分项</view
-          >
-          <view
-            class="seg-btn"
-            :class="{ active: draft.calorieMode === 'partial' }"
-            @click="draft.calorieMode = 'partial'"
-          >
-            部分分项</view
-          >
-        </view>
-
-        <view v-if="draft.calorieMode === 'whole'" class="field-row">
-          <text class="field-label">本餐总热量</text>
-          <input
-            class="field-input"
-            type="digit"
-            placeholder="如 600"
-            v-model="draft.wholeOverride"
-          />
-          <text class="field-unit">kcal</text>
-        </view>
-
-        <block v-if="draft.calorieMode !== 'whole'">
-          <view class="food-items">
-            <view v-for="(f, i) in draft.foodItems" :key="i" class="food-item">
-              <input class="food-name" placeholder="食物名" v-model="f.name" />
-              <input
-                class="food-kcal"
-                type="digit"
-                placeholder="热量"
-                v-model="f.calories"
-              />
-              <text class="food-kcal-unit">kcal</text>
-              <view class="food-sticker" @click="pickFoodSticker(i)">
-                <image
-                  v-if="f.sticker_image_url"
-                  :src="f.sticker_image_url"
-                  mode="aspectFill"
-                  class="food-sticker-img"
-                />
-                <text v-else class="food-sticker-plus">🏷️</text>
-              </view>
-              <view class="food-del" @click="removeFoodItem(i)"><text>🗑️</text></view>
-            </view>
-          </view>
-          <view class="add-food-btn" @click="addFoodItem"><text>＋ 添加食物</text></view>
-          <view
-            v-if="draft.calorieMode === 'partial'"
-            class="field-row"
-            style="margin-top: 12rpx"
-          >
-            <text class="field-label">确认总热量</text>
-            <input
-              class="field-input"
-              type="digit"
-              :placeholder="String(itemizedSum)"
-              v-model="draft.wholeOverride"
-            />
-            <text class="field-unit">kcal</text>
-          </view>
-          <text class="food-sum" v-else>分项合计：{{ itemizedSum }} kcal</text>
-        </block>
       </view>
 
       <view class="section-label">凭证图片</view>
@@ -448,7 +557,15 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, nextTick, watch } from "vue";
+import {
+  ref,
+  reactive,
+  computed,
+  onMounted,
+  onBeforeUnmount,
+  nextTick,
+  watch,
+} from "vue";
 import { useUserStore, loadStickers } from "@/stores/user.js";
 import { consumeOcrPrefill } from "@/stores/ocrPrefill.js";
 import {
@@ -493,6 +610,76 @@ const draft = reactive({
 const allCats = ref([]);
 const ledgers = ref([]);
 const members = ref([]); // 当前账本成员列表
+
+// 快捷入口（占位大图，后续替换为真实图片）
+const quickEntries = ref([
+  {
+    title: "选择账本分类",
+    thumbBg: "linear-gradient(135deg,#4fd974,#25cc5d)",
+    tagBg: "rgba(37,204,93,0.18)",
+  },
+  {
+    title: "付款账户",
+    thumbBg: "linear-gradient(135deg,#6aa9ff,#3d7bf0)",
+    tagBg: "rgba(61,123,240,0.18)",
+  },
+  {
+    title: "消耗囤货",
+    thumbBg: "linear-gradient(135deg,#ffb86a,#ff8a3d)",
+    tagBg: "rgba(255,138,61,0.18)",
+  },
+  {
+    title: "餐次与热量",
+    thumbBg: "linear-gradient(135deg,#ff8fae,#ff5d8f)",
+    tagBg: "rgba(255,93,143,0.18)",
+  },
+]);
+
+// 快捷入口点击 -> 弹出对应选择框（分类/付款账户/消耗囤货/餐次与热量）
+const quickPopup = ref(""); // '' | 'category' | 'account' | 'stock' | 'meal'
+function openQuickEntry(type) {
+  if (type === "category" && !groupedCats.value.length) {
+    uni.showToast({ title: "暂无分类", icon: "none" });
+    return;
+  }
+  quickPopup.value = type;
+}
+function closeQuickPopup() {
+  quickPopup.value = "";
+}
+
+// 凭证图片 / 拍照扫描 横幅：自动循环展开 -> 停留 -> 合上
+const scanPlaying = ref(false);
+let scanTimer = null;
+function startScanLoop() {
+  const cycle = () => {
+    scanPlaying.value = true; // 展开（等价于 hover）
+    scanTimer = setTimeout(() => {
+      scanPlaying.value = false; // 合上（等价于移开）
+      scanTimer = setTimeout(cycle, 1000); // 间隔 1s 后再展开
+    }, 10000); // 展开后停留约 10s
+  };
+  cycle();
+}
+function stopScanLoop() {
+  if (scanTimer) clearTimeout(scanTimer);
+  scanTimer = null;
+  scanPlaying.value = false;
+}
+onMounted(() => {
+  startScanLoop();
+});
+onBeforeUnmount(() => {
+  stopScanLoop();
+});
+function onScanBannerClick(mode) {
+  // 真实功能占位：后续接相册/拍照
+  if (mode === "image") {
+    uni.showToast({ title: "凭证图片（待接入）", icon: "none" });
+  } else {
+    uni.showToast({ title: "拍照扫描记账（待接入）", icon: "none" });
+  }
+}
 // 自己（默认选中，头像+昵称，可切换其他成员）
 const selfAvatar = computed(
   () =>
@@ -543,6 +730,10 @@ watch(
 );
 const amountMirrorText = computed(() => draft.amount || "0.00");
 const inputWidth = ref("180px");
+// 金额输入统一走 App.vue 全局数字键盘（AmountKeyboard 单例 + NumberField）
+function onAmountKeyInput(val) {
+  draft.amount = val;
+}
 const saving = ref(false);
 const uploading = ref(false);
 // 当前选中的分类分组（swiper 页索引）
@@ -1431,6 +1622,12 @@ function goBack() {
     color: var(--ink);
     letter-spacing: -2rpx;
     text-align: left;
+    cursor: pointer;
+  }
+
+  .amount-input.is-placeholder {
+    color: var(--ink4);
+    font-weight: 700;
   }
 
   .amount-input-mirror {
@@ -1743,6 +1940,244 @@ function goBack() {
     color: var(--ink);
   }
 
+  // 快捷入口（一行四个），与金额卡片/备注框同宽对齐（左右各 32rpx 边距）
+  .quick-entries {
+    display: flex;
+    gap: 16rpx;
+    margin: 48rpx 32rpx 0;
+    box-sizing: border-box;
+  }
+
+  // 凭证图片 & 拍照扫描 两卡片（自动循环展开）
+  .scan-row {
+    display: flex;
+    gap: 16rpx;
+    margin: 28rpx 32rpx 0;
+    box-sizing: border-box;
+  }
+
+  // 蓝绿（Teal）对比主题变量，明度节奏与 g0~g5 对齐，仅供对比预览
+  .scan-banner {
+    --t0: #ccfbf1;
+    --t1: #99f6e4;
+    --t2: #5eead4;
+    --t3: #2dd4bf;
+    --t4: #14b8a6;
+    --t5: #0d9488;
+    position: relative;
+    flex: 1;
+    height: 210rpx;
+    border-radius: 24rpx;
+    // 背景直接用 g0 绿色
+    background: var(--g0);
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    transition: all 0.5s ease-in-out;
+    box-sizing: border-box;
+  }
+
+  // 蓝绿对比版（仅用于你左侧绿色、右侧蓝绿的并排预览）
+  .scan-banner--teal {
+    background: var(--t0);
+  }
+  .scan-banner--teal .scan-border {
+    border-color: var(--t4);
+  }
+  .scan-banner--teal .scan-icon {
+    background: rgba(20, 184, 166, 0.15);
+  }
+  .scan-banner--teal .scan-title {
+    color: #0f766e;
+  }
+  .scan-banner--teal .scan-sub {
+    color: rgba(15, 118, 110, 0.75);
+  }
+  .scan-banner--teal .scan-bottom-text {
+    color: #0d9488;
+    background: var(--t0);
+  }
+
+  .scan-border {
+    position: absolute;
+    inset: 0;
+    border: 2rpx solid var(--g4);
+    border-radius: 24rpx;
+    opacity: 0;
+    transform: rotate(10deg);
+    transition: all 0.5s ease-in-out;
+  }
+
+  // 整体居中：图标+标题 一行居中，副标题在其下方居中
+  .scan-content {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14rpx;
+    padding: 0 28rpx;
+    box-sizing: border-box;
+    transition: all 0.5s ease-in-out;
+  }
+
+  // 图标 + 标题（一行，水平居中）
+  .scan-main {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12rpx;
+  }
+
+  .scan-icon {
+    height: 64rpx;
+    width: 64rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: rgba(37, 204, 93, 0.15);
+    flex-shrink: 0;
+  }
+
+  .scan-icon-emoji {
+    font-size: 36rpx;
+    line-height: 1;
+  }
+
+  // 标题：合上态收起为 0 宽（只显示图标）；展开态出现
+  .scan-title {
+    font-size: 30rpx;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: 1rpx;
+    max-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    opacity: 0;
+    transition: all 0.5s ease-in-out 0.2s;
+  }
+
+  // 副标题：图标+标题下方居中，合上态隐藏
+  .scan-sub {
+    font-size: 22rpx;
+    color: var(--ink3);
+    text-align: center;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: all 0.5s ease-in-out 0.3s;
+  }
+
+  .scan-bottom-text {
+    position: absolute;
+    left: 50%;
+    bottom: 14rpx;
+    transform: translateX(-50%);
+    font-size: 18rpx;
+    text-transform: uppercase;
+    letter-spacing: 3rpx;
+    color: var(--ink4);
+    background: var(--g0);
+    padding: 0 8rpx;
+    opacity: 0;
+    transition: all 0.5s ease-in-out;
+  }
+
+  // ===== 展开态（由 JS 循环切换 .playing，等价于原 :hover） =====
+  .scan-banner.playing {
+    border-radius: 12rpx;
+    transform: scale(1.02);
+  }
+
+  .scan-banner.playing .scan-border {
+    inset: 22rpx;
+    border-radius: 16rpx;
+    opacity: 1;
+    transform: rotate(0);
+  }
+
+  .scan-banner.playing .scan-title {
+    max-width: 400rpx;
+    opacity: 1;
+  }
+
+  .scan-banner.playing .scan-sub {
+    max-height: 60rpx;
+    opacity: 1;
+  }
+
+  .scan-banner.playing .scan-bottom-text {
+    opacity: 1;
+    letter-spacing: 6rpx;
+    transform: translateX(-50%);
+  }
+
+  @keyframes scan-opacity {
+    0% {
+      border-right: 1rpx solid transparent;
+    }
+    10% {
+      border-right: 1rpx solid #25cc5d;
+    }
+    80% {
+      border-right: 1rpx solid #25cc5d;
+    }
+    100% {
+      border-right: 1rpx solid transparent;
+    }
+  }
+
+  .q-entry {
+    position: relative;
+    flex: 1;
+    height: 100rpx;
+    border-radius: 24rpx;
+    background: #ffffff;
+    box-shadow: 0 20rpx 30rpx -6rpx rgba(0, 0, 0, 0.1),
+      0 12rpx 24rpx -4rpx rgba(0, 0, 0, 0.05);
+    overflow: visible;
+    // 给上方超出的图与竖矩形留空间
+    margin-top: 28rpx;
+  }
+
+  // 占位大图：超出矩形上方
+  .q-thumb {
+    position: absolute;
+    top: -36rpx;
+    left: 70%;
+    transform: translateX(-50%);
+    width: 96rpx;
+    height: 96rpx;
+    border-radius: 20rpx;
+    box-shadow: 0 6rpx 16rpx rgba(0, 0, 0, 0.12);
+  }
+
+  // 右侧叠加：上方超出矩形的竖矩形
+  .q-tag {
+    position: absolute;
+    top: -20rpx;
+    right: -6rpx;
+    width: 28rpx;
+    height: 60rpx;
+    border-radius: 10rpx;
+  }
+
+  // 居左大字
+  .q-title {
+    position: absolute;
+    left: 20rpx;
+    top: 12rpx;
+    right: 20rpx;
+    font-size: 26rpx;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--ink);
+    text-align: left;
+  }
+
   .info-note-ph {
     color: var(--ink4);
   }
@@ -1944,7 +2379,7 @@ function goBack() {
   }
 
   .scroll-bottom-gap {
-    height: 24rpx;
+    height: calc(160rpx + env(safe-area-inset-bottom));
   }
 
   .sticker-row {
@@ -2395,7 +2830,21 @@ function goBack() {
   }
 
   .save-bar {
-    padding: 8rpx 32rpx 40rpx;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    padding: 8rpx 32rpx;
+    padding-bottom: calc(40rpx + constant(safe-area-inset-bottom));
+    padding-bottom: calc(40rpx + env(safe-area-inset-bottom));
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.92) 40%,
+      rgba(255, 255, 255, 0.98) 100%
+    );
+    backdrop-filter: blur(6rpx);
   }
 
   .save-main-btn {

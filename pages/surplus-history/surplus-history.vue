@@ -49,7 +49,10 @@
       </view>
       <view style="height:24px;" />
     </scroll-view>
-  </view>
+      
+    <!-- 全局数字键盘（单例）：由 main.js 全局注册 -->
+    <amount-keyboard />
+</view>
 </template>
 
 <script setup>

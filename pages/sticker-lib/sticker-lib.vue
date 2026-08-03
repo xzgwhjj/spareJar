@@ -58,7 +58,10 @@
 
           <template v-if="tab === 'stock'">
             <text class="sticker-sub">库存 {{ s.stock_qty }} · ¥{{ yuan(s.unit_price) }}/件</text>
-            <view class="consume-btn" @click.stop="onTap(s)">消耗 1 件</view>
+            <view class="consume-btn" @click.stop="onTap(s)">消耗 1 件    
+    <!-- 全局数字键盘（单例）：由 main.js 全局注册 -->
+    <amount-keyboard />
+</view>
           </template>
           <template v-else>
             <text class="sticker-sub">已用 {{ s.use_count || 0 }} 次</text>

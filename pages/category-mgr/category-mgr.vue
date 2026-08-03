@@ -50,7 +50,10 @@
               <view class="act-btn" :class="{ disabled: isFirstInGroup(g, idx) }" @click="move(g, idx, -1)"><text>↑</text></view>
               <view class="act-btn" :class="{ disabled: isLastInGroup(g, idx) }" @click="move(g, idx, 1)"><text>↓</text></view>
               <view class="act-btn" @click="openEdit(cat)"><text>✏️</text></view>
-              <view class="act-btn act-danger" @click="openDelete(cat)"><text>🗑</text></view>
+              <view class="act-btn act-danger" @click="openDelete(cat)"><text>🗑</text>    
+    <!-- 全局数字键盘（单例）：由 main.js 全局注册 -->
+    <amount-keyboard />
+</view>
             </template>
             <view class="act-btn" @click="toggleHide(cat)">
               <text>{{ cat.is_hidden ? '👁' : '🚫' }}</text>

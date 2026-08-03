@@ -135,7 +135,7 @@
           <view class="form-row">
             <view class="form-input-wrap">
               <text class="form-prefix">¥</text>
-              <input class="form-input" v-model="dailyLimit" type="number" />
+              <number-field class="form-input" :model-value="dailyLimit" placeholder="每日限额" title="每日限额" :decimal-places="0" :max-integer="6" @update:model-value="(v) => (dailyLimit = v)" />
             </view>
             <view class="form-check-btn"><text>✓</text></view>
           </view>
@@ -184,7 +184,10 @@
       </view>
     </view>
 
-  </view>
+      
+    <!-- 全局数字键盘（单例）：由 main.js 全局注册 -->
+    <amount-keyboard />
+</view>
 </template>
 
 <script setup>

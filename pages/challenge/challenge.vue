@@ -125,7 +125,7 @@
       <view class="sheet" @click.stop>
         <text class="sheet-title">{{ targetType === 'monthly' ? '设置月度挑战目标' : '设置年度挑战目标' }}</text>
         <text class="sheet-sub">周期内总消费不超过该金额即达标</text>
-        <input class="sheet-input" v-model="targetAmountYuan" type="digit" placeholder="目标金额（元）" />
+        <number-field class="sheet-input" :model-value="targetAmountYuan" placeholder="目标金额（元）" title="挑战目标金额" :decimal-places="2" :max-integer="9" @update:model-value="(v) => (targetAmountYuan = v)" />
         <text class="sheet-label">绑定账本（可选，仅统计该账本消费）</text>
         <picker class="sheet-picker" :range="ledgerOptions" range-key="label" @change="onLedgerPick">
           <view class="sheet-picker-text">{{ ledgerLabel }}</view>
@@ -158,7 +158,10 @@
 
     <!-- TabBar -->
     <TabBar :current="3" />
-  </view>
+      
+    <!-- 全局数字键盘（单例）：由 main.js 全局注册 -->
+    <amount-keyboard />
+</view>
 </template>
 
 <script setup>

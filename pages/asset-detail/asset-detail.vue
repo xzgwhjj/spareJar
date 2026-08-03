@@ -102,7 +102,7 @@
         <view class="sheet-handle"><view class="handle-bar" /></view>
         <text class="sheet-title">调整余额（元）</text>
         <text class="form-label">目标余额</text>
-        <input class="sheet-input" v-model="adjustForm.balanceStr" type="digit" placeholder="0" />
+        <number-field class="sheet-input" :model-value="adjustForm.balanceStr" placeholder="0" title="目标余额" :decimal-places="2" :max-integer="12" @update:model-value="(v) => (adjustForm.balanceStr = v)" />
         <text class="form-label">备注</text>
         <input class="sheet-input" v-model="adjustForm.note" placeholder="如：对账修正" />
         <view class="save-btn" @click="doAdjust"><text>确认调整</text></view>
@@ -119,7 +119,7 @@
           <view v-for="t in otherAccounts" :key="t._id" class="type-chip" :class="{ active: transferForm.toId === t._id }" @click="transferForm.toId = t._id">{{ t.name }}</view>
         </view>
         <text class="form-label">金额（元）</text>
-        <input class="sheet-input" v-model="transferForm.amountStr" type="digit" placeholder="0" />
+        <number-field class="sheet-input" :model-value="transferForm.amountStr" placeholder="0" title="转账金额" :decimal-places="2" :max-integer="12" @update:model-value="(v) => (transferForm.amountStr = v)" />
         <text class="form-label">备注</text>
         <input class="sheet-input" v-model="transferForm.note" placeholder="转账" />
         <view class="save-btn" @click="doTransfer"><text>确认转账</text></view>
@@ -140,9 +140,9 @@
           <view v-for="t in ASSET_TYPES" :key="t.v" class="type-chip" :class="{ active: holdingForm.asset_type === t.v }" @click="holdingForm.asset_type = t.v">{{ t.label }}</view>
         </view>
         <text class="form-label">份额</text>
-        <input class="sheet-input" v-model="holdingForm.sharesStr" type="digit" placeholder="0" />
+        <number-field class="sheet-input" :model-value="holdingForm.sharesStr" placeholder="0" title="份额" :decimal-places="4" :max-integer="12" @update:model-value="(v) => (holdingForm.sharesStr = v)" />
         <text class="form-label">单价（元）</text>
-        <input class="sheet-input" v-model="holdingForm.priceStr" type="digit" placeholder="0" />
+        <number-field class="sheet-input" :model-value="holdingForm.priceStr" placeholder="0" title="单价" :decimal-places="4" :max-integer="12" @update:model-value="(v) => (holdingForm.priceStr = v)" />
         <view class="save-btn" @click="doAddHolding"><text>添加持仓</text></view>
       </view>
     </view>
@@ -157,13 +157,16 @@
           <view v-for="s in dailyAccounts" :key="s._id" class="type-chip" :class="{ active: investTxForm.sourceId === s._id }" @click="investTxForm.sourceId = s._id">{{ s.name }}</view>
         </view>
         <text class="form-label">金额（元）</text>
-        <input class="sheet-input" v-model="investTxForm.amountStr" type="digit" placeholder="0" />
+        <number-field class="sheet-input" :model-value="investTxForm.amountStr" placeholder="0" title="金额" :decimal-places="2" :max-integer="12" @update:model-value="(v) => (investTxForm.amountStr = v)" />
         <text v-if="investTxForm.action !== 'dividend'" class="form-label">份额变动</text>
-        <input v-if="investTxForm.action !== 'dividend'" class="sheet-input" v-model="investTxForm.sharesStr" type="digit" placeholder="0" />
+        <number-field v-if="investTxForm.action !== 'dividend'" class="sheet-input" :model-value="investTxForm.sharesStr" placeholder="0" title="份额变动" :decimal-places="4" :max-integer="12" @update:model-value="(v) => (investTxForm.sharesStr = v)" />
         <view class="save-btn" @click="doInvestTx"><text>确认</text></view>
       </view>
     </view>
-  </view>
+      
+    <!-- 全局数字键盘（单例）：由 main.js 全局注册 -->
+    <amount-keyboard />
+</view>
 </template>
 
 <script setup>
