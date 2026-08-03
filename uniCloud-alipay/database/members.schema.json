@@ -1,0 +1,58 @@
+{
+  "bsonType": "object",
+  "required": [
+    "user_id",
+    "nickname",
+    "is_self",
+    "created_at"
+  ],
+  "permission": {
+    "read": "doc.user_id == auth.uid",
+    "create": "doc.user_id == auth.uid",
+    "update": "doc.user_id == auth.uid",
+    "delete": "doc.user_id == auth.uid"
+  },
+  "properties": {
+    "_id": {
+      "description": "PK，成员全局唯一标识（跨账本复用）"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "成员归属用户 openid；本人与自定义联系人均挂在创建者 user_id 下",
+      "maxLength": 64,
+      "foreignKey": "users.user_id"
+    },
+    "is_self": {
+      "bsonType": "bool",
+      "description": "是否当前用户本人（每个用户固定一条 is_self=true 的记录）",
+      "defaultValue": false
+    },
+    "nickname": {
+      "bsonType": "string",
+      "description": "成员显示昵称（本人冗余自 users；自定义联系人由用户填写）",
+      "maxLength": 64
+    },
+    "avatar": {
+      "bsonType": "string",
+      "description": "成员头像 URL（本人冗余自 users，或自定义 emoji）",
+      "defaultValue": ""
+    },
+    "bio": {
+      "bsonType": "string",
+      "description": "成员简介/备注（如「负责日常采买」）",
+      "defaultValue": "",
+      "maxLength": 200
+    },
+    "relation": {
+      "bsonType": "string",
+      "description": "与用户的关系标识，如 self/family/partner/friend/child/colleague/other",
+      "defaultValue": "other",
+      "maxLength": 32
+    },
+    "created_at": {
+      "bsonType": "string",
+      "description": "创建时间",
+      "maxLength": 19
+    }
+  }
+}

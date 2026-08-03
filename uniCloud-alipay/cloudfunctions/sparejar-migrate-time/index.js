@@ -25,7 +25,7 @@ function fmt(ts) {
 const COLLECTIONS = [
   'account_balance_logs', 'achievements', 'asset_accounts', 'categories', 'challenge_records',
   'daily_health_snapshots', 'daily_settlements', 'data_backups', 'investment_holdings', 'investment_logs',
-  'jar_skins', 'ledger_members', 'ledgers', 'meal_food_items', 'meals', 'savings_pool_logs', 'savings_pools',
+  'jar_skins', 'ledgers', 'meal_food_items', 'meals', 'savings_pool_logs', 'savings_pools',
   'stickers', 'surplus_allocations', 'surplus_pool_logs', 'surplus_pools', 'transactions', 'uni-id-users',
   'user_achievements', 'user_health_profiles', 'user_penalty_logs', 'user_settings', 'user_streaks', 'users',
   'wishes', 'wish_fund_logs'

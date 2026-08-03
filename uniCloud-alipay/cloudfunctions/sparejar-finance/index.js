@@ -379,6 +379,32 @@ exports.main = async (event, context) => {
         if (!data.ledger_id) return fail('ledger_id is required')
         return ok(await dbApi.getLedgerWithTransactions(userId, data.ledger_id))
 
+      case 'addMember':
+        return ok(await dbApi.addMember(userId, data.payload || data))
+
+      case 'updateMember':
+        if (!data.member_id) return fail('member_id is required')
+        return ok(await dbApi.updateMember(userId, data.member_id, data.payload || data))
+
+      case 'removeMember':
+        if (!data.member_id) return fail('member_id is required')
+        return ok(await dbApi.removeMember(userId, data.member_id))
+
+      case 'linkMember':
+        if (!data.member_id || !data.ledger_id) return fail('member_id and ledger_id are required')
+        return ok(await dbApi.linkMemberToLedger(userId, data.member_id, data.ledger_id))
+
+      case 'unlinkMember':
+        if (!data.member_id || !data.ledger_id) return fail('member_id and ledger_id are required')
+        return ok(await dbApi.unlinkMemberFromLedger(userId, data.member_id, data.ledger_id))
+
+      case 'getMembers':
+        return ok(await dbApi.getMembersByUser(userId))
+
+      case 'getLedgerMembers':
+        if (!data.ledger_id) return fail('ledger_id is required')
+        return ok(await dbApi.getLedgerMembers(userId, data.ledger_id))
+
       case 'getTransaction':
         if (!data.transaction_id) return fail('transaction_id is required')
         return ok(await dbApi.getTransaction(userId, data.transaction_id))

@@ -243,26 +243,45 @@ writeIndex('ledgers', [
   idx('uk_share_code', [{ name: 'share_code', type: 'varchar' }], true)
 ])
 
-// ========== ledger_members ==========
-writeSchema('ledger_members', {
+// ========== members（用户级全局成员，跨账本复用） ==========
+// 成员 = 标识「这笔账是谁用的/谁付的钱」，非协作概念。
+// members 挂在创建者 user_id 下（用户级 1:N）；member_ledgers 记录成员与账本的多对多关联。
+writeSchema('members', {
   bsonType: 'object',
-  required: ['ledger_id', 'user_id', 'joined_at'],
-  permission: {
-    read: 'doc.user_id == auth.uid',
-    create: false,
-    update: false,
-    delete: false
-  },
+  required: ['user_id', 'nickname', 'is_self', 'created_at'],
+  permission: USER_PERM,
   properties: {
-    _id: { description: 'PK' },
-    ledger_id: { ...strField(0, '账本 ID'), ...fk('ledgers') },
-    user_id: { ...strField(64, '成员 openid'), ...fk('users', 'user_id') },
-    role: { ...enumField(['owner', 'member', 'viewer'], '角色'), defaultValue: 'member' },
-    joined_at: tsField('加入时间')
+    _id: { description: 'PK，成员全局唯一标识（跨账本复用）' },
+    user_id: { ...strField(64, '归属用户 openid'), ...fk('users', 'user_id') },
+    is_self: { bsonType: 'bool', description: '是否本人（每用户固定一条）', defaultValue: false },
+    nickname: { ...strField(64, '成员昵称') },
+    avatar: { ...strField(0, '头像 URL') },
+    bio: { ...strField(200, '成员简介/备注') },
+    relation: { ...strField(32, '关系标识 self/family/partner/friend/child/colleague/other'), defaultValue: 'other' },
+    created_at: tsField('创建时间')
   }
 })
-writeIndex('ledger_members', [
-  idx('uk_ledger_user', [{ name: 'ledger_id', type: 'varchar' }, { name: 'user_id', type: 'varchar' }], true),
+writeIndex('members', [
+  idx('uk_user_self', [{ name: 'user_id', type: 'varchar' }, { name: 'is_self', type: 'varchar' }], true),
+  idx('idx_user', [{ name: 'user_id', type: 'varchar' }])
+])
+
+// ========== member_ledgers（成员↔账本 多对多关联） ==========
+writeSchema('member_ledgers', {
+  bsonType: 'object',
+  required: ['member_id', 'ledger_id', 'user_id'],
+  permission: USER_PERM,
+  properties: {
+    _id: { description: 'PK' },
+    member_id: { ...strField(0, '成员 ID'), ...fk('members') },
+    ledger_id: { ...strField(0, '账本 ID'), ...fk('ledgers') },
+    user_id: { ...strField(64, '归属用户 openid（冗余）'), ...fk('users', 'user_id') },
+    linked_at: tsField('关联时间')
+  }
+})
+writeIndex('member_ledgers', [
+  idx('uk_member_ledger', [{ name: 'member_id', type: 'varchar' }, { name: 'ledger_id', type: 'varchar' }], true),
+  idx('idx_ledger', [{ name: 'ledger_id', type: 'varchar' }]),
   idx('idx_user', [{ name: 'user_id', type: 'varchar' }])
 ])
 

@@ -1,45 +1,34 @@
 {
   "bsonType": "object",
   "required": [
-    "ledger_id",
-    "user_id",
-    "joined_at"
+    "ledger_id"
   ],
   "permission": {
-    "read": "doc.user_id == auth.uid",
+    "read": "doc.user_id == auth.uid || doc.user_id == null",
     "create": false,
     "update": false,
     "delete": false
   },
   "properties": {
     "_id": {
-      "description": "PK"
+      "description": "PK（已废弃，迁移至 members + member_ledgers）"
     },
     "ledger_id": {
       "bsonType": "string",
-      "description": "FK→ledgers._id",
+      "description": "账本 ID",
       "foreignKey": "ledgers._id"
     },
     "user_id": {
       "bsonType": "string",
-      "description": "FK→users.user_id",
+      "description": "成员 openid（已废弃）",
       "maxLength": 64,
-      "foreignKey": "users.user_id"
+      "foreignKey": "users.user_id",
+      "nullable": true
     },
-    "role": {
+    "nickname": {
       "bsonType": "string",
-      "enum": [
-        "owner",
-        "member",
-        "viewer"
-      ],
-      "description": "角色",
-      "defaultValue": "member"
-    },
-    "joined_at": {
-      "bsonType": "string",
-      "description": "加入时间",
-      "maxLength": 19
+      "description": "成员昵称（已废弃）",
+      "maxLength": 64
     }
   }
 }

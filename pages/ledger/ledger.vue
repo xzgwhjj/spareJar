@@ -32,7 +32,7 @@
           <text class="topbar-title">我的账本</text>
         </view>
         <view class="topbar-actions">
-          <!-- 待：替换图标，成员 -->
+          <view class="action-btn" @click="openMemberMgr"><text>👥</text></view>
           <view class="action-btn" @click="goAssetMgr"><text>💳</text></view>
           <!-- <view class="action-btn" @click="goStickerLib"><text>⭐</text></view> -->
         </view>
@@ -898,6 +898,13 @@
 
     <!-- TabBar -->
     <TabBar :current="1" />
+
+    <MemberManager
+      :visible="showMemberMgr"
+      :ledger-id="memberMgrLedgerId"
+      :ledger-name="memberMgrLedgerName"
+      @close="showMemberMgr = false"
+  />
   </view>
 </template>
 
@@ -909,8 +916,10 @@ import {
   ensureMasterLedger,
   listLedgers,
   listTransactions,
+  getLedgerDetail,
 } from "@/api/sparejar.js";
 import TabBar from "@/components/tabbar/tabbar.vue";
+import MemberManager from "@/components/MemberManager.vue";
 import { checkLoggedIn, useUserStore } from "@/stores/user.js";
 import { cdn, resolveCover, getCloudTempUrl, getCloudTempUrls } from "@/utils/cdn.js";
 import { deleteLedgerCover, uploadLedgerCover } from "@/utils/cloudFile.js";
@@ -2170,6 +2179,33 @@ const openLedgerSheet = (l) => {
   uni.navigateTo({ url: `/pages/ledger-detail/ledger-detail?id=${l._id}` });
 };
 const goAssetMgr = () => uni.navigateTo({ url: "/pages/asset-mgr/asset-mgr" });
+
+// ===== 成员管理（用户级全局成员 + 账本关联） =====
+// 从账本列表页进入，管理成员与「主账本」的关联。
+const showMemberMgr = ref(false)
+const memberMgrLedgerId = ref('')
+const memberMgrLedgerName = ref('')
+
+function getMasterLedger() {
+  const id = userStore.state.defaultLedgerId
+  if (id) {
+    const l = ledgers.value.find((x) => x._id === id)
+    if (l) return l
+  }
+  return ledgers.value[0] || null
+}
+
+async function loadMemberMgrMembers() {
+  const l = getMasterLedger()
+  if (!l) return
+  memberMgrLedgerId.value = l._id
+  memberMgrLedgerName.value = l.name || '账本'
+}
+
+async function openMemberMgr() {
+  await loadMemberMgrMembers()
+  showMemberMgr.value = true
+}
 const goAssetDetail = (a) =>
   uni.navigateTo({ url: `/pages/asset-detail/asset-detail?id=${a._id}` });
 const goStickerLib = () => uni.navigateTo({ url: "/pages/sticker-lib/sticker-lib" });

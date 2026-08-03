@@ -215,6 +215,12 @@ async function ensureMasterLedger(userId) {
   const ts = nowTs()
   const doc = { user_id: userId, ...DEFAULT_LEDGER, share_code: genShareCode(), created_at: ts, updated_at: ts }
   const res = await db.collection('ledgers').add(doc)
+  // 创建账本时：确保本人全局成员存在，并关联到本账本
+  try {
+    await ensureSelfMemberLinkedToLedger(userId, res.id)
+  } catch (e) {
+    console.error('[sparejar-db] ensureMasterLedger link self member failed', e)
+  }
   return { _id: res.id, ...doc }
 }
 
@@ -247,7 +253,61 @@ async function createLedger(userId, data = {}) {
     updated_at: ts
   }
   const res = await db.collection('ledgers').add(doc)
+  // 创建账本时：确保本人全局成员存在，并关联到本账本
+  try {
+    await ensureSelfMemberLinkedToLedger(userId, res.id)
+  } catch (e) {
+    console.error('[sparejar-db] createLedger link self member failed', e)
+  }
   return { _id: res.id, ...doc }
+}
+
+/**
+ * 幂等确保用户在 members 表中存在本人记录（is_self=true），返回该成员 _id。
+ * @param {string} userId
+ * @returns {Promise<string>} memberId
+ */
+async function ensureSelfMember(userId) {
+  const db = getDb()
+  const exist = await db.collection('members').where({ user_id: userId, is_self: true }).limit(1).get()
+  if (exist.data && exist.data[0]) return exist.data[0]._id
+  let selfProfile = {}
+  try {
+    const uRes = await db.collection('users').where({ user_id: userId }).limit(1).get()
+    selfProfile = (uRes.data && uRes.data[0]) || {}
+  } catch (_e) {
+    selfProfile = {}
+  }
+  const ts = nowTs()
+  const res = await db.collection('members').add({
+    user_id: userId,
+    is_self: true,
+    nickname: selfProfile.nickname || '我',
+    avatar: selfProfile.avatar_url || '',
+    bio: '',
+    relation: 'self',
+    created_at: ts
+  })
+  return res.id
+}
+
+/**
+ * 确保本人成员存在于 members，并关联到指定账本（member_ledgers 幂等）。
+ * @param {string} userId
+ * @param {string} ledgerId
+ */
+async function ensureSelfMemberLinkedToLedger(userId, ledgerId) {
+  const db = getDb()
+  const memberId = await ensureSelfMember(userId)
+  const exist = await db.collection('member_ledgers').where({ member_id: memberId, ledger_id: ledgerId }).limit(1).get()
+  if (exist.data && exist.data[0]) return memberId
+  await db.collection('member_ledgers').add({
+    member_id: memberId,
+    ledger_id: ledgerId,
+    user_id: userId,
+    linked_at: nowTs()
+  })
+  return memberId
 }
 
 /**
@@ -3069,17 +3129,182 @@ async function listLedgers(userId) {
     .orderBy('sort_order', 'asc')
     .get()
   const ledgers = res.data || []
-  // 统计每个账本的成员数（异常降级为 0，不影响主流程）
+  // 统计每个账本的成员数（来自 member_ledgers 关联，异常降级为 0，不影响主流程）
   await Promise.all(ledgers.map(async (l) => {
     try {
-      const mRes = await db.collection('ledger_members').where({ ledger_id: l._id }).count()
-      l.memberCount = (mRes && mRes.total) || 0
+      const mRes = await db.collection('member_ledgers').where({ ledger_id: l._id }).count()
+      l.memberCount = (mRes && (mRes.total !== undefined ? mRes.total : mRes)) || 0
     } catch (e) {
       l.memberCount = 0
     }
   }))
   return ledgers
 }
+
+/**
+ * 新增账本成员（自定义联系人 / 本人冗余）。
+ * 成员用于标识「这笔账是谁用的/谁付的钱」，非协作概念：
+ * - 本人(is_self=true) 由 createLedger/ensureMasterLedger 写入，user_id 关联真实用户；
+ * - 自定义联系人（家人/朋友等）user_id 留空，由调用方填写 nickname/avatar/bio/relation。
+ * @param {string} userId 当前用户（用于校验账本归属）
+ * @param {string} ledgerId
+ * @param {{ nickname:string, avatar?:string, bio?:string, relation?:string, is_self?:boolean }} payload
+ * @returns {Promise<{_id:string,nickname:string,avatar:string,bio:string,relation:string,is_self:boolean,user_id:string}>}
+ */
+async function addMember(userId, payload = {}) {
+  const db = getDb()
+  const nickname = (payload.nickname || '').toString().trim()
+  if (!nickname) throw new Error('nickname is required')
+  const doc = {
+    user_id: userId,
+    is_self: false,
+    nickname,
+    avatar: payload.avatar || '',
+    bio: payload.bio || '',
+    relation: payload.relation || 'other',
+    created_at: nowTs(),
+  }
+  const res = await db.collection('members').add(doc)
+  return { _id: res.id, ...doc }
+}
+
+/**
+ * 更新全局成员资料（昵称/头像/简介/关系）。
+ * @param {string} userId
+ * @param {string} memberId members._id
+ * @param {{ nickname?:string, avatar?:string, bio?:string, relation?:string }} payload
+ * @returns {Promise<{updated:number}>}
+ */
+async function updateMember(userId, memberId, payload = {}) {
+  const db = getDb()
+  const mRes = await db.collection('members').doc(memberId).get()
+  const m = mRes.data && mRes.data[0]
+  if (!m || m.user_id !== userId) throw new Error('member not found')
+  const set = {}
+  if (payload.nickname !== undefined && payload.nickname !== '') set.nickname = payload.nickname.toString().trim()
+  if (payload.avatar !== undefined) set.avatar = payload.avatar
+  if (payload.bio !== undefined) set.bio = payload.bio
+  if (payload.relation !== undefined) set.relation = payload.relation
+  const res = await db.collection('members').doc(memberId).update(set)
+  return { updated: (res && res.updated) || 0 }
+}
+
+/**
+ * 删除全局成员（本人 is_self=true 不可删）。会清理 member_ledgers 关联，
+ * 并把关联交易的 member_ids 中该成员移出，避免孤儿引用。
+ * @param {string} userId
+ * @param {string} memberId members._id
+ * @returns {Promise<{deleted:number}>}
+ */
+async function removeMember(userId, memberId) {
+  const db = getDb()
+  const mRes = await db.collection('members').doc(memberId).get()
+  const m = mRes.data && mRes.data[0]
+  if (!m || m.user_id !== userId) throw new Error('member not found')
+  if (m.is_self === true) throw new Error('cannot remove self member')
+  try {
+    await db.collection('member_ledgers').where({ member_id: memberId }).remove()
+  } catch (e) {
+    console.error('[sparejar-db] removeMember cleanup member_ledgers failed', e)
+  }
+  try {
+    await db.collection('transactions')
+      .where({ user_id: userId, member_ids: memberId, deleted_at: db.command.eq(null) })
+      .update({ member_ids: db.command.pull(memberId) })
+  } catch (e) {
+    console.error('[sparejar-db] removeMember cleanup transactions failed', e)
+  }
+  const res = await db.collection('members').doc(memberId).remove()
+  return { deleted: (res && res.deleted) || 0 }
+}
+
+/**
+ * 将全局成员关联到指定账本（幂等）。
+ * @param {string} userId
+ * @param {string} memberId members._id
+ * @param {string} ledgerId
+ * @returns {Promise<{linked:boolean}>}
+ */
+async function linkMemberToLedger(userId, memberId, ledgerId) {
+  const db = getDb()
+  const mRes = await db.collection('members').doc(memberId).get()
+  const m = mRes.data && mRes.data[0]
+  if (!m || m.user_id !== userId) throw new Error('member not found')
+  const lRes = await db.collection('ledgers').doc(ledgerId).get()
+  const l = lRes.data && lRes.data[0]
+  if (!l || l.user_id !== userId) throw new Error('ledger not found')
+  const exist = await db.collection('member_ledgers').where({ member_id: memberId, ledger_id: ledgerId }).limit(1).get()
+  if (exist.data && exist.data[0]) return { linked: false }
+  await db.collection('member_ledgers').add({
+    member_id: memberId,
+    ledger_id: ledgerId,
+    user_id: userId,
+    linked_at: nowTs(),
+  })
+  return { linked: true }
+}
+
+/**
+ * 取消成员与账本的关联（不删除成员本身）。本人关联也可取消。
+ * @param {string} userId
+ * @param {string} memberId members._id
+ * @param {string} ledgerId
+ * @returns {Promise<{unlinked:number}>}
+ */
+async function unlinkMemberFromLedger(userId, memberId, ledgerId) {
+  const db = getDb()
+  const res = await db.collection('member_ledgers')
+    .where({ user_id: userId, member_id: memberId, ledger_id: ledgerId })
+    .remove()
+  return { unlinked: (res && res.removed) || 0 }
+}
+
+/**
+ * 取用户全部全局成员（供成员管理器列表使用）。
+ * @param {string} userId
+ * @returns {Promise<Array>}
+ */
+async function getMembersByUser(userId) {
+  const db = getDb()
+  const res = await db.collection('members').where({ user_id: userId }).orderBy('is_self', 'desc').get()
+  return (res.data || []).map((m) => ({
+    _id: m._id,
+    user_id: m.user_id || '',
+    nickname: m.nickname || '',
+    avatar_url: m.avatar || '',
+    bio: m.bio || '',
+    relation: m.relation || 'other',
+    is_self: m.is_self === true,
+  }))
+}
+
+/**
+ * 取账本已关联成员（供记账/筛选使用，只返回关联到该账本的成员）。
+ * @param {string} userId
+ * @param {string} ledgerId
+ * @returns {Promise<Array>}
+ */
+async function getLedgerMembers(userId, ledgerId) {
+  const db = getDb()
+  const linkRes = await db.collection('member_ledgers').where({ ledger_id: ledgerId }).get()
+  const links = linkRes.data || []
+  if (!links.length) return []
+  const memberIds = links.map((x) => x.member_id)
+  const mRes = await db.collection('members').where({ _id: db.command.in(memberIds) }).get()
+  const members = mRes.data || []
+  return members
+    .map((m) => ({
+      _id: m._id,
+      user_id: m.user_id || '',
+      nickname: m.nickname || '',
+      avatar_url: m.avatar || '',
+      bio: m.bio || '',
+      relation: m.relation || 'other',
+      is_self: m.is_self === true,
+    }))
+    .sort((a, b) => (a.is_self === b.is_self ? 0 : a.is_self ? -1 : 1))
+}
+
 
 /** 账本详情：账本文档 + 该用户全部交易（前端按账本过滤）+ 成员总数。 */
 async function getLedgerWithTransactions(userId, ledgerId) {
@@ -3090,31 +3315,35 @@ async function getLedgerWithTransactions(userId, ledgerId) {
   ])
   const l = lRes.data && lRes.data[0]
   if (!l || l.user_id !== userId) return null
-  // 成员列表：ledger_members 关联 users，返回头像/昵称并标记自己（异常时降级为空数组）
+  // 成员列表：从 member_ledgers 关联 members 取本账本已关联成员（异常时降级为空数组）
   let memberCount = 0
   let members = []
   try {
-    const mRes = await db.collection('ledger_members').where({ ledger_id: ledgerId }).get()
-    const rows = mRes.data || []
-    memberCount = rows.length
-    const userMap = {}
-    if (rows.length) {
-      const userIds = rows.map((m) => m.user_id)
-      const uRes = await db
-        .collection('users')
-        .where({ user_id: db.command.in(userIds) })
-        .get()
-      ;(uRes.data || []).forEach((u) => { userMap[u.user_id] = u })
-    }
-    members = rows.map((m) => {
-      const u = userMap[m.user_id] || {}
-      return {
-        user_id: m.user_id,
-        nickname: u.nickname || '',
-        avatar_url: u.avatar_url || '',
-        is_self: m.user_id === userId,
+    const list = await getLedgerMembers(userId, ledgerId)
+    members = list
+    memberCount = list.length
+    // 兜底：若账本无任何关联成员（存量账本），自动把本人关联进去
+    if (!list.length) {
+      try {
+        const selfId = await ensureSelfMemberLinkedToLedger(userId, ledgerId)
+        const selfRes = await db.collection('members').doc(selfId).get()
+        const selfM = selfRes.data && selfRes.data[0]
+        if (selfM) {
+          members = [{
+            _id: selfM._id,
+            user_id: selfM.user_id || '',
+            nickname: selfM.nickname || '',
+            avatar_url: selfM.avatar || '',
+            bio: selfM.bio || '',
+            relation: selfM.relation || 'self',
+            is_self: true,
+          }]
+          memberCount = 1
+        }
+      } catch (e) {
+        console.error('[sparejar-db] ensure self member linked failed', e)
       }
-    })
+    }
   } catch (e) {
     memberCount = 0
     members = []
@@ -3259,6 +3488,15 @@ module.exports = {
   getDoc,
   listLedgers,
   getLedgerWithTransactions,
+  addMember,
+  updateMember,
+  removeMember,
+  linkMemberToLedger,
+  unlinkMemberFromLedger,
+  getMembersByUser,
+  getLedgerMembers,
+  ensureSelfMember,
+  ensureSelfMemberLinkedToLedger,
   getTransaction,
   listTransactions,
   listAccountBalanceLogs,

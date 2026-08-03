@@ -1,0 +1,40 @@
+{
+  "bsonType": "object",
+  "required": [
+    "member_id",
+    "ledger_id",
+    "user_id"
+  ],
+  "permission": {
+    "read": "doc.user_id == auth.uid",
+    "create": "doc.user_id == auth.uid",
+    "update": "doc.user_id == auth.uid",
+    "delete": "doc.user_id == auth.uid"
+  },
+  "properties": {
+    "_id": {
+      "description": "PK"
+    },
+    "member_id": {
+      "bsonType": "string",
+      "description": "FK→members._id（被关联的全局成员）",
+      "foreignKey": "members._id"
+    },
+    "ledger_id": {
+      "bsonType": "string",
+      "description": "FK→ledgers._id（所属账本）",
+      "foreignKey": "ledgers._id"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "冗余归属用户 openid，便于权限与查询",
+      "maxLength": 64,
+      "foreignKey": "users.user_id"
+    },
+    "linked_at": {
+      "bsonType": "string",
+      "description": "关联到该账本的时间",
+      "maxLength": 19
+    }
+  }
+}

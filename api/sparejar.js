@@ -114,7 +114,14 @@ export const ACTIONS = Object.freeze({
   GET_DAILY_HEALTH_SNAPSHOT: 'getDailyHealthSnapshot',
   SET_EXERCISE_CALORIES: 'setExerciseCalories',
   GET_WEEKLY_HEALTH: 'getWeeklyHealth',
-  CRON_DAILY_SETTLEMENT: 'cronDailySettlement'
+  CRON_DAILY_SETTLEMENT: 'cronDailySettlement',
+  ADD_MEMBER: 'addMember',
+  UPDATE_MEMBER: 'updateMember',
+  REMOVE_MEMBER: 'removeMember',
+  LINK_MEMBER: 'linkMember',
+  UNLINK_MEMBER: 'unlinkMember',
+  GET_MEMBERS: 'getMembers',
+  GET_LEDGER_MEMBERS: 'getLedgerMembers'
 })
 
 export class SparejarApiError extends Error {
@@ -272,6 +279,50 @@ export function listLedgers() {
 /** 账本详情：账本信息 + 该用户全部交易 */
 export function getLedgerDetail(ledgerId) {
   return callSparejar(ACTIONS.GET_LEDGER_DETAIL, { ledger_id: ledgerId })
+}
+
+// ===== 成员管理（用户级全局成员 + 账本多对多关联） =====
+
+/**
+ * 新增全局成员（自定义联系人）。本人由后端自动维护，无需前端创建。
+ * @param {{nickname:string, avatar?:string, bio?:string, relation?:string}} payload
+ */
+export function addMember(payload) {
+  return callSparejar(ACTIONS.ADD_MEMBER, { payload })
+}
+
+/**
+ * 更新成员资料
+ * @param {string} memberId members._id
+ * @param {{nickname?:string, avatar?:string, bio?:string, relation?:string}} payload
+ */
+export function updateMember(memberId, payload) {
+  return callSparejar(ACTIONS.UPDATE_MEMBER, { member_id: memberId, payload })
+}
+
+/** 删除成员（本人不可删） */
+export function removeMember(memberId) {
+  return callSparejar(ACTIONS.REMOVE_MEMBER, { member_id: memberId })
+}
+
+/** 将全局成员关联到指定账本 */
+export function linkMember(memberId, ledgerId) {
+  return callSparejar(ACTIONS.LINK_MEMBER, { member_id: memberId, ledger_id: ledgerId })
+}
+
+/** 取消成员与账本的关联（不删除成员本身） */
+export function unlinkMember(memberId, ledgerId) {
+  return callSparejar(ACTIONS.UNLINK_MEMBER, { member_id: memberId, ledger_id: ledgerId })
+}
+
+/** 取用户全部成员（供成员管理器列表） */
+export function getMembers() {
+  return callSparejar(ACTIONS.GET_MEMBERS, {})
+}
+
+/** 取账本已关联成员（供记账/筛选） */
+export function getLedgerMembers(ledgerId) {
+  return callSparejar(ACTIONS.GET_LEDGER_MEMBERS, { ledger_id: ledgerId })
 }
 
 /** 获取单笔交易（编辑 / 退款关联） */

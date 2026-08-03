@@ -441,7 +441,7 @@ const coverSrc = computed(() =>
     ? ledgerCoverUrl.value
     : resolveCover(ledger.cover)
 );
-/** 成员总数（来自云函数 ledger_members 统计，异常时降级为 0） */
+/** 成员总数（来自云函数 member_ledgers 关联统计，异常时降级为 0） */
 const memberCount = ref(0);
 /** 成员列表（来自云函数，含 user_id/nickname/avatar_url/is_self） */
 const members = ref([]);
@@ -473,7 +473,7 @@ const rightPaneStyle = computed(() => ({
 }));
 
 /** 收藏按钮（Uiverse like 动效）：本地持久化，避免与全局底部胶囊冲突。
- * 生产环境如需多端同步，可将此处改为云函数写入 ledger_members 或独立 favorites 表。 */
+ * 生产环境如需多端同步，可将此处改为云函数写入独立 favorites 表。 */
 const FAV_KEY = (id) => `sparejar_fav_${id}`;
 const isFaved = ref(false);
 const favAnim = ref(""); // '' | 'entering' | 'leaving'
