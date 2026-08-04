@@ -1,10 +1,14 @@
 <template>
-  <text
-    class="nf-field"
-    :class="{ 'is-placeholder': !hasValue }"
-    @click="open"
-    >{{ display }}</text
+  <view
+    class="nf-wrap"
+    @tap="open"
   >
+    <text
+      class="nf-field"
+      :class="{ 'is-placeholder': !hasValue }"
+      >{{ display }}</text
+    >
+  </view>
 </template>
 
 <script setup>
@@ -44,8 +48,15 @@ function open() {
 </script>
 
 <style scoped>
-.nf-field {
+.nf-wrap {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 100%;
   cursor: pointer;
+}
+.nf-field {
+  flex: 1;
 }
 .nf-field.is-placeholder {
   opacity: 0.5;

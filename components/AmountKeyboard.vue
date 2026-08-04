@@ -2,13 +2,14 @@
   <view class="ak-mask" v-if="state.show" @click="onMaskClick">
     <view class="ak-panel" @click.stop>
       <!-- 顶部条：标题 + 当前输入预览 + 收起箭头 -->
+      <!-- 待：横线上放一个小狗在敲键盘 -->
       <view class="ak-head">
         <text class="ak-title" v-if="state.title">{{ state.title }}</text>
         <text class="ak-preview" :class="{ 'is-empty': !state.value }">{{
           displayPreview
         }}</text>
         <view class="ak-collapse" @click="onDone">
-          <text class="ak-collapse-icon">⌄</text>
+          <text class="ak-collapse-icon">∨</text>
         </view>
       </view>
 
@@ -27,6 +28,7 @@
           hover-stay-time="70"
           @click="onPress(k.val)"
         >
+          <!-- 待：小狗拿着大删除的牌子 -->
           <text v-if="k.val === 'delete'" class="ak-key-icon">⌫</text>
           <text v-else class="ak-key-text">{{ k.label }}</text>
         </view>
@@ -39,7 +41,6 @@
         hover-stay-time="70"
         @click="onDone"
       >
-        <text class="ak-done-check">✓</text>
         <text class="ak-done-text">完成</text>
       </view>
     </view>
@@ -127,7 +128,7 @@ function onMaskClick() {
 
 .ak-panel {
   width: 100%;
-  background: #f2f3f5;
+  background: #ffffff;
   border-top-left-radius: 24rpx;
   border-top-right-radius: 24rpx;
   padding-bottom: calc(20rpx + env(safe-area-inset-bottom));
@@ -157,8 +158,8 @@ function onMaskClick() {
 }
 
 .ak-preview {
-  flex: 1 1 auto;
-  text-align: right;
+  flex: 0 1 auto;
+  text-align: center;
   font-size: 30rpx;
   font-weight: 700;
   color: var(--ink, #1f2329);
@@ -185,14 +186,19 @@ function onMaskClick() {
 .ak-keys {
   display: flex;
   flex-wrap: wrap;
-  padding: 2rpx;
+  gap: 16rpx;
+  padding: 24rpx 24rpx 8rpx;
   margin-top: 2rpx;
 }
 
 .ak-key {
-  flex: 0 0 calc((100% - 4rpx) / 3);
+  flex: 1 1 calc((100% - 32rpx) / 3);
+  min-width: calc((100% - 32rpx) / 3);
   height: 110rpx;
   background: #ffffff;
+  // border: 2rpx solid var(--ink4);
+  border-radius: 12rpx;
+  box-shadow: 0 4rpx 10rpx rgba(0, 0, 0, 0.15);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -229,10 +235,12 @@ function onMaskClick() {
 
 /* 完成按钮 */
 .ak-done {
-  margin: 16rpx 24rpx 0;
+  margin: 24rpx 24rpx 0;
   height: 96rpx;
+  border: 1px solid var(--g6);
   border-radius: 16rpx;
-  background: #25cc5d;
+  background: var(--g5);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -240,7 +248,7 @@ function onMaskClick() {
   transition: background-color 0.12s ease, transform 0.08s ease;
 }
 .ak-done--press {
-  background: #1fae4f !important;
+  background: var(--g6) !important;
   transform: scale(0.98);
 }
 .ak-done-check {

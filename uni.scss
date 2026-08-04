@@ -119,6 +119,20 @@ $sj-ink3: #6b8c7a !default;
 $sj-ink4: #9bb8a8 !default;
 $sj-red: #ff6b6b !default;
 $sj-red-bg: rgba(255, 107, 107, 0.1) !default;
+// 红色渐淡色板（r0 最浅≈白 → r8 最深=原色），与 p0~p8 浅→深命名对齐
+$sj-r0: #fffcfc !default; // 混 95% 白
+$sj-r1: #fff6f6 !default; // 混 90% 白
+$sj-r2: #ffebec !default; // 混 82% 白
+$sj-r3: #ffd9d9 !default; // 混 70% 白
+$sj-r4: #ffc2c2 !default; // 混 55% 白
+$sj-r5: #ffa4a4 !default; // 混 35% 白
+$sj-r6: #ff8686 !default; // 混 15% 白
+$sj-r7: #ff7676 !default; // 混 8% 白
+$sj-r8: #ff6b6b !default; // 原色（100%）
+// 配套半透明背景（用于浅红底）
+$sj-red-bg: rgba(255, 107, 107, 0.1) !default;
+$sj-red-bg-2: rgba(255, 107, 107, 0.18) !default;
+$sj-red-bg-3: rgba(255, 107, 107, 0.28) !default;
 $sj-amber: #f59e0b !default;
 $sj-amber2: #fcd34d !default;
 $sj-amber-bg: rgba(245, 158, 11, 0.1) !default;
@@ -177,6 +191,17 @@ $sj-shadow-light: 0 2rpx 12rpx 0 rgba(0, 0, 0, 0.1) !default; // 通用浅色阴
   --p6: #{$sj-p6};
   --p7: #{$sj-p7};
   --p8: #{$sj-p8};
+  --r0: #{$sj-r0};
+  --r1: #{$sj-r1};
+  --r2: #{$sj-r2};
+  --r3: #{$sj-r3};
+  --r4: #{$sj-r4};
+  --r5: #{$sj-r5};
+  --r6: #{$sj-r6};
+  --r7: #{$sj-r7};
+  --r8: #{$sj-r8};
+  --red-bg-2: #{$sj-red-bg-2};
+  --red-bg-3: #{$sj-red-bg-3};
   --ink: #{$sj-ink};
   --ink-deep: #{$sj-ink-deep};
   --ink2: #{$sj-ink2};
