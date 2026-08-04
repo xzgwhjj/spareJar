@@ -48,9 +48,6 @@
           </view>
         </view>
 
-        <!-- 今日消费 chips -->
-        <TodaySpendChips />
-
         <!-- 盈余横幅 -->
         <SurplusBanner />
 
@@ -128,7 +125,6 @@ import HealthDualTrack from './components/HealthDualTrack.vue';
 import SurplusBanner from './components/SurplusBanner.vue';
 import TopBar from './components/TopBar.vue';
 import WishMiniCard from './components/WishMiniCard.vue';
-import TodaySpendChips from './components/TodaySpendChips.vue';
 import { useUserStore } from '@/stores/user.js';
 import { formatFen } from '@/utils/money.js';
 

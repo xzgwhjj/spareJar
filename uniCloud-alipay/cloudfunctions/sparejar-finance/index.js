@@ -354,6 +354,13 @@ exports.main = async (event, context) => {
         if (!data.image_url) return fail('image_url is required')
         return ok(await dbApi.recognizeReceipt(userId, data))
 
+      case 'getLimitHistory':
+        return ok(await dbApi.getLimitHistory(userId, {
+          start_key: data.start_key,
+          end_key: data.end_key,
+          limit: data.limit
+        }))
+
       case 'cronDailySettlement': {
         const db = uniCloud.database()
         const dateKey = data.date_key || dbApi.formatDateKey(new Date(Date.now() - 86400000))

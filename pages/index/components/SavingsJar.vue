@@ -22,6 +22,8 @@ const props = defineProps({
   isOver: { type: Boolean, default: false },
   /** 剩余可花比例 0~1，用于驱动 Lottie 帧段 */
   leftPct: { type: Number, default: 1 },
+  /** 未设满额时启用：硬币逐帧消失并循环（满→空→满…） */
+  autoCycle: { type: Boolean, default: false },
 });
 
 const STORAGE_KEY = 'sj_drops_level';
@@ -80,6 +82,53 @@ function playLoop(seg) {
   anim.loop = true;
   anim.setSpeed(0.1);
   anim.playSegments(seg.loop, true);
+}
+
+/* ====== 未设满额：硬币逐帧消失循环 ====== */
+let cycleTimer = null;
+let cycleHandler = null;
+// 上限与"记一笔后"实际帧段保持一致：取满→空（leftPct=0）时 getFrameSegments 计算出的 drops
+const CYCLE_TOTAL = getFrameSegments(0).drops;
+
+/**
+ * 播放"从第 i-1 个硬币高度下沉到第 i 个硬币高度"的过渡帧（i: 0~CYCLE_TOTAL）
+ * 帧段完全复用 getFrameSegments 的逻辑，与正常记一笔后的动画帧数保持一致。
+ * i=0 时从满罐(0%)起始过渡段播放，模拟"刚记一笔、罐还满"的状态。
+ */
+function playCycleSegment(i, onDone) {
+  if (!anim) return;
+  anim.loop = false;
+  anim.setSpeed(0.5);
+  // 复用记一笔后的真实帧段（transition 段即从上一高度下沉到当前高度）
+  const seg = getFrameSegments(1 - i / CYCLE_TOTAL);
+  anim.playSegments(seg.transition, true);
+  cycleHandler = () => {
+    if (!anim) return;
+    anim.removeEventListener('complete', cycleHandler);
+    cycleHandler = null;
+    onDone && onDone();
+  };
+  anim.addEventListener('complete', cycleHandler);
+}
+
+/** 自动循环：满罐 → 逐帧消失 → 暂停 10-20s → 下一帧 → 空罐后回到第一帧无限循环 */
+function startCycle() {
+  if (started || !anim) return;
+  started = true;
+  let i = 0;
+  const step = () => {
+    if (!anim) return;
+    playCycleSegment(i, () => {
+      // 每次硬币消失后暂停 10~20s（随机），再推进下一帧
+      const wait = 10000 + Math.random() * 10000;
+      cycleTimer = setTimeout(() => {
+        i += 1;
+        if (i > CYCLE_TOTAL) i = 0; // 回到第一帧，无限循环
+        step();
+      }, wait);
+    });
+  };
+  step();
 }
 
 /** 启动播放（仅触发一次） */
@@ -158,13 +207,15 @@ async function initLottie() {
         });
 
         anim.addEventListener('DOMLoaded', () => {
-          startPlayback();
+          if (props.autoCycle) startCycle();
+          else startPlayback();
           resolve(true);
         });
         // 兜底：部分版本不触发 DOMLoaded
         setTimeout(() => {
           if (anim && anim.isLoaded) {
-            startPlayback();
+            if (props.autoCycle) startCycle();
+            else startPlayback();
             resolve(true);
           }
         }, 60);
@@ -175,10 +226,18 @@ async function initLottie() {
 }
 
 function destroyLottie() {
+  if (cycleTimer) {
+    clearTimeout(cycleTimer);
+    cycleTimer = null;
+  }
   if (anim) {
     if (_completeHandler) {
       anim.removeEventListener('complete', _completeHandler);
       _completeHandler = null;
+    }
+    if (cycleHandler) {
+      anim.removeEventListener('complete', cycleHandler);
+      cycleHandler = null;
     }
     anim.destroy();
     anim = null;

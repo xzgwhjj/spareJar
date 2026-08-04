@@ -1,0 +1,64 @@
+{
+  "bsonType": "object",
+  "required": [
+    "user_id",
+    "date_key"
+  ],
+  "permission": {
+    "read": "doc.user_id == auth.uid",
+    "create": "doc.user_id == auth.uid",
+    "update": "doc.user_id == auth.uid",
+    "delete": "doc.user_id == auth.uid"
+  },
+  "properties": {
+    "_id": {
+      "description": "PK"
+    },
+    "user_id": {
+      "bsonType": "string",
+      "description": "FK→users.user_id",
+      "maxLength": 64,
+      "foreignKey": "users.user_id"
+    },
+    "date_key": {
+      "bsonType": "string",
+      "description": "本地日期 YYYY-MM-DD",
+      "maxLength": 10
+    },
+    "day_limit_fen": {
+      "bsonType": "int",
+      "description": "当日实际生效额度(分)"
+    },
+    "month_limit_fen": {
+      "bsonType": "int",
+      "description": "当月实际月池(分，含override)"
+    },
+    "year_limit_fen": {
+      "bsonType": "int",
+      "description": "当年实际年池(分，含override)"
+    },
+    "source": {
+      "bsonType": "string",
+      "enum": ["auto", "override"],
+      "description": "当日额度来源"
+    },
+    "spent_fen": {
+      "bsonType": "int",
+      "description": "当日实际花费(分)"
+    },
+    "surplus_fen": {
+      "bsonType": "int",
+      "description": "当日结余(分)"
+    },
+    "surplus_dest": {
+      "bsonType": "string",
+      "enum": ["rollover_tomorrow", "rollover_pool", "wish", "savings", "none"],
+      "description": "结余去向：顺延明日/滚回月池/心愿/存款池/无"
+    },
+    "created_at": {
+      "bsonType": "string",
+      "description": "创建时间",
+      "maxLength": 19
+    }
+  }
+}

@@ -57,6 +57,13 @@
       }
     },
     {
+      "path": "pages/limit-history/limit-history",
+      "style": {
+        "navigationBarTitleText": "限额历史",
+        "navigationStyle": "custom"
+      }
+    },
+    {
       "path": "pages/surplus-alloc/surplus-alloc",
       "style": {
         "navigationBarTitleText": "盈余分配",

@@ -122,6 +122,27 @@ writeSchema('user_settings', {
     daily_base_limit: { ...intField('日基准限额(分)'), minimum: 100, defaultValue: 10000 },
     pending_base_limit: { ...intField('待生效限额(分)'), minimum: 100 },
     limit_effective_date: strField(10, '限额生效日'),
+    limit_dim: { ...enumField(['day', 'month', 'year'], '主管控维度'), defaultValue: 'day' },
+    limit_amount_fen: { ...intField('主管控维度总池(分)'), minimum: 100 },
+    year_strategy: { ...enumField(['equal', 'rollover'], '年→月策略'), defaultValue: 'equal' },
+    month_strategy: { ...enumField(['equal', 'rollover'], '月→日策略'), defaultValue: 'equal' },
+    pending_limit_dim: { ...enumField(['day', 'month', 'year'], '待生效维度') },
+    pending_amount_fen: { ...intField('待生效总池(分)'), minimum: 100 },
+    pending_year_strategy: { ...enumField(['equal', 'rollover'], '待生效年策略') },
+    pending_month_strategy: { ...enumField(['equal', 'rollover'], '待生效月策略') },
+    overrides: {
+      bsonType: 'array', description: '局部覆盖(day 最近7天 / month 最近1~3月)',
+      item: {
+        bsonType: 'object',
+        required: ['type', 'key', 'amount_fen', 'expire_at'],
+        properties: {
+          type: { ...enumField(['day', 'month'], '覆盖类型') },
+          key: strField(10, '日期或月份'),
+          amount_fen: { ...intField('覆盖额度(分)'), minimum: 0 },
+          expire_at: strField(10, '失效日')
+        }
+      }
+    },
     default_surplus_action: { ...enumField(['roll_over', 'wish', 'savings_pool'], '默认结余去向'), defaultValue: 'roll_over' },
     default_wish_id: { ...strField(0, '默认心愿'), ...fk('wishes') },
     refund_restore_limit: { ...boolField('退款恢复限额'), defaultValue: true },
@@ -872,6 +893,29 @@ writeSchema('user_penalty_logs', {
 writeIndex('user_penalty_logs', [
   idx('uk_user_date_type', [{ name: 'user_id', type: 'varchar' }, { name: 'date_key', type: 'varchar' }, { name: 'penalty_type', type: 'varchar' }], true),
   idx('idx_settlement', [{ name: 'settlement_id', type: 'varchar' }])
+])
+
+// ========== limit_history ==========
+writeSchema('limit_history', {
+  bsonType: 'object',
+  required: ['user_id', 'date_key'],
+  permission: USER_PERM,
+  properties: {
+    _id: { description: 'PK' },
+    user_id: { ...strField(64, '用户 openid'), ...fk('users', 'user_id') },
+    date_key: strField(10, '本地日期'),
+    day_limit_fen: intField('当日实际生效额度(分)'),
+    month_limit_fen: intField('当月实际月池(分)'),
+    year_limit_fen: intField('当年实际年池(分)'),
+    source: { ...enumField(['auto', 'override'], '额度来源'), defaultValue: 'auto' },
+    spent_fen: intField('当日实际花费(分)'),
+    surplus_fen: intField('当日结余(分)'),
+    surplus_dest: { ...enumField(['rollover_tomorrow', 'rollover_pool', 'wish', 'savings', 'none'], '结余去向') },
+    created_at: tsField('创建时间')
+  }
+})
+writeIndex('limit_history', [
+  idx('uk_user_date', [{ name: 'user_id', type: 'varchar' }, { name: 'date_key', type: 'varchar' }], true)
 ])
 
 // ========== jar_skins ==========

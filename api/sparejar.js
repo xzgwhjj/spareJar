@@ -55,6 +55,7 @@ export const ACTIONS = Object.freeze({
   LIST_ACCOUNT_BALANCE_LOGS: 'listAccountBalanceLogs',
   GET_DASHBOARD: 'getDashboard',
   GET_DOC: 'getDoc',
+  GET_LIMIT_HISTORY: 'getLimitHistory',
   RECALCULATE_SETTLEMENT: 'recalculateSettlement',
   RUN_DAILY_SETTLEMENT: 'runDailySettlement',
   ALLOCATE_SURPLUS: 'allocateSurplus',
@@ -348,6 +349,11 @@ export function getDashboard(dateKey) {
 /** 通用单文档读取（user_settings / user_streaks / surplus_pools / savings_pools 等） */
 export function getDoc(collection) {
   return callSparejar(ACTIONS.GET_DOC, { collection })
+}
+
+/** 限额历史（按日期倒序） */
+export function getLimitHistory(opts = {}) {
+  return callSparejar(ACTIONS.GET_LIMIT_HISTORY, opts)
 }
 
 /** @param {string} dateKey */

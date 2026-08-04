@@ -64,6 +64,7 @@ import {
   isSparejarApiError
 } from '@/api/sparejar.js'
 import { todayDateKey, addDaysToDateKey } from '@/utils/date.js'
+import { computeDayBaseLimit } from '@/utils/limitEngine.js'
 
 /** uni-id 默认 token 存储键 */
 export const UNI_ID_TOKEN_KEY = 'uni_id_token'
@@ -1090,10 +1091,25 @@ export function useUserStore() {
     if (settlement && typeof settlement.base_limit === 'number') {
       return settlement.base_limit
     }
+    // 未结算时按分层引擎估算当日额度（保证月/年维度下也有值）
+    if (state.settings) {
+      const dayKey = todayDateKey()
+      const est = computeDayBaseLimit(state.settings, dayKey)
+      if (est > 0) return est
+    }
     if (state.settings && typeof state.settings.daily_base_limit === 'number') {
       return state.settings.daily_base_limit
     }
-    return 10000
+    return 0
+  })
+  /** 是否已设置任何维度的限额（供"未设置"判断使用） */
+  const hasLimit = computed(() => {
+    const s = state.settings
+    if (!s) return false
+    if (s.limit_dim === 'month' || s.limit_dim === 'year') {
+      return typeof s.limit_amount_fen === 'number' && s.limit_amount_fen > 0
+    }
+    return typeof s.daily_base_limit === 'number' && s.daily_base_limit > 0
   })
   const spentTodayFen = computed(() => {
     const settlement = state.dashboard.settlement
@@ -1147,6 +1163,7 @@ export function useUserStore() {
     isGuest,
     sessionReady,
     dailyLimitFen,
+    hasLimit,
     spentTodayFen,
     leftTodayFen,
     isOverLimit,

@@ -4,31 +4,71 @@
     <view class="topbar">
       <view class="back-btn" @click="goBack"><text>←</text></view>
       <text class="topbar-title">限额设置</text>
-      <view style="width:36px;" />
+      <view class="history-entry" @click="goHistory"><text>历史</text></view>
     </view>
 
     <scroll-view class="page-scroll" scroll-y enhanced :show-scrollbar="false" style="flex:1;">
-      <!-- 当前生效 + 待生效 -->
+      <!-- 维度选择 -->
       <view class="glass-mid card-in-1" style="margin:16px;padding:18px;">
-        <text class="section-title">📅 每日限额</text>
-        <view class="current-row">
-          <text class="current-label">当前生效</text>
-          <text class="current-value">¥{{ currentYuan }}</text>
+        <text class="section-title">🎯 管控维度</text>
+        <view class="seg-row">
+          <view
+            v-for="d in dims"
+            :key="d.value"
+            class="seg-item"
+            :class="{ active: dim === d.value }"
+            @click="selectDim(d.value)"
+          >
+            <text>{{ d.label }}</text>
+          </view>
         </view>
-        <view v-if="pending" class="pending-hint">
-          <text class="pending-dot">●</text>
-          <text class="pending-text">待生效 ¥{{ pending.yuan }}（{{ pendingLabel }} 生效）</text>
-        </view>
+        <text class="seg-tip">仅可配置一种维度，系统自动向下拆分为每日额度</text>
+      </view>
 
+      <!-- 拆分策略 -->
+      <view v-if="dim !== 'day'" class="glass-mid card-in-1" style="margin:0 16px 16px;padding:18px;">
+        <text class="section-title">⚙️ 分配策略</text>
+        <block v-if="dim === 'year'">
+          <view class="strategy-label">年 → 月</view>
+          <view class="seg-row sm">
+            <view
+              v-for="s in strategies"
+              :key="'y'+s.value"
+              class="seg-item"
+              :class="{ active: yearStrategy === s.value }"
+              @click="yearStrategy = s.value"
+            >
+              <text>{{ s.label }}</text>
+            </view>
+          </view>
+        </block>
+        <view class="strategy-label">月 → 日</view>
+        <view class="seg-row sm">
+          <view
+            v-for="s in strategies"
+            :key="'m'+s.value"
+            class="seg-item"
+            :class="{ active: monthStrategy === s.value }"
+            @click="monthStrategy = s.value"
+          >
+            <text>{{ s.label }}</text>
+          </view>
+        </view>
+        <text class="strategy-tip">均分：每天固定基线；剩余滚动：每日按「剩余池 ÷ 剩余天数」动态重算</text>
+      </view>
+
+      <!-- 总池配置 -->
+      <view class="glass-mid card-in-1" style="margin:0 16px 16px;padding:18px;">
+        <text class="section-title">{{ dimLabel }}总{{ poolUnit }}</text>
         <view class="slider-value-row">
-          <text class="slider-value">¥{{ dailyLimit }}</text>
-          <text class="slider-hint">每日最高可花金额</text>
+          <text class="slider-value">¥{{ poolYuan }}</text>
+          <text class="slider-hint">每{{ poolUnit }}最高可分配金额</text>
         </view>
         <slider
           class="custom-slider"
-          :value="dailyLimit"
-          min="1"
-          max="2000"
+          :value="poolYuan"
+          :min="poolMin"
+          :max="poolMax"
           step="1"
           activeColor="#25cc5d"
           backgroundColor="rgba(194,242,200,0.3)"
@@ -41,40 +81,91 @@
           <text class="input-prefix">¥</text>
           <number-field
             class="limit-input"
-            :model-value="dailyLimit"
+            :model-value="poolYuan"
             placeholder="输入整数金额"
-            title="每日限额"
+            title="总池"
             :decimal-places="0"
-            :max-integer="5"
+            :max-integer="7"
             @update:model-value="onInputValue"
           />
-          <text class="input-unit">/天</text>
+          <text class="input-unit">/{{ poolUnit }}</text>
         </view>
         <view class="slider-labels">
-          <text>¥1</text>
-          <text>¥2000</text>
+          <text>¥{{ poolMin }}</text>
+          <text>¥{{ poolMax }}</text>
+        </view>
+
+        <!-- 实时预估 -->
+        <view class="preview-box" v-if="dim !== 'day'">
+          <text class="preview-label">预估每日额度</text>
+          <text class="preview-value">¥{{ estDailyYuan }}</text>
+          <text class="preview-sub">{{ strategyLabel }} · 本月约 ¥{{ estMonthYuan }}/月</text>
         </view>
       </view>
 
-      <!-- 月预算参考（仅展示） -->
+      <!-- 局部微调 -->
       <view class="glass-mid card-in-1" style="margin:0 16px 16px;padding:18px;">
-        <text class="section-title">📆 月预算参考</text>
-        <view v-if="monthlyBudgetYuan != null" class="ref-row">
-          <view class="ref-cell">
-            <text class="ref-label">月预算</text>
-            <text class="ref-value">¥{{ monthlyBudgetYuan }}</text>
-          </view>
-          <view class="ref-cell">
-            <text class="ref-label">当月天数</text>
-            <text class="ref-value">{{ daysInMonth }} 天</text>
-          </view>
-          <view class="ref-cell">
-            <text class="ref-label">日均约</text>
-            <text class="ref-value accent">¥{{ dailyRefYuan }}</text>
-          </view>
+        <view class="collapse-head" @click="showOverride = !showOverride">
+          <text class="section-title" style="margin-bottom:0;">🔧 局部微调</text>
+          <text class="collapse-arrow">{{ showOverride ? '∧' : '∨' }}</text>
         </view>
-        <view v-else class="ref-empty">
-          <text>尚未设置月预算，可在账本预算中调整作为参考</text>
+        <view v-if="showOverride">
+          <text class="override-tip">可临时覆盖最近 {{ dim === 'day' ? '7 天' : '1~3 个月 + 7 天' }} 的额度，次日生效，过期自动失效。</text>
+
+          <!-- 日覆盖 -->
+          <view class="override-add">
+            <view class="ov-input-group">
+              <text class="ov-prefix">日期</text>
+              <picker mode="date" :value="ovDayKey" :start="ovDayStart" :end="ovDayEnd" @change="onOvDayChange">
+                <view class="ov-picker"><text>{{ ovDayKey }}</text></view>
+              </picker>
+            </view>
+            <view class="ov-input-group grow">
+              <text class="ov-prefix">¥</text>
+              <number-field
+                class="ov-field"
+                :model-value="ovDayAmount"
+                placeholder="当日额度"
+                title="当日额度"
+                :decimal-places="0"
+                :max-integer="7"
+                @update:model-value="v => ovDayAmount = Number(v)"
+              />
+            </view>
+            <view class="ov-add-btn" @click="addDayOverride"><text>＋</text></view>
+          </view>
+
+          <!-- 月覆盖（仅 month/year 维度） -->
+          <view v-if="dim !== 'day'" class="override-add" style="margin-top:10px;">
+            <view class="ov-input-group">
+              <text class="ov-prefix">月份</text>
+              <picker mode="date" fields="month" :value="ovMonthKey" :start="ovMonthStart" :end="ovMonthEnd" @change="onOvMonthChange">
+                <view class="ov-picker"><text>{{ ovMonthKey }}</text></view>
+              </picker>
+            </view>
+            <view class="ov-input-group grow">
+              <text class="ov-prefix">¥</text>
+              <number-field
+                class="ov-field"
+                :model-value="ovMonthAmount"
+                placeholder="当月总池"
+                title="当月总池"
+                :decimal-places="0"
+                :max-integer="7"
+                @update:model-value="v => ovMonthAmount = Number(v)"
+              />
+            </view>
+            <view class="ov-add-btn" @click="addMonthOverride"><text>＋</text></view>
+          </view>
+
+          <!-- 已添加列表 -->
+          <view v-if="overrideList.length" class="ov-list">
+            <view v-for="(o, i) in overrideList" :key="i" class="ov-item">
+              <text class="ov-item-key">{{ o.type === 'day' ? '日' : '月' }} · {{ o.key }}</text>
+              <text class="ov-item-amt">¥{{ Math.round(o.amount_fen / 100) }}</text>
+              <text class="ov-item-del" @click="removeOverride(i)">✕</text>
+            </view>
+          </view>
         </view>
       </view>
 
@@ -84,14 +175,13 @@
           <text>💾 保存设置</text>
         </view>
         <view class="reset-btn" @click="resetSettings">
-          <text>恢复默认（¥100）</text>
+          <text>恢复默认（日 ¥100）</text>
         </view>
       </view>
     </scroll-view>
-      
-    <!-- 全局数字键盘（单例）：由 main.js 全局注册 -->
+
     <amount-keyboard />
-</view>
+  </view>
 </template>
 
 <script setup>
@@ -99,48 +189,84 @@ import { ref, computed, onMounted } from 'vue';
 import { useUserStore } from '@/stores/user.js';
 import { updateSettings } from '@/api/sparejar.js';
 import { todayDateKey, addDaysToDateKey } from '@/utils/date.js';
+import { computeDayBaseLimit, validateOverride, addOverride, pruneOverrides } from '@/utils/limitEngine.js';
 
 const { state, loadSettings, refreshTodayDashboard } = useUserStore();
 
-const DEFAULT_YUAN = 100; // 默认 ¥100（服务端 10000 分）
+const DEFAULT_YUAN = 100;
+const dims = [
+  { value: 'day', label: '日', unit: '天' },
+  { value: 'month', label: '月', unit: '月' },
+  { value: 'year', label: '年', unit: '年' }
+];
+const strategies = [
+  { value: 'equal', label: '均分' },
+  { value: 'rollover', label: '剩余滚动' }
+];
 
-/** 当前生效限额（元） */
-const currentYuan = computed(() => {
-  const s = state.settings;
-  if (!s) return DEFAULT_YUAN;
-  const eff = (s.pending_base_limit != null && s.limit_effective_date && s.limit_effective_date <= todayDateKey())
-    ? s.pending_base_limit
-    : (s.daily_base_limit || 10000);
-  return Math.round(eff / 100);
+/* ---- 响应式表单状态 ---- */
+const dim = ref('day');
+const yearStrategy = ref('equal');
+const monthStrategy = ref('equal');
+const poolYuan = ref(DEFAULT_YUAN);
+const overrides = ref([]);
+
+const showOverride = ref(false);
+const ovDayKey = ref(todayDateKey());
+const ovDayAmount = ref(DEFAULT_YUAN);
+const ovMonthKey = ref(todayDateKey().slice(0, 7));
+const ovMonthAmount = ref(DEFAULT_YUAN);
+
+/* ---- 派生 ---- */
+const dimMeta = computed(() => dims.find(d => d.value === dim.value) || dims[0]);
+const dimLabel = computed(() => dimMeta.value.label);
+const poolUnit = computed(() => dimMeta.value.unit);
+const poolMin = computed(() => 1);
+const poolMax = computed(() => (dim.value === 'day' ? 2000 : 1000000));
+
+const overrideList = computed(() => overrides.value);
+
+const estSettings = computed(() => ({
+  limit_dim: dim.value,
+  limit_amount_fen: dim.value === 'day' ? null : poolYuan.value * 100,
+  daily_base_limit: dim.value === 'day' ? poolYuan.value * 100 : null,
+  year_strategy: yearStrategy.value,
+  month_strategy: monthStrategy.value,
+  overrides: overrides.value
+}));
+
+const estDailyFen = computed(() => computeDayBaseLimit(estSettings.value, todayDateKey()));
+const estDailyYuan = computed(() => Math.round(estDailyFen.value / 100));
+const estMonthYuan = computed(() => Math.round(estDailyFen.value / 100 * new Date().getDate() || (poolYuan.value / 30)));
+const strategyLabel = computed(() => {
+  if (dim.value === 'day') return '按日固定';
+  return (monthStrategy.value === 'equal' ? '日均分' : '月剩余滚动');
 });
 
-const dailyLimit = ref(DEFAULT_YUAN);
-const pending = ref(null); // { yuan, dateKey }
-const monthlyBudgetYuan = ref(null);
-
-const daysInMonth = computed(() => {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-});
-const dailyRefYuan = computed(() =>
-  monthlyBudgetYuan.value ? Math.round(monthlyBudgetYuan.value / daysInMonth.value) : null
-);
-const pendingLabel = computed(() => {
-  if (!pending.value) return '';
-  const [y, m, d] = pending.value.dateKey.split('-');
-  return `${Number(m)}月${Number(d)}日`;
+/* ---- 局部覆盖日期范围 ---- */
+const ovDayStart = computed(() => todayDateKey());
+const ovDayEnd = computed(() => addDaysToDateKey(todayDateKey(), 6));
+const ovMonthStart = computed(() => todayDateKey().slice(0, 7));
+const ovMonthEnd = computed(() => {
+  const d = new Date(todayDateKey());
+  d.setMonth(d.getMonth() + 2);
+  return d.toISOString().slice(0, 7);
 });
 
+/* ---- 同步 ---- */
 function syncFromSettings() {
   const s = state.settings;
-  dailyLimit.value = currentYuan.value;
-  if (s && s.pending_base_limit != null && s.limit_effective_date && s.limit_effective_date > todayDateKey()) {
-    pending.value = { yuan: Math.round(s.pending_base_limit / 100), dateKey: s.limit_effective_date };
+  if (!s) return;
+  dim.value = s.limit_dim || 'day';
+  yearStrategy.value = s.year_strategy || 'equal';
+  monthStrategy.value = s.month_strategy || 'equal';
+  overrides.value = pruneOverrides(s, todayDateKey());
+  if (dim.value === 'day') {
+    const eff = (s.pending_base_limit != null && s.limit_effective_date && s.limit_effective_date <= todayDateKey())
+      ? s.pending_base_limit : (s.daily_base_limit || 10000);
+    poolYuan.value = Math.round(eff / 100);
   } else {
-    pending.value = null;
-  }
-  if (s && typeof s.monthly_budget === 'number') {
-    monthlyBudgetYuan.value = Math.round(s.monthly_budget / 100);
+    poolYuan.value = Math.round((s.limit_amount_fen || 0) / 100) || DEFAULT_YUAN;
   }
 }
 
@@ -149,25 +275,61 @@ onMounted(async () => {
   syncFromSettings();
 });
 
-const onSlide = (e) => { dailyLimit.value = Number(e.detail.value); };
+/* ---- 交互 ---- */
+function selectDim(v) { dim.value = v; }
+
+const onSlide = (e) => { poolYuan.value = Number(e.detail.value); };
 const onInputValue = (val) => {
   const v = Number(val);
-  if (Number.isFinite(v)) dailyLimit.value = Math.max(1, Math.min(2000, Math.floor(v)));
+  if (Number.isFinite(v)) {
+    const max = poolMax.value;
+    poolYuan.value = Math.max(poolMin.value, Math.min(max, Math.floor(v)));
+  }
 };
 
-const saveSettings = async () => {
-  const val = Math.floor(Number(dailyLimit.value));
+function onOvDayChange(e) { ovDayKey.value = e.detail.value; }
+function onOvMonthChange(e) { ovMonthKey.value = e.detail.value; }
+
+function addDayOverride() {
+  const rec = { type: 'day', key: ovDayKey.value, amount_fen: Math.round(Number(ovDayAmount.value) * 100) };
+  const v = validateOverride(estSettings.value, rec, todayDateKey());
+  if (!v.ok) return uni.showToast({ title: v.error, icon: 'none' });
+  overrides.value = addOverride({ overrides: overrides.value }, rec, todayDateKey());
+}
+function addMonthOverride() {
+  const rec = { type: 'month', key: ovMonthKey.value, amount_fen: Math.round(Number(ovMonthAmount.value) * 100) };
+  const v = validateOverride(estSettings.value, rec, todayDateKey());
+  if (!v.ok) return uni.showToast({ title: v.error, icon: 'none' });
+  overrides.value = addOverride({ overrides: overrides.value }, rec, todayDateKey());
+}
+function removeOverride(i) {
+  overrides.value = overrides.value.filter((_, idx) => idx !== i);
+}
+
+/* ---- 保存（次日生效） ---- */
+async function saveSettings() {
+  const val = Math.floor(Number(poolYuan.value));
   if (!Number.isFinite(val) || val < 1 || !Number.isInteger(val)) {
-    uni.showToast({ title: '每日限额需为整数且 ≥ 1 元', icon: 'none' });
-    return;
+    return uni.showToast({ title: '总池需为整数且 ≥ 1 元', icon: 'none' });
   }
-  const fen = val * 100;
+  const tomorrow = addDaysToDateKey(todayDateKey(), 1);
+  const payload = {
+    limit_dim: dim.value,
+    pending_limit_dim: dim.value,
+    limit_effective_date: tomorrow,
+    overrides: overrides.value
+  };
+  if (dim.value === 'day') {
+    payload.pending_base_limit = val * 100;
+    payload.pending_amount_fen = null;
+  } else {
+    payload.pending_amount_fen = val * 100;
+    payload.pending_year_strategy = yearStrategy.value;
+    payload.pending_month_strategy = monthStrategy.value;
+    payload.pending_base_limit = null;
+  }
   try {
-    // 修改次日生效：写入 pending，limit_effective_date = 明日；引擎在次日自动启用
-    await updateSettings({
-      pending_base_limit: fen,
-      limit_effective_date: addDaysToDateKey(todayDateKey(), 1)
-    });
+    await updateSettings(payload);
     await loadSettings();
     syncFromSettings();
     await refreshTodayDashboard({ force: true });
@@ -175,13 +337,17 @@ const saveSettings = async () => {
   } catch (err) {
     uni.showToast({ title: (err && err.message) || '保存失败', icon: 'none' });
   }
-};
+}
 
-const resetSettings = async () => {
+async function resetSettings() {
   try {
     await updateSettings({
+      limit_dim: 'day',
+      pending_limit_dim: 'day',
       pending_base_limit: DEFAULT_YUAN * 100,
-      limit_effective_date: addDaysToDateKey(todayDateKey(), 1)
+      pending_amount_fen: null,
+      limit_effective_date: addDaysToDateKey(todayDateKey(), 1),
+      overrides: []
     });
     await loadSettings();
     syncFromSettings();
@@ -190,9 +356,10 @@ const resetSettings = async () => {
   } catch (err) {
     uni.showToast({ title: (err && err.message) || '操作失败', icon: 'none' });
   }
-};
+}
 
 const goBack = () => uni.navigateBack();
+const goHistory = () => uni.navigateTo({ url: '/pages/limit-history/limit-history' });
 </script>
 
 <style scoped>
@@ -200,17 +367,21 @@ const goBack = () => uni.navigateBack();
 .topbar { display: flex; align-items: center; justify-content: space-between; padding: 44px 16px 10px; }
 .back-btn { width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,0.75); display: flex; align-items: center; justify-content: center; cursor: pointer; color: #6b8c7a; font-size: 16px; }
 .topbar-title { font-size: 17px; font-weight: 700; color: #0f1c14; }
+.history-entry { font-size: 13px; font-weight: 600; color: #25cc5d; cursor: pointer; }
 
 .section-title { font-size: 14px; font-weight: 700; color: #0f1c14; display: block; margin-bottom: 12px; }
-.current-row { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
-.current-label { font-size: 12px; color: #9bb8a8; }
-.current-value { font-size: 22px; font-weight: 800; color: #0f1c14; }
-.pending-hint { display: flex; align-items: center; gap: 6px; background: rgba(37,204,93,0.1); border-radius: 10px; padding: 8px 10px; margin-bottom: 14px; }
-.pending-dot { color: #25cc5d; font-size: 8px; }
-.pending-text { font-size: 12px; font-weight: 600; color: #25cc5d; }
+
+.seg-row { display: flex; gap: 8px; }
+.seg-row.sm { margin-bottom: 10px; }
+.seg-item { flex: 1; text-align: center; padding: 10px 0; border-radius: 12px; background: rgba(242,252,242,0.7); border: 1px solid rgba(194,242,200,0.4); font-size: 14px; font-weight: 700; color: #6b8c7a; cursor: pointer; }
+.seg-item.active { background: linear-gradient(135deg,#4fd974,#25cc5d); color: #fff; border-color: transparent; box-shadow: 0 3px 12px rgba(37,204,93,0.3); }
+.seg-tip { font-size: 11px; color: #9bb8a8; margin-top: 10px; display: block; }
+
+.strategy-label { font-size: 12px; font-weight: 700; color: #6b8c7a; margin: 4px 0 8px; }
+.strategy-tip { font-size: 11px; color: #9bb8a8; margin-top: 10px; display: block; }
 
 .slider-value-row { display: flex; align-items: baseline; gap: 8px; margin-bottom: 16px; }
-.slider-value { font-size: 36px; font-weight: 900; color: #25cc5d; }
+.slider-value { font-size: 32px; font-weight: 900; color: #25cc5d; }
 .slider-hint { font-size: 12px; color: #9bb8a8; }
 .slider-labels { display: flex; justify-content: space-between; font-size: 10px; color: #9bb8a8; margin-top: 4px; }
 
@@ -219,12 +390,28 @@ const goBack = () => uni.navigateBack();
 .limit-input { flex: 1; font-size: 16px; font-weight: 700; color: #0f1c14; }
 .input-unit { font-size: 12px; color: #9bb8a8; }
 
-.ref-row { display: flex; justify-content: space-between; }
-.ref-cell { flex: 1; text-align: center; }
-.ref-label { font-size: 11px; color: #9bb8a8; display: block; margin-bottom: 4px; }
-.ref-value { font-size: 15px; font-weight: 800; color: #0f1c14; }
-.ref-value.accent { color: #25cc5d; }
-.ref-empty { font-size: 12px; color: #9bb8a8; text-align: center; padding: 8px 0; }
+.preview-box { margin-top: 16px; padding: 12px 14px; border-radius: 12px; background: rgba(37,204,93,0.08); display: flex; flex-direction: column; gap: 2px; }
+.preview-label { font-size: 11px; color: #9bb8a8; }
+.preview-value { font-size: 22px; font-weight: 900; color: #25cc5d; }
+.preview-sub { font-size: 11px; color: #6b8c7a; }
+
+.collapse-head { display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+.collapse-arrow { font-size: 14px; color: #9bb8a8; }
+.override-tip { font-size: 11px; color: #9bb8a8; margin: 10px 0; display: block; }
+
+.override-add { display: flex; align-items: center; gap: 8px; }
+.ov-input-group { display: flex; align-items: center; gap: 6px; background: rgba(242,252,242,0.8); border: 1px solid rgba(194,242,200,0.4); border-radius: 12px; padding: 0 10px; height: 42px; }
+.ov-input-group.grow { flex: 1; }
+.ov-prefix { font-size: 13px; font-weight: 700; color: #25cc5d; }
+.ov-picker { font-size: 13px; font-weight: 700; color: #0f1c14; }
+.ov-field { flex: 1; font-size: 14px; font-weight: 700; color: #0f1c14; }
+.ov-add-btn { width: 42px; height: 42px; border-radius: 12px; background: linear-gradient(135deg,#4fd974,#25cc5d); color: #fff; font-size: 20px; font-weight: 800; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+
+.ov-list { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.ov-item { display: flex; align-items: center; justify-content: space-between; background: rgba(242,252,242,0.6); border-radius: 10px; padding: 8px 12px; }
+.ov-item-key { font-size: 12px; color: #6b8c7a; font-weight: 600; }
+.ov-item-amt { font-size: 13px; font-weight: 800; color: #0f1c14; }
+.ov-item-del { font-size: 13px; color: #e07a7a; cursor: pointer; padding: 0 4px; }
 
 .save-btn { width: 100%; padding: 14px; border-radius: 16px; background: linear-gradient(135deg,#4fd974,#25cc5d); text-align: center; color: #fff; font-size: 14px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 20px rgba(37,204,93,0.3); }
 .reset-btn { width: 100%; padding: 12px; border-radius: 14px; text-align: center; color: #9bb8a8; font-size: 12px; font-weight: 600; cursor: pointer; margin-top: 10px; }

@@ -794,10 +794,97 @@ async function sendSubscribeMessage(userId, type, payload = {}) {
 async function getEffectiveBaseLimit(userId, dateKey) {
   const settings = await getDocByUser('user_settings', userId)
   if (!settings) return 10000
-  if (settings.pending_base_limit && settings.limit_effective_date && settings.limit_effective_date <= dateKey) {
-    return settings.pending_base_limit
+  return computeDayBaseLimit(settings, dateKey)
+}
+
+/**
+ * 分层限额引擎：根据 settings 算出指定日期的 base_limit（分）。
+ * - dim=day：pending → daily_base_limit（原逻辑）
+ * - dim=month：月总池 → 按 month_strategy 拆到当日
+ * - dim=year：年总池 → 年策略拆月 → 月策略拆日
+ * 局部 override（day/month）为硬覆盖，且从父池预扣（保证父池不被突破）。
+ * @param {Object} settings user_settings 文档
+ * @param {string} dateKey YYYY-MM-DD
+ * @returns {number} 当日 base_limit（分）
+ */
+function computeDayBaseLimit(settings, dateKey) {
+  const dim = settings.limit_dim || 'day'
+  const overrides = Array.isArray(settings.overrides) ? settings.overrides : []
+
+  // day 维度：原逻辑
+  if (dim === 'day') {
+    if (settings.pending_base_limit != null && settings.limit_effective_date && settings.limit_effective_date <= dateKey) {
+      return settings.pending_base_limit
+    }
+    return settings.daily_base_limit || 10000
   }
-  return settings.daily_base_limit || 10000
+
+  const monthKey = dateKey.slice(0, 7)
+  const yearKey = dateKey.slice(0, 4)
+  const dayOverride = overrides.find(o => o.type === 'day' && o.key === dateKey)
+  if (dayOverride) return dayOverride.amount_fen // 硬覆盖优先
+
+  // 是否次日生效（pending）
+  const pendingActive = settings.pending_limit_dim && settings.limit_effective_date && settings.limit_effective_date <= dateKey
+  const effDim = pendingActive ? settings.pending_limit_dim : dim
+  const effAmount = pendingActive ? (settings.pending_amount_fen != null ? settings.pending_amount_fen : settings.limit_amount_fen) : settings.limit_amount_fen
+  const effYearStrat = pendingActive ? settings.pending_year_strategy : settings.year_strategy
+  const effMonthStrat = pendingActive ? settings.pending_month_strategy : settings.month_strategy
+
+  // 取某月 override（硬覆盖该月，并从年池预扣）
+  const monthOverride = overrides.find(o => o.type === 'month' && o.key === monthKey)
+  const monthPoolFromOverride = monthOverride ? monthOverride.amount_fen : null
+
+  // —— 年维度：先拆月 ——
+  let monthPool
+  if (effDim === 'year') {
+    if (monthPoolFromOverride != null) {
+      monthPool = monthPoolFromOverride
+    } else {
+      const monthsInYear = 12
+      if (effYearStrat === 'equal') {
+        monthPool = Math.floor((effAmount || 0) / monthsInYear)
+      } else {
+        // rollover：年池剩余 / 剩余月
+        const monthNum = parseInt(monthKey.slice(5, 7), 10)
+        const remainingMonths = 13 - monthNum // 含本月
+        monthPool = Math.floor((effAmount || 0) / Math.max(1, remainingMonths))
+      }
+    }
+  } else {
+    // month 维度：月池 = 月度 override 或 limit_amount_fen
+    monthPool = monthPoolFromOverride != null ? monthPoolFromOverride : (effAmount || 0)
+  }
+
+  // —— 月 → 日 ——
+  if (effMonthStrat === 'equal') {
+    const daysInMonth = daysInMonthOf(dateKey)
+    const base = Math.floor(monthPool / daysInMonth)
+    return Math.max(0, base)
+  } else {
+    // rollover：月池剩余 / 剩余天（含今日）。由于结算时无法实时知"已花"，
+    // 这里用"月池 − 本月已硬覆盖日额预扣"近似；精确重算在 runDailySettlement 内完成。
+    const daysInMonth = daysInMonthOf(dateKey)
+    const dayNum = parseInt(dateKey.slice(8, 10), 10)
+    const remainingDays = daysInMonth - dayNum + 1
+    const preDeduct = sumDayOverridesInMonth(overrides, monthKey, dateKey)
+    const poolRemain = Math.max(0, monthPool - preDeduct)
+    return Math.max(0, Math.floor(poolRemain / Math.max(1, remainingDays)))
+  }
+}
+
+/** 当月天数 */
+function daysInMonthOf(dateKey) {
+  const y = parseInt(dateKey.slice(0, 4), 10)
+  const m = parseInt(dateKey.slice(5, 7), 10)
+  return new Date(y, m, 0).getDate()
+}
+
+/** 本月内（截至今日之前）的 day override 预扣总额（硬覆盖从父池扣额） */
+function sumDayOverridesInMonth(overrides, monthKey, dateKey) {
+  return overrides
+    .filter(o => o.type === 'day' && o.key.slice(0, 7) === monthKey && o.key < dateKey)
+    .reduce((s, o) => s + (o.amount_fen || 0), 0)
 }
 
 /** 允许前端更新的 user_settings 字段白名单（防止越权写入） */
@@ -817,7 +904,16 @@ const SETTINGS_WRITABLE = [
   'asset_view_mode',
   'meal_tracking_enabled',
   'fat_loss_mode_enabled',
-  'savings_withdraw_limit_pct'
+  'savings_withdraw_limit_pct',
+  'limit_dim',
+  'limit_amount_fen',
+  'year_strategy',
+  'month_strategy',
+  'pending_limit_dim',
+  'pending_amount_fen',
+  'pending_year_strategy',
+  'pending_month_strategy',
+  'overrides'
 ]
 
 /**
@@ -1335,7 +1431,65 @@ async function runDailySettlement(userId, dateKey, options = {}) {
     }
   }
 
+  // 归档 limit_history（记录当日实际额度/花费/结余去向，供历史查询）
+  await archiveLimitHistory(userId, dateKey, settlement, settings, allocationResult)
+
   return { skipped: false, settlement, allocation: allocationResult }
+}
+
+/**
+ * 归档每日限额历史。幂等：同 date_key 重复写则更新。
+ */
+async function archiveLimitHistory(userId, dateKey, settlement, settings, allocationResult) {
+  const db = getDb()
+  const dim = settings ? (settings.limit_dim || 'day') : 'day'
+  const monthKey = dateKey.slice(0, 7)
+  const yearKey = dateKey.slice(0, 4)
+
+  // 父池口径（含 override 近似值）
+  let monthLimitFen = 0
+  let yearLimitFen = 0
+  if (dim === 'month') {
+    const mo = (settings.overrides || []).find(o => o.type === 'month' && o.key === monthKey)
+    monthLimitFen = mo ? mo.amount_fen : (settings.limit_amount_fen || 0)
+    yearLimitFen = 0
+  } else if (dim === 'year') {
+    const mo = (settings.overrides || []).find(o => o.type === 'month' && o.key === monthKey)
+    monthLimitFen = mo ? mo.amount_fen : Math.floor((settings.limit_amount_fen || 0) / 12)
+    yearLimitFen = settings.limit_amount_fen || 0
+  } else {
+    monthLimitFen = 0
+    yearLimitFen = 0
+  }
+
+  // 结余去向
+  let surplusDest = 'none'
+  if (allocationResult && allocationResult.items && allocationResult.items.length) {
+    const t = allocationResult.items[0].target_type
+    if (t === 'wish') surplusDest = 'wish'
+    else if (t === 'savings_pool') surplusDest = 'savings'
+    else if (t === 'roll_over') surplusDest = (dim !== 'day' && (settings.month_strategy || 'equal') === 'rollover') ? 'rollover_pool' : 'rollover_tomorrow'
+  }
+
+  const payload = {
+    user_id: userId,
+    date_key: dateKey,
+    day_limit_fen: settlement.base_limit || 0,
+    month_limit_fen: monthLimitFen,
+    year_limit_fen: yearLimitFen,
+    source: (settings.overrides || []).some(o => o.type === 'day' && o.key === dateKey) ? 'override' : 'auto',
+    spent_fen: settlement.consumed || 0,
+    surplus_fen: settlement.surplus || 0,
+    surplus_dest: surplusDest,
+    created_at: nowTs()
+  }
+
+  const existRes = await db.collection('limit_history').where({ user_id: userId, date_key: dateKey }).limit(1).get()
+  if (existRes.data && existRes.data[0]) {
+    await db.collection('limit_history').doc(existRes.data[0]._id).update(payload)
+  } else {
+    await db.collection('limit_history').add(payload)
+  }
 }
 
 async function allocateSurplus(userId, dateKey, items, isAuto = false) {
@@ -3427,6 +3581,22 @@ async function getDoc(collection, userId) {
   return getDocByUser(collection, userId)
 }
 
+/**
+ * 读取限额历史（按日期倒序）。
+ * @param {string} userId
+ * @param {Object} opts { start_key, end_key, limit }
+ */
+async function getLimitHistory(userId, opts = {}) {
+  const db = getDb()
+  const where = { user_id: userId }
+  if (opts.start_key) where.date_key = Object.assign({}, where.date_key, { $gte: opts.start_key })
+  if (opts.end_key) where.date_key = Object.assign({}, where.date_key, { $lte: opts.end_key })
+  const q = db.collection('limit_history').where(where).orderBy('date_key', 'desc')
+  const lim = opts.limit || 60
+  const res = await q.limit(lim).get()
+  return res.data || []
+}
+
 module.exports = {
   PRESET_EXPENSE_CATEGORIES,
   PRESET_INCOME_CATEGORIES,
@@ -3522,5 +3692,6 @@ module.exports = {
   getMeal,
   getDailyHealthSnapshot,
   setExerciseCalories,
-  getWeeklyHealth
+  getWeeklyHealth,
+  getLimitHistory
 }
