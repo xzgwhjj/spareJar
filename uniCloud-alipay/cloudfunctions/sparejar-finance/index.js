@@ -202,6 +202,10 @@ exports.main = async (event, context) => {
         if (!data.date_key) return fail('date_key is required')
         return ok(await dbApi.allocateSurplus(userId, data.date_key, data.items, !!data.is_auto))
 
+      case 'confirmSurplusRollover':
+        if (!data.decision) return fail('decision is required')
+        return ok(await dbApi.confirmSurplusRollover(userId, data.decision, data.opts || {}))
+
       case 'applySurplusPoolChange':
         return ok({
           balance: await dbApi.applySurplusPoolChange(

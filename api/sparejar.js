@@ -59,6 +59,7 @@ export const ACTIONS = Object.freeze({
   RECALCULATE_SETTLEMENT: 'recalculateSettlement',
   RUN_DAILY_SETTLEMENT: 'runDailySettlement',
   ALLOCATE_SURPLUS: 'allocateSurplus',
+  CONFIRM_SURPLUS_ROLLOVER: 'confirmSurplusRollover',
   APPLY_SURPLUS_POOL_CHANGE: 'applySurplusPoolChange',
   APPLY_SAVINGS_POOL_CHANGE: 'applySavingsPoolChange',
   APPLY_WISH_FUND_CHANGE: 'applyWishFundChange',
@@ -382,6 +383,18 @@ export function allocateSurplus(dateKey, items = null, isAuto = false) {
     date_key: dateKey,
     ...(items ? { items } : {}),
     is_auto: isAuto
+  })
+}
+
+/**
+ * 确认/转走次日待滚入结余（24h 选择窗口）。
+ * @param {'confirm'|'other'} decision confirm=保持滚入次日限额；other=转入目标
+ * @param {Object} [opts] { target_type, wish_id }
+ */
+export function confirmSurplusRollover(decision, opts = {}) {
+  return callSparejar(ACTIONS.CONFIRM_SURPLUS_ROLLOVER, {
+    decision,
+    opts
   })
 }
 
@@ -741,6 +754,7 @@ export default {
   recalculateSettlement,
   runDailySettlement,
   allocateSurplus,
+  confirmSurplusRollover,
   applySurplusPoolChange,
   applySavingsPoolChange,
   applyWishFundChange,

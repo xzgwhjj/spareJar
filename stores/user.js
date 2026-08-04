@@ -61,6 +61,7 @@ import {
   listCategories,
   getDashboard,
   getDoc,
+  confirmSurplusRollover,
   isSparejarApiError
 } from '@/api/sparejar.js'
 import { todayDateKey, addDaysToDateKey } from '@/utils/date.js'
@@ -450,6 +451,20 @@ export function invalidateDashboard() {
   state.dashboard.yesterdaySettlement = null
   state.dashboard.transactions = []
   state.dashboard.loadedAt = 0
+}
+
+/**
+ * 确认/转走次日待滚入结余（24h 选择窗口）。
+ * @param {'confirm'|'other'} decision confirm=保持滚入次日限额；other=转入目标
+ * @param {Object} [opts] { target_type, wish_id }
+ */
+export async function confirmSurplusRolloverAction(decision, opts = {}) {
+  if (!state.uid) return
+  await confirmSurplusRollover(decision, opts)
+  await loadSettings()
+  await refreshTodayDashboard()
+  await loadSurplusPool()
+  await loadSavingsPool()
 }
 
 /**
@@ -1102,6 +1117,13 @@ export function useUserStore() {
     }
     return 0
   })
+  /** 次日待滚入结余额（与 surplus_pools 分离） */
+  const pendingRolloverFen = computed(() => {
+    const s = state.settings
+    return s && typeof s.pending_rollover_fen === 'number' ? s.pending_rollover_fen : 0
+  })
+  /** 当日总限额 = 固定限额 + 待滚入结余（即“还可花”的分母） */
+  const totalDailyLimitFen = computed(() => dailyLimitFen.value + pendingRolloverFen.value)
   /** 是否已设置任何维度的限额（供"未设置"判断使用） */
   const hasLimit = computed(() => {
     const s = state.settings
@@ -1163,6 +1185,8 @@ export function useUserStore() {
     isGuest,
     sessionReady,
     dailyLimitFen,
+    pendingRolloverFen,
+    totalDailyLimitFen,
     hasLimit,
     spentTodayFen,
     leftTodayFen,
@@ -1186,6 +1210,7 @@ export function useUserStore() {
     loadSavingsPool,
     refreshTodayDashboard,
     invalidateDashboard,
+    confirmSurplusRolloverAction,
     loadCategories,
     categoryMap,
     loadWishes,

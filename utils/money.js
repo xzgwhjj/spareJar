@@ -197,6 +197,40 @@ export function formatYuan(yuan, options = {}) {
 }
 
 /**
+ * 分 → 紧凑展示字符串（自动省略为 千/万/亿 单位）
+ * - < 1000（不足千）：原样整数（不带小数）
+ * - >= 1000：按 千/万/亿 缩写，保留 1 位小数（末尾 .0 省略）
+ * 例：1234 → "1.2千"，35000 → "3.5万"，350000000 → "3.5亿"
+ * @param {unknown} fen
+ * @param {{ withSymbol?: boolean }} [options]
+ * @returns {string}
+ */
+export function formatFenCompact(fen, options = {}) {
+  const { withSymbol = false } = options
+  assertIntegerFen(fen, true)
+  const yuan = fen / 100
+  const sign = yuan < 0 ? '-' : ''
+  const abs = Math.abs(yuan)
+  let body
+  if (abs < 1000) {
+    body = String(Math.round(abs))
+  } else if (abs < 10000) {
+    body = trimZero((abs / 1000).toFixed(1)) + '千'
+  } else if (abs < 100000000) {
+    body = trimZero((abs / 10000).toFixed(1)) + '万'
+  } else {
+    body = trimZero((abs / 100000000).toFixed(1)) + '亿'
+  }
+  const display = `${sign}${body}`
+  return withSymbol ? `¥${display}` : display
+}
+
+/** 去掉末尾多余的 .0 */
+function trimZero(s) {
+  return s.endsWith('.0') ? s.slice(0, -2) : s
+}
+
+/**
  * 安全版：元 → 分，失败返回 { ok: false }
  * @param {number|string} yuan
  * @returns {MoneyResult}
@@ -276,6 +310,7 @@ export default {
   fenToYuanString,
   formatFen,
   formatYuan,
+  formatFenCompact,
   safeYuanToFen,
   safeFormatFen,
   parseYuanInput

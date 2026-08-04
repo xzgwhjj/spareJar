@@ -1220,6 +1220,8 @@ async function recalculateDailySettlement(userId, dateKey) {
   const baseLimit = await getEffectiveBaseLimit(userId, dateKey)
   const pool = await getDocByUser('surplus_pools', userId)
   const surplusPoolBalance = pool ? pool.balance || 0 : 0
+  // 次日待滚入结余额（与 surplus_pools.balance 分离；滚入次日限额的临时额度）
+  const pendingRollover = settings ? (settings.pending_rollover_fen || 0) : 0
   // 退款恢复当日可用额度：受 user_settings.refund_restore_limit 控制（默认开启）
   const refundRestore = settings ? settings.refund_restore_limit !== false : true
   const consumed = await sumDailyLimitExpenses(userId, dateKey, refundRestore, false)
@@ -1227,17 +1229,19 @@ async function recalculateDailySettlement(userId, dateKey) {
   const challengeConsumed = await sumDailyLimitExpenses(userId, dateKey, true, true)
   const consumedFromBase = Math.min(consumed, baseLimit)
   const consumedFromSurplus = Math.max(0, consumed - baseLimit)
-  const availableStart = baseLimit + surplusPoolBalance
+  // 生效总限额 = 固定限额 + 已确认滚入的次日结余（pending 滚动为临时额度）
+  const availableStart = baseLimit + pendingRollover
   const availableEnd = availableStart - consumed
   const surplus = Math.max(0, baseLimit - consumedFromBase)
-  const overAmount = Math.max(0, consumed - baseLimit - surplusPoolBalance)
-  const isOverLimit = overAmount > 0 || consumed > baseLimit + surplusPoolBalance
+  const overAmount = Math.max(0, consumed - baseLimit - pendingRollover)
+  const isOverLimit = overAmount > 0 || consumed > baseLimit + pendingRollover
 
   const existing = await db.collection('daily_settlements').where({ user_id: userId, date_key: dateKey }).limit(1).get()
   const payload = {
     user_id: userId,
     date_key: dateKey,
     base_limit: baseLimit,
+    pending_rollover_fen: pendingRollover,
     surplus_pool_start: surplusPoolBalance,
     consumed,
     consumed_from_base: consumedFromBase,
@@ -1528,10 +1532,13 @@ async function allocateSurplus(userId, dateKey, items, isAuto = false) {
 
   for (const item of allocItems) {
     if (item.target_type === 'roll_over') {
-      await applySurplusPoolChange(userId, 'in', item.amount, 'daily_surplus', {
-        ref_type: 'allocation',
-        ref_id: allocRes.id,
-        date_key: dateKey
+      // 滚入次日限额：写入 user_settings.pending_rollover_fen（临时待确认额度，与 surplus_pools 分离）
+      const s = await getDocByUser('user_settings', userId)
+      const cur = s ? (s.pending_rollover_fen || 0) : 0
+      await db.collection('user_settings').where({ user_id: userId }).update({
+        pending_rollover_fen: cur + item.amount,
+        pending_rollover_date: dateKey,
+        updated_at: nowTs()
       })
     } else if (item.target_type === 'wish') {
       await applyWishFundChange(userId, item.wish_id, 'in', item.amount, 'surplus_allocation', {
@@ -1552,6 +1559,63 @@ async function allocateSurplus(userId, dateKey, items, isAuto = false) {
   })
 
   return { allocation_id: allocRes.id, items: allocItems, is_auto: isAuto }
+}
+
+/**
+ * 确认/转走次日待滚入结余（24h 选择窗口）。
+ * - decision='confirm'：保持滚入次日限额（限额=base+pending），标记已确认。
+ * - decision='other'：把 pending_rollover_fen 立即转入指定目标（savings_pool / wish 等），清零 pending，限额回到 base。
+ * @param {string} userId
+ * @param {'confirm'|'other'} decision
+ * @param {Object} [opts] { target_type, wish_id }
+ */
+async function confirmSurplusRollover(userId, decision, opts = {}) {
+  const db = getDb()
+  const settings = await getDocByUser('user_settings', userId)
+  if (!settings) throw new Error('user settings not found')
+  const pending = settings.pending_rollover_fen || 0
+  const pendingDate = settings.pending_rollover_date || null
+  if (pending <= 0) {
+    return { ok: true, changed: false, pending_rollover_fen: 0 }
+  }
+
+  const ts = nowTs()
+  if (decision === 'confirm') {
+    await db.collection('user_settings').where({ user_id: userId }).update({
+      pending_rollover_confirmed: true,
+      updated_at: ts
+    })
+  } else {
+    const target = opts.target_type || 'savings_pool'
+    if (target === 'wish') {
+      if (!opts.wish_id) throw new Error('wish_id required for wish target')
+      await applyWishFundChange(userId, opts.wish_id, 'in', pending, 'surplus_rollover', {})
+    } else if (target === 'savings_pool') {
+      await applySavingsPoolChange(userId, 'in', pending, 'surplus_rollover', { date_key: pendingDate })
+    } else {
+      // 其他自定义去向默认进存款池
+      await applySavingsPoolChange(userId, 'in', pending, 'surplus_rollover', { date_key: pendingDate })
+    }
+    await db.collection('user_settings').where({ user_id: userId }).update({
+      pending_rollover_fen: 0,
+      pending_rollover_date: null,
+      pending_rollover_confirmed: false,
+      updated_at: ts
+    })
+  }
+
+  // 把对应日结标记已处理，避免重复触发
+  if (pendingDate) {
+    const sRes = await db.collection('daily_settlements').where({ user_id: userId, date_key: pendingDate }).limit(1).get()
+    if (sRes.data && sRes.data[0]) {
+      await db.collection('daily_settlements').doc(sRes.data[0]._id).update({
+        allocation_status: decision === 'confirm' ? 'allocated' : 'allocated',
+        updated_at: ts
+      })
+    }
+  }
+
+  return { ok: true, changed: true, decision, pending_rollover_fen: decision === 'confirm' ? pending : 0 }
 }
 
 async function applyOverLimitPenalty(userId, dateKey, settlement) {
@@ -3616,6 +3680,7 @@ module.exports = {
   recalculateDailySettlement,
   runDailySettlement,
   allocateSurplus,
+  confirmSurplusRollover,
   createTransaction,
   softDeleteTransaction,
   updateTransaction,

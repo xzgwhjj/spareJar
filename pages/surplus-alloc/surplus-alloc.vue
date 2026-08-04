@@ -1,7 +1,7 @@
 <template>
   <view class="alloc-page" data-cmp="SurplusAlloc">
     <view class="topbar">
-      <view class="back-btn" @click="goBack"><text>←</text></view>
+      <view class="back-btn" @tap="goBack"><text>←</text></view>
       <text class="topbar-title">盈余分配</text>
       <view style="width:36px;" />
     </view>
@@ -9,7 +9,7 @@
     <scroll-view class="page-scroll" scroll-y enhanced :show-scrollbar="false" style="flex:1;">
       <!-- 待分配结余 -->
       <view class="glass-hero card-in-1" style="margin:16px;padding:18px;text-align:center;">
-        <text class="surplus-label">昨日结余待分配</text>
+        <text class="surplus-label">昨日结余待确认（24h内选择）</text>
         <text class="surplus-amount" v-if="pending">¥{{ surplusText }}</text>
         <text class="surplus-amount muted" v-else>¥0</text>
         <text v-if="pending" class="surplus-date">结算日 {{ pending.date_key }}</text>
@@ -48,7 +48,7 @@
               :key="w._id"
               class="wish-pick-item"
               :class="{ active: selectedWishId === w._id }"
-              @click="selectedWishId = w._id"
+              @tap="selectedWishId = w._id"
             >
               <text>{{ w.name }}</text>
               <text class="wish-pick-sub">已存 ¥{{ formatFen(w.saved_amount || 0) }}</text>
@@ -63,15 +63,15 @@
       </view>
 
       <!-- 分配历史入口 -->
-      <view class="glass-thin" style="margin:0 16px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;" @click="goHistory">
+      <view class="glass-thin" style="margin:0 16px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;" @tap="goHistory">
         <text class="history-label">📋 查看分配历史</text>
         <text class="history-arrow">›</text>
       </view>
 
       <!-- 确认按钮 -->
       <view v-if="pending" style="padding:20px 16px 30px;">
-        <view class="confirm-btn" @click="confirmAlloc">
-          <text>✅ 确认分配</text>
+        <view class="confirm-btn" :class="{ loading: allocating }" @tap="confirmAlloc">
+          <text>{{ allocating ? '处理中…' : '✅ 确认分配' }}</text>
         </view>
       </view>
     </scroll-view>
@@ -84,10 +84,9 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useUserStore } from '@/stores/user.js';
-import { allocateSurplus } from '@/api/sparejar.js';
 import { formatFen } from '@/utils/money.js';
 
-const { state, loadWishes, loadSurplusPool, loadPendingAllocationAction } = useUserStore();
+const { state, loadWishes, loadSurplusPool, loadPendingAllocationAction, confirmSurplusRolloverAction } = useUserStore();
 
 const pending = ref(null);
 const wishes = computed(() => (Array.isArray(state.wishes) ? state.wishes : []));
@@ -119,40 +118,41 @@ const normalizeAlloc = (changedIdx) => {
   }
 };
 
-const buildItems = () => {
-  const total = pending.value.surplus;
-  const raw = allocItems.map((it) => ({ key: it.key, pct: it.percent }));
-  // 先按百分比取整，再校正使总和精确等于 total（分）
-  const amounts = raw.map((r) => Math.round(total * r.pct / 100));
-  let diff = total - amounts.reduce((s, a) => s + a, 0);
-  // 把差值补到占比最大的非滚存项（或滚存项）上
-  let idx = amounts.findIndex((a, i) => raw[i].key === 'roll_over');
-  if (idx < 0) idx = 0;
-  amounts[idx] += diff;
-  const items = [];
-  allocItems.forEach((it, i) => {
-    const amt = amounts[i];
-    if (amt <= 0) return;
-    if (it.key === 'wish') {
-      if (!selectedWishId.value) throw new Error('请选择要存入的心愿');
-      items.push({ target_type: 'wish', wish_id: selectedWishId.value, amount: amt });
-    } else {
-      items.push({ target_type: it.key, amount: amt });
-    }
-  });
-  return items;
-};
+const allocating = ref(false);
+
+// 按占比决定主目标：占比最高的项即用户选择的结余去向
+const primaryTarget = computed(() => {
+  const sorted = [...allocItems].sort((a, b) => b.percent - a.percent);
+  const top = sorted[0];
+  if (!top || top.percent <= 0) return { key: 'roll_over' };
+  return { key: top.key };
+});
 
 const confirmAlloc = async () => {
-  if (!pending.value) return;
+  if (!pending.value || allocating.value) return;
   try {
-    const items = buildItems();
-    await allocateSurplus(pending.value.date_key, items, false);
+    allocating.value = true;
+    const target = primaryTarget.value;
+    if (target.key === 'roll_over') {
+      // 确认滚入次日限额
+      await confirmSurplusRolloverAction('confirm');
+    } else if (target.key === 'wish') {
+      if (!selectedWishId.value) throw new Error('请选择要存入的心愿');
+      await confirmSurplusRolloverAction('other', {
+        target_type: 'wish',
+        wish_id: selectedWishId.value,
+      });
+    } else {
+      // savings_pool 等：整笔转入该目标
+      await confirmSurplusRolloverAction('other', { target_type: target.key });
+    }
     await Promise.all([loadSurplusPool(), loadWishes()]);
     uni.showToast({ title: '分配成功', icon: 'success' });
     setTimeout(() => uni.navigateBack(), 500);
   } catch (err) {
     uni.showToast({ title: err.message || '分配失败', icon: 'none' });
+  } finally {
+    allocating.value = false;
   }
 };
 

@@ -13,8 +13,8 @@
           <view class="alloc-tab-spacer">
           </view>
           <view class="alloc-tabs">
-            <view v-for="(c, i) in QUICK_ALLOC" :key="c.id" class="alloc-tab" :class="{ chosen: applied === c.id }"
-              @click="handleChip(c.id)"
+            <view v-for="(c, i) in QUICK_ALLOC" :key="c.id" class="alloc-tab" :class="{ chosen: applied === c.id, loading: applying }"
+              @tap="handleChip(c.id)"
               :style="{ borderRadius: i === 0 ? '20rpx 8rpx 0 20rpx' : i === QUICK_ALLOC.length - 1 ? '8rpx 20rpx 0 8rpx' : '8rpx 8rpx 0 8rpx' }">
               <text class="alloc-tab-label">{{ c.label }}</text>
               <view class="surplus-tab-indicator"></view>
@@ -28,10 +28,10 @@
             <view class="surplus-main">
               <view class="surplus-title-row">
                 <view class="surplus-dot" />
-                <text class="surplus-title-text">{{ yesterdaySurplusFen > 0 ? '昨日结余待分配' : '昨日结余已分配' }}</text>
+                <text class="surplus-title-text">{{ yesterdaySurplusFen > 0 ? '昨日结余待确认（24h内选择）' : '昨日结余已分配' }}</text>
               </view>
               <view class="surplus-amount-row">
-                <text class="surplus-plus">＋¥</text>
+                <text class="surplus-plus">待滚入次日限额 ＋¥</text>
                 <text class="surplus-num">{{ yesterdaySurplusText }}</text>
               </view>
             </view>
@@ -60,7 +60,7 @@ import { cdn } from '@/utils/cdn.js';
 import { useUserStore } from '@/stores/user.js';
 import { formatFen } from '@/utils/money.js';
 
-const { yesterdaySurplusFen } = useUserStore();
+const { yesterdaySurplusFen, state, confirmSurplusRolloverAction } = useUserStore();
 const yesterdaySurplusText = computed(() => formatFen(yesterdaySurplusFen.value));
 
 /** 单个 tab 动画占全周期的 1/3，12s 一轮 */
@@ -73,11 +73,35 @@ const QUICK_ALLOC = [
   { id: 'wish', emoji: '⭐', label: '心愿', hint: '攒', color: '#fcd34d', glow: 'rgba(252, 211, 77, 0.35)' },
 ];
 
-const applied = ref('pool');
+const applied = ref('');
 const appliedChip = computed(() => QUICK_ALLOC.find(c => c.id === applied.value));
+const applying = ref(false);
 
-const handleChip = (id) => {
-  applied.value = id;
+// 三个快捷 tab 直接确认/转走次日待滚入结余
+// carry=确认滚入次日限额；pool/wish=把待滚入结余立即转入对应目标
+const handleChip = async (id) => {
+  if (applying.value) return;
+  if (yesterdaySurplusFen.value <= 0) {
+    applied.value = id;
+    return;
+  }
+  applying.value = true;
+  try {
+    if (id === 'carry') {
+      await confirmSurplusRolloverAction('confirm');
+    } else if (id === 'pool') {
+      await confirmSurplusRolloverAction('other', { target_type: 'savings_pool' });
+    } else if (id === 'wish') {
+      const w = (state.wishes || [])[0];
+      await confirmSurplusRolloverAction('other', {
+        target_type: 'wish',
+        wish_id: w ? w._id : undefined,
+      });
+    }
+    applied.value = id;
+  } finally {
+    applying.value = false;
+  }
 };
 
 const allocTabStyle = (c, index) => ({

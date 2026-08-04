@@ -16,7 +16,7 @@
       >
         <!-- 待：符合风格的限额图标 -->
         <text class="limit-btn-icon">🎯</text>
-        <text class="limit-btn-text">限额 ¥{{ dailyLimitText }}</text>
+        <text class="limit-btn-text">限额 ¥{{ totalDailyLimitText }}</text>
         <text class="limit-btn-arrow">›</text>
       </view>
       <view
@@ -62,15 +62,33 @@
       >
         <view class="hud-inner">
           <text class="hud-label">{{ hudLabel }}</text>
-          <text class="hud-amount" :class="{ 'over-amount': isOver }"
+          <!-- 完整金额气泡（点击金额切换显示，定位在金额上方，无遮罩） -->
+          <view v-if="showAmountTip" class="amount-tip" @tap.stop>
+            <text class="amount-tip-value">¥{{ hudAmountFull }}</text>
+          </view>
+          <text
+            class="hud-amount"
+            :class="{ 'over-amount': isOver, tappable: hudAmountTappable }"
+            @tap="toggleAmountTip"
             >¥{{ hudAmount }}</text
           >
-          <text class="hud-spent" v-if="hasLimit"
+          <text
+            class="hud-spent"
+            v-if="hasLimit"
+            :class="{ tappable: limitTipTappable }"
+            @tap="toggleLimitTip"
             >已用 ¥{{ spentText
-            }}<template v-if="dailyLimitFen > 0">
-              · 限额 ¥{{ dailyLimitText }}</template
+            }}<template v-if="totalDailyLimitFen > 0">
+              · 限额 ¥{{ totalDailyLimitText }}</template
             ></text
           >
+          <!-- 限额说明气泡（点击“已用·限额”一行弹出，展示固定限额+结余限额=总限额） -->
+          <view v-if="showLimitTip && limitTipTappable" class="limit-tip" @tap.stop>
+            <text class="limit-tip-row">固定限额 ¥{{ dailyLimitText }}</text>
+            <text class="limit-tip-row" v-if="pendingRolloverFen > 0">+ 结余限额 ¥{{ pendingRolloverText }}</text>
+            <view class="limit-tip-divider" v-if="pendingRolloverFen > 0" />
+            <text class="limit-tip-row limit-tip-total">= 总限额 ¥{{ totalDailyLimitText }}</text>
+          </view>
           <view class="hud-bar" :class="{ 'over-bar': isOver, 'loop-bar': !hasLimit }">
             <!-- 循环模式下的粒子拖尾光点（已设限额时隐藏） -->
             <view v-if="!hasLimit" class="bar-head" />
@@ -111,10 +129,11 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, ref } from "vue";
+import { onHide, onUnload } from "@dcloudio/uni-app";
 import SavingsJar from "./SavingsJar.vue";
 import { useUserStore } from "@/stores/user.js";
-import { formatFen } from "@/utils/money.js";
+import { formatFen, formatFenCompact } from "@/utils/money.js";
 
 const props = defineProps({
   isOver: { type: Boolean, default: false },
@@ -124,6 +143,8 @@ const {
   state,
   categoryMap,
   dailyLimitFen,
+  pendingRolloverFen,
+  totalDailyLimitFen,
   spentTodayFen,
   leftTodayFen,
   isOverLimit,
@@ -154,20 +175,53 @@ const TOTAL_BILLS = computed(
 
 const over = computed(() => props.isOver || isOverLimit.value);
 const dailyLimitText = computed(() => formatFen(dailyLimitFen.value));
+const totalDailyLimitText = computed(() => formatFen(totalDailyLimitFen.value));
+const pendingRolloverText = computed(() => formatFen(pendingRolloverFen.value));
 const spentText = computed(() => formatFen(spentTodayFen.value));
 const leftText = computed(() => formatFen(leftTodayFen.value));
 // 未设限额时，悬浮面板展示"已用"金额；已设限额时展示"还可花"金额
-const hasLimit = computed(() => dailyLimitFen.value > 0);
+const hasLimit = computed(() => totalDailyLimitFen.value > 0);
 const hudLabel = computed(() => (hasLimit.value ? "还可花" : "已用"));
-const hudAmount = computed(() => (hasLimit.value ? leftText.value : spentText.value));
+// 紧凑显示（自动转 千/万/亿）；完整金额用于点击气泡
+const hudAmount = computed(() =>
+  hasLimit.value
+    ? formatFenCompact(leftTodayFen.value)
+    : formatFenCompact(spentTodayFen.value)
+);
+const hudAmountFull = computed(() => (hasLimit.value ? leftText.value : spentText.value));
+// 仅当显示值被缩写（≠完整值）时才允许点击查看完整金额
+const hudAmountTappable = computed(() => hudAmount.value !== hudAmountFull.value);
+
+// 完整金额气泡
+const showAmountTip = ref(false);
+const toggleAmountTip = () => {
+  if (hudAmountTappable.value) showAmountTip.value = !showAmountTip.value;
+};
+
+// 限额说明气泡（固定限额 + 结余限额 = 总限额）
+const showLimitTip = ref(false);
+const limitTipTappable = computed(() => totalDailyLimitFen.value > 0);
+const toggleLimitTip = () => {
+  if (limitTipTappable.value) showLimitTip.value = !showLimitTip.value;
+};
+
+// 页面隐藏/卸载时自动收起气泡（用户离开当前页面）
+onHide(() => {
+  showAmountTip.value = false;
+  showLimitTip.value = false;
+});
+onUnload(() => {
+  showAmountTip.value = false;
+  showLimitTip.value = false;
+});
 
 const pct = computed(() => {
-  const limit = dailyLimitFen.value;
+  const limit = totalDailyLimitFen.value;
   if (!limit || limit <= 0) return 0;
   return Math.max(0, Math.min(leftTodayFen.value / limit, 1));
 });
 const spentPct = computed(() => {
-  const limit = dailyLimitFen.value;
+  const limit = totalDailyLimitFen.value;
   if (!limit || limit <= 0) return 0;
   return Math.min(spentTodayFen.value / limit, 1);
 });
@@ -318,7 +372,9 @@ const goLimitSetting = () =>
     right: 0;
     bottom: 72rpx;
     z-index: 10;
-    width: 260rpx;
+    min-width: 260rpx;
+    width: auto;
+    max-width: 500rpx;
     padding: 20rpx 22rpx 16rpx;
     border-radius: 36rpx;
     // 更透的毛玻璃：顶部更亮、底部更透的雾感渐变
@@ -338,6 +394,7 @@ const goLimitSetting = () =>
     animation: panel-float-kf 4.5s ease-in-out infinite;
 
     .hud-inner {
+      position: relative;
       .hud-label {
         font-size: 20rpx;
         color: $ink-muted;
@@ -356,6 +413,103 @@ const goLimitSetting = () =>
 
         &.over-amount {
           color: $over;
+        }
+        &.tappable {
+          cursor: pointer;
+          position: relative;
+        }
+      }
+      // 完整金额气泡（点击金额弹出，定位在金额上方，无遮罩、小尺寸）
+      .amount-tip {
+        position: absolute;
+        left: 22rpx;
+        bottom: 100%;
+        margin-bottom: 12rpx;
+        z-index: 30;
+        padding: 12rpx 22rpx;
+        border-radius: 18rpx;
+        display: inline-flex;
+        align-items: center;
+        background: rgba(245, 255, 247, 0.92);
+        animation: tip-pop-kf 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+        border: 2rpx solid rgba(140, 233, 155, 0.7);
+        box-shadow: 0 0 16rpx rgba(140, 233, 155, 0.35);
+        backdrop-filter: blur(12px) saturate(160%);
+        -webkit-backdrop-filter: blur(12px) saturate(160%);
+
+        &-value {
+          font-size: 30rpx;
+          font-weight: 900;
+          color: var(--g7);
+          letter-spacing: -1rpx;
+          word-break: break-all;
+          white-space: nowrap;
+        }
+      }
+      // 限额说明气泡（点击“已用·限额”一行弹出，展示 固定+结余=总限额）
+      .limit-tip {
+        position: absolute;
+        left: 22rpx;
+        bottom: 56rpx;
+        z-index: 30;
+        padding: 14rpx 22rpx;
+        border-radius: 18rpx;
+        display: flex;
+        flex-direction: column;
+        gap: 6rpx;
+        min-width: 240rpx;
+        max-width: 460rpx;
+        background: rgba(245, 255, 247, 0.95);
+        animation: tip-pop-kf 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+        border: 2rpx solid rgba(140, 233, 155, 0.7);
+        box-shadow: 0 0 16rpx rgba(140, 233, 155, 0.35);
+        backdrop-filter: blur(12px) saturate(160%);
+        -webkit-backdrop-filter: blur(12px) saturate(160%);
+
+        &-row {
+          font-size: 26rpx;
+          font-weight: 600;
+          color: var(--ink3);
+          white-space: nowrap;
+        }
+        &-total {
+          font-size: 28rpx;
+          font-weight: 900;
+          color: var(--g7);
+        }
+        &-divider {
+          height: 2rpx;
+          background: rgba(140, 233, 155, 0.5);
+          margin: 2rpx 0;
+        }
+      }
+      @keyframes tip-fade-kf {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+      @keyframes tip-pop-kf {
+        from {
+          opacity: 0;
+          transform: translateY(36rpx) scale(0.92);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+      @keyframes premiumGradient {
+        0% {
+          background-position: 0% 50%;
+        }
+        50% {
+          background-position: 100% 50%;
+        }
+        100% {
+          background-position: 0% 50%;
         }
       }
       .hud-spent {
