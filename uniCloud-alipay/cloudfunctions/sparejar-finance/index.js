@@ -132,9 +132,19 @@ exports.main = async (event, context) => {
         if (!data.wish_id) return fail('wish_id is required')
         return ok(await dbApi.archiveWish(userId, data.wish_id))
 
+      case 'deleteWish':
+        if (!data.wish_id) return fail('wish_id is required')
+        return ok(await dbApi.deleteWish(userId, data.wish_id))
+
+      case 'listArchivedWishes':
+        return ok(await dbApi.listArchivedWishes(userId, data.reason_filter))
+
       case 'listWishFundLogs':
         if (!data.wish_id) return fail('wish_id is required')
         return ok(await dbApi.listWishFundLogs(userId, data.wish_id))
+
+      case 'listSavingsPoolLogs':
+        return ok(await dbApi.listSavingsPoolLogs(userId))
 
       case 'listSurplusAllocations':
         return ok(await dbApi.listSurplusAllocations(userId))

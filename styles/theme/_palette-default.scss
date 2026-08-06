@@ -26,6 +26,32 @@ $sj-g6: #29c35a !default;   // malachite-800（深一档，用于深色态/强�
 $sj-g7: #0e923f !default;   // malachite-900（更深，深色模式/正文深绿）
 $sj-g8: #00580c !default;   // malachite-950（最深，深色模式背景）
 
+/* 品牌紫阶（purple 色阶 · 与 malachite 同结构，用于次级主题/渐变） */
+$sj-pu0: #faf7ff !default;  // purple-50
+$sj-pu1: #f4eeff !default;  // purple-100
+$sj-pu2: #ede4ff !default;  // purple-200
+$sj-pu2-0: #e0d2ff !default; // purple-300（过渡档）
+$sj-pu2-1: #cbb6ff !default; // purple-400（过渡档）
+$sj-pu3: #b794f6 !default;  // purple-500
+$sj-pu4: #9a78f0 !default;  // purple-600
+$sj-pu5: #7c6cf8 !default;  // purple-700（主色）
+$sj-pu6: #6a55e6 !default;  // purple-800
+$sj-pu7: #523bb8 !default;  // purple-900
+$sj-pu8: #2e1c66 !default;  // purple-950
+
+/* 品牌黄阶（amber 色阶 · 与 malachite 同结构，用于次级主题/渐变） */
+$sj-y0: #fffdf2 !default;   // amber-50
+$sj-y1: #fffae0 !default;   // amber-100
+$sj-y2: #fff4cc !default;   // amber-200
+$sj-y2-0: #ffecaa !default;  // amber-300（过渡档）
+$sj-y2-1: #ffe08a !default;  // amber-400（过渡档）
+$sj-y3: #fcd34d !default;   // amber-500
+$sj-y4: #fbbf24 !default;   // amber-600
+$sj-y5: #f59e0b !default;   // amber-700（主色）
+$sj-y6: #d97706 !default;   // amber-800
+$sj-y7: #b45309 !default;   // amber-900
+$sj-y8: #78350f !default;   // amber-950
+
 /* 文字 */
 $sj-ink: #0f1c14 !default;
 $sj-ink2: #3a5244 !default;

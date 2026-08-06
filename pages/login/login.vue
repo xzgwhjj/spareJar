@@ -45,6 +45,19 @@
     </view>
   </view>
       
+    <!-- 隐私协议确认弹框：未勾选时点击登录触发，使用统一 BaseModal -->
+    <BaseModal
+      :show="showPrivacyModal"
+      title="隐私协议"
+      :content="`请阅读并同意${privacyState.contractName}，我们将依法保护你的个人信息安全。`"
+      cancel-text="暂不同意"
+      confirm-text="同意"
+      :close-on-overlay="false"
+      @confirm="onPrivacyConfirm"
+      @cancel="onPrivacyCancel"
+      @close="onPrivacyCancel"
+    />
+
     <!-- 全局数字键盘（单例）：由 main.js 全局注册 -->
     <amount-keyboard />
 </view>
@@ -52,6 +65,7 @@
 
 <script setup>
 import PrivacyPopup from '@/components/PrivacyPopup.vue';
+import BaseModal from '@/components/BaseModal.vue';
 import { ref } from 'vue';
 import { cdn } from '@/utils/cdn.js';
 import { onLoad } from '@dcloudio/uni-app';
@@ -62,6 +76,8 @@ const { state: privacyState } = usePrivacy();
 const userStore = useUserStore();
 const loading = ref(false);
 const agreedPrivacy = ref(false);
+// 未勾选隐私协议时，用于承载隐私确认弹框（BaseModal）
+const showPrivacyModal = ref(false);
 // 登录后需要返回的目标页面（由拦截方通过 ?redirect= 传入，支持 tabBar 与普通页面）
 const redirect = ref('');
 
@@ -98,21 +114,27 @@ function openPrivacyDetail() {
 
 function requestPrivacyConsent() {
   return new Promise((resolve) => {
-    uni.showModal({
-      title: '隐私协议',
-      content: `请阅读并同意${privacyState.contractName}，我们将依法保护你的个人信息安全。`,
-      cancelText: '暂不同意',
-      confirmText: '同意',
-      success: (res) => {
-        if (res.confirm) {
-          agreedPrivacy.value = true;
-          resolve(true);
-        } else {
-          resolve(false);
-        }
-      }
-    });
+    const done = (ok) => {
+      if (ok) agreedPrivacy.value = true;
+      resolve(ok);
+    };
+    // 打开 BaseModal 隐私确认弹框；确认=同意，取消/关闭=暂不同意
+    showPrivacyModal.value = true;
+    privacyResolver = done;
   });
+}
+
+// 缓存当前确认回调，由 BaseModal 的 confirm/cancel/close 事件触发
+let privacyResolver = null;
+function onPrivacyConfirm() {
+  showPrivacyModal.value = false;
+  privacyResolver && privacyResolver(true);
+  privacyResolver = null;
+}
+function onPrivacyCancel() {
+  showPrivacyModal.value = false;
+  privacyResolver && privacyResolver(false);
+  privacyResolver = null;
 }
 
 async function handleLogin() {

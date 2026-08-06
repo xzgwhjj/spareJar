@@ -44,6 +44,28 @@ export function uploadLedgerCover(localPath) {
 }
 
 /**
+ * 上传本地图片到云存储 wish_img 目录（心愿 logo / 自定义封面）。
+ * 透明背景 PNG 原样上传，云存储保留 alpha 通道，前端 <image> 回显即保持透明。
+ * @param {string} localPath 本地临时文件路径
+ * @returns {Promise<{rel:string, fileID:string}>}
+ */
+export function uploadWishLogo(localPath) {
+  return new Promise((resolve, reject) => {
+    const cloudPath = `wish_img/${genName(localPath)}`;
+    const onOk = (res) => resolve({ rel: `/${cloudPath}`, fileID: res.fileID });
+    const task = uniCloud.uploadFile({
+      filePath: localPath,
+      cloudPath,
+      success: onOk,
+      fail: reject,
+    });
+    if (task && typeof task.then === 'function') {
+      task.then(onOk).catch(reject);
+    }
+  });
+}
+
+/**
  * 删除云端临时封面（用户上传后最终未保存时清理，防止存储冗余）。
  * 先尝试客户端直删；若失败（权限/环境限制等）则调用云函数兜底。
  * @param {string} fileID uniCloud.uploadFile 返回的文件标识
@@ -76,3 +98,6 @@ export async function deleteLedgerCover(fileID) {
     console.warn('[cloudFile] 删除临时封面失败（可忽略）:', fileID, e);
   }
 }
+
+/** 删除心愿 logo（复用兜底逻辑）。 */
+export const deleteWishLogo = deleteLedgerCover;

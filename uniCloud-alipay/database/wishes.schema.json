@@ -41,13 +41,38 @@
     },
     "cover_image_url": {
       "bsonType": "string",
-      "description": "封面",
+      "description": "封面图片 fileID / 系统图标(sys::idx) / 空（纯色封面）",
       "maxLength": 512
+    },
+    "cover_gradient": {
+      "bsonType": "string",
+      "description": "封面渐变色 linear-gradient(...)，任意封面类型都存",
+      "maxLength": 256
     },
     "deadline": {
       "bsonType": "string",
-      "description": "截止日期",
+      "description": "截止日期（兼容旧字段，等于 end_date）",
       "maxLength": 10
+    },
+    "start_date": {
+      "bsonType": "string",
+      "description": "心愿区间起始日期",
+      "maxLength": 10
+    },
+    "end_date": {
+      "bsonType": "string",
+      "description": "心愿区间截止日期",
+      "maxLength": 10
+    },
+    "start_time": {
+      "bsonType": "string",
+      "description": "心愿区间起始时间(HH:mm:ss)",
+      "maxLength": 8
+    },
+    "end_time": {
+      "bsonType": "string",
+      "description": "心愿区间截止时间(HH:mm:ss)",
+      "maxLength": 8
     },
     "status": {
       "bsonType": "string",
@@ -70,6 +95,16 @@
       "bsonType": "string",
       "description": "达成时间",
       "maxLength": 19
+    },
+    "archived_reason": {
+      "bsonType": "string",
+      "enum": [
+        "completed",
+        "deleted",
+        "expired"
+      ],
+      "description": "归档原因：达成(completed)/手动删除(deleted)/过期未达成(expired)",
+      "forceDefaultValue": "completed"
     },
     "sort_order": {
       "bsonType": "int",

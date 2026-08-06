@@ -74,7 +74,6 @@ $uni-color-subtitle: #555555; // 二级标题颜色
 $uni-font-size-subtitle:26px;
 $uni-color-paragraph: #3F536E; // 文章段落颜色
 $uni-font-size-paragraph:15px;
-
 /* ========== 余钱罐主题（与 styles/theme/_palette-default.scss 保持同步 · Kigen malachite 色阶）========== */
 $sj-g0: #f5fff7 !default;   // malachite-50
 $sj-g1: #f1fff3 !default;   // malachite-100
@@ -87,6 +86,28 @@ $sj-g5: #25cc5d !default;   // malachite-700（品牌主色）
 $sj-g6: #29c35a !default;   // malachite-800
 $sj-g7: #0e923f !default;   // malachite-900
 $sj-g8: #00580c !default;   // malachite-950
+$sj-pu0: #faf7ff !default;  // purple-50
+$sj-pu1: #f4eeff !default;  // purple-100
+$sj-pu2: #ede4ff !default;  // purple-200
+$sj-pu2-0: #e0d2ff !default; // purple-300
+$sj-pu2-1: #cbb6ff !default; // purple-400
+$sj-pu3: #b794f6 !default;  // purple-500
+$sj-pu4: #9a78f0 !default;  // purple-600
+$sj-pu5: #7c6cf8 !default;  // purple-700（主色，沿用 $sj-purple）
+$sj-pu6: #6a55e6 !default;  // purple-800
+$sj-pu7: #523bb8 !default;  // purple-900
+$sj-pu8: #2e1c66 !default;  // purple-950
+$sj-y0: #fffdf2 !default;   // amber-50
+$sj-y1: #fffae0 !default;   // amber-100
+$sj-y2: #fff4cc !default;   // amber-200
+$sj-y2-0: #ffecaa !default;  // amber-300（过渡档）
+$sj-y2-1: #ffe08a !default;  // amber-400（过渡档）
+$sj-y3: #fcd34d !default;   // amber-500
+$sj-y4: #fbbf24 !default;   // amber-600
+$sj-y5: #f59e0b !default;   // amber-700（主色，沿用 $sj-amber）
+$sj-y6: #d97706 !default;   // amber-800
+$sj-y7: #b45309 !default;   // amber-900
+$sj-y8: #78350f !default;   // amber-950
 $sj-b0: #f0f9ff !default;   // sky-50
 $sj-b1: #e0f2fe !default;   // sky-100
 $sj-b2: #bae6fd !default;   // sky-200
@@ -191,6 +212,28 @@ $sj-shadow-light: 0 2rpx 12rpx 0 rgba(0, 0, 0, 0.1) !default; // 通用浅色阴
   --p6: #{$sj-p6};
   --p7: #{$sj-p7};
   --p8: #{$sj-p8};
+  --pu0: #{$sj-pu0};
+  --pu1: #{$sj-pu1};
+  --pu2: #{$sj-pu2};
+  --pu2-0: #{$sj-pu2-0};
+  --pu2-1: #{$sj-pu2-1};
+  --pu3: #{$sj-pu3};
+  --pu4: #{$sj-pu4};
+  --pu5: #{$sj-pu5};
+  --pu6: #{$sj-pu6};
+  --pu7: #{$sj-pu7};
+  --pu8: #{$sj-pu8};
+  --y0: #{$sj-y0};
+  --y1: #{$sj-y1};
+  --y2: #{$sj-y2};
+  --y2-0: #{$sj-y2-0};
+  --y2-1: #{$sj-y2-1};
+  --y3: #{$sj-y3};
+  --y4: #{$sj-y4};
+  --y5: #{$sj-y5};
+  --y6: #{$sj-y6};
+  --y7: #{$sj-y7};
+  --y8: #{$sj-y8};
   --r0: #{$sj-r0};
   --r1: #{$sj-r1};
   --r2: #{$sj-r2};

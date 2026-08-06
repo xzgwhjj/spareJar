@@ -1,0 +1,350 @@
+@charset "UTF-8";
+/**
+ * 页面级公共样式（按需引入，不要放进 uni.scss，否则会打进每个页面包）
+ *
+ * 用法（在 pages/xxx/xxx.vue 的 style 中）：
+ * @import '../../styles/page-common.scss';
+ *
+ * 若只需玻璃卡片：
+ * @import '../../styles/common/glass.scss';
+ * （glass 依赖色板，需先引入 palette 或本文件的 page-common）
+ */
+/**
+ * 余钱罐默认主题色板（Kigen malachite 色阶 · 第二套）
+ * 换肤：复制本文件为 _palette-xxx.scss，改色值后在 _skins.scss 注册即可
+ *
+ * gN ↔ malachite-N 映射：
+ *  g0    = malachite-50  #f5fff7
+ *  g1    = malachite-100 #f1fff3
+ *  g2    = malachite-200 #ebfded
+ *  g2-0  = malachite-300 #e5f9e7  （g2~g3 之间的过渡档）
+ *  g2-1  = malachite-400 #c6fbce  （g2~g3 之间的过渡档）
+ *  g3    = malachite-500 #acf5b7
+ *  g4    = malachite-600 #8ae99b
+ *  g5    = malachite-700 #25cc5d  （品牌主色）
+ */
+/* 品牌绿阶（malachite 色阶） */
+/* 文字 */
+/* 语义色 */
+/* 极光 / 背景辅助色 */
+/* 品牌主色（用于 rgba($sj-brand, 0.x)） */
+/* 品牌 RGB 字符串（仅用于 CSS 变量 --brand-rgb，勿用于 Sass rgba()） */
+/* 字体与圆角 */
+/* 阴影 */
+/**
+ * 主题 mixin：CSS 变量注入 + 常用样式片段
+ */
+/* ========== 通用工具 mixin（居中 / 玻璃拟态）========== */
+.glass-hero {
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.84);
+  backdrop-filter: blur(28px) saturate(1.6);
+  -webkit-backdrop-filter: blur(28px) saturate(1.6);
+  border: 1.5px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 14px 42px rgba(37, 204, 93, 0.09), 0 3px 12px rgba(0, 0, 0, 0.05), inset 0 1.5px 0 rgba(255, 255, 255, 0.98);
+}
+
+.glass-mid {
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.92);
+  box-shadow: 0 6px 24px rgba(37, 204, 93, 0.08), 0 1px 6px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.96);
+}
+
+.glass-thin {
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.58);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  border: 1px solid rgba(255, 255, 255, 0.88);
+  box-shadow: 0 3px 14px rgba(37, 204, 93, 0.06), 0 1px 4px rgba(0, 0, 0, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.94);
+}
+
+.glass-thin-2 {
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(36rpx) saturate(1.3);
+  -webkit-backdrop-filter: blur(36rpx) saturate(1.3);
+  border: 2rpx solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 6rpx 40rpx rgba(37, 204, 93, 0.1), 0 10rpx 16rpx rgba(0, 0, 0, 0.1), inset 0 2rpx 0 rgba(255, 255, 255, 0.94);
+}
+
+.aurora-bg-wrap {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.aurora-bg-base {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, #c6fbce 0%, #d8f8e0 6%, #eafbec 14%, #f7fef8 24%, #ffffff 38%, #fdfffd 60%, #f8fef9 80%, #edfbf0 100%);
+}
+
+.aurora-top-halo {
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 380px;
+  height: 220px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 30%, #acf5b7 0%, #ebfded 28%, #f1fff3 55%, transparent 75%);
+  opacity: 0.72;
+  filter: blur(38px);
+}
+
+.aurora-band-1 {
+  position: absolute;
+  top: -30px;
+  left: -60px;
+  width: 300px;
+  height: 110px;
+  background: linear-gradient(90deg, transparent, #ebfded 40%, #acf5b7 65%, transparent);
+  border-radius: 70px;
+  opacity: 0.55;
+  filter: blur(22px);
+  animation: aurora-drift-1 9s ease-in-out infinite alternate;
+}
+
+.aurora-band-2 {
+  position: absolute;
+  top: 60px;
+  right: -60px;
+  width: 250px;
+  height: 80px;
+  background: linear-gradient(90deg, transparent, #a6eec0 40%, #ebfded 65%, transparent);
+  border-radius: 60px;
+  opacity: 0.42;
+  filter: blur(26px);
+  animation: aurora-drift-2 12s ease-in-out infinite alternate;
+}
+
+.blob-top-l {
+  position: absolute;
+  top: -20px;
+  left: -15px;
+  width: 210px;
+  height: 210px;
+  border-radius: 60% 40% 70% 30%/42% 58% 42% 58%;
+  background: radial-gradient(circle, #ebfded, transparent 68%);
+  opacity: 0.28;
+  filter: blur(42px);
+  animation: blob-float-a 14s ease-in-out infinite alternate;
+}
+
+.blob-top-r {
+  position: absolute;
+  top: 50px;
+  right: -20px;
+  width: 180px;
+  height: 180px;
+  border-radius: 42% 58% 30% 70%/60% 40% 60% 40%;
+  background: radial-gradient(circle, #8ae99b, transparent 66%);
+  opacity: 0.22;
+  filter: blur(40px);
+  animation: blob-float-b 11s ease-in-out infinite alternate;
+}
+
+.blob-mid {
+  position: absolute;
+  top: 42%;
+  left: -40px;
+  width: 200px;
+  height: 200px;
+  border-radius: 55% 45% 40% 60%/55% 45% 55% 45%;
+  background: radial-gradient(circle, rgba(37, 204, 93, 0.2), transparent 65%);
+  opacity: 0.4;
+  filter: blur(50px);
+  animation: blob-float-a 18s ease-in-out infinite alternate-reverse;
+}
+
+.blob-bot {
+  position: absolute;
+  bottom: 60px;
+  right: -20px;
+  width: 200px;
+  height: 200px;
+  border-radius: 45% 55% 60% 40%/58% 42% 58% 42%;
+  background: radial-gradient(circle, rgba(37, 204, 93, 0.15), transparent 65%);
+  opacity: 0.35;
+  filter: blur(45px);
+  animation: blob-float-b 16s ease-in-out infinite alternate;
+}
+
+@keyframes aurora-drift-1 {
+  0% {
+    transform: translateX(0) translateY(0);
+  }
+  100% {
+    transform: translateX(20px) translateY(-10px);
+  }
+}
+@keyframes aurora-drift-2 {
+  0% {
+    transform: translateX(0) translateY(0);
+  }
+  100% {
+    transform: translateX(-25px) translateY(8px);
+  }
+}
+@keyframes blob-float-a {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(15px, -18px) scale(1.08);
+  }
+  100% {
+    transform: translate(-10px, 10px) scale(0.94);
+  }
+}
+@keyframes blob-float-b {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-20px, 12px) scale(0.92);
+  }
+  100% {
+    transform: translate(12px, -15px) scale(1.06);
+  }
+}
+.card-in-1 {
+  animation: cardFadeIn 0.55s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.banner-in {
+  animation: cardFadeIn 0.65s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+@keyframes cardFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.badge-pulse {
+  animation: badgePulse 2.5s ease-in-out infinite;
+}
+
+@keyframes badgePulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+.bar-grow {
+  animation: barGrow 0.8s cubic-bezier(0.34, 1.2, 0.64, 1) forwards;
+  width: 0;
+}
+
+@keyframes barGrow {
+  to {
+    width: var(--bar-w);
+  }
+}
+.coin-vanish-a {
+  animation: coinPop 2.4s ease-in-out infinite 0s;
+}
+
+.coin-vanish-b {
+  animation: coinPop 2.4s ease-in-out infinite 0.6s;
+}
+
+.coin-vanish-c {
+  animation: coinPop 2.4s ease-in-out infinite 1.2s;
+}
+
+@keyframes coinPop {
+  0%, 85% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+}
+.panel-float {
+  animation: panelFloatIn 0.5s 0.3s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+}
+
+@keyframes panelFloatIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.stack-shrink {
+  transition: transform 0.4s cubic-bezier(0.34, 1.2, 0.64, 1);
+}
+
+@keyframes bounce-in {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.08);
+  }
+  70% {
+    transform: scale(0.94);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes slideUpIn {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spin-anim {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes flamePulse {
+  0%, 100% {
+    transform: scaleY(1) scaleX(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scaleY(1.12) scaleX(0.92);
+    opacity: 1;
+  }
+}/*# sourceMappingURL=page-common.css.map */

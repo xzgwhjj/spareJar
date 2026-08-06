@@ -36,6 +36,53 @@ function persistRefreshedToken(result) {
   }
 }
 
+/**
+ * token 失效响应码（服务端 checkToken 失败统一返回 401 unauthorized）。
+ * 命中后前端会静默刷新 token 并重放原请求，用户无感知。
+ */
+const TOKEN_EXPIRED_CODES = [401, 'uni-id-check-token-failed']
+
+/**
+ * 判断云函数业务结果是否为 token 失效。
+ * @param {{ code?: number, message?: string }} result
+ */
+function isTokenExpired(result) {
+  if (!result || typeof result !== 'object') return false
+  if (TOKEN_EXPIRED_CODES.includes(result.code)) return true
+  return /token expired|unauthorized|登录已过期|请重新登录/i.test(result.message || '')
+}
+
+let refreshingPromise = null
+
+/**
+ * 主动静默续期：凭本地持久化的 uid 请求服务端 refreshToken，重新签发 token。
+ * 同一时刻并发请求只触发一次刷新（refreshingPromise 去重），避免雪崩。
+ * @returns {Promise<string>}
+ */
+export async function refreshToken() {
+  if (refreshingPromise) return refreshingPromise
+  refreshingPromise = (async () => {
+    const uid = uni.getStorageSync('uid')
+    if (!uid) throw new Error('refreshToken: 本地无 uid，无法静默续期')
+    const res = await uniCloud.callFunction({
+      name: 'sparejar-auth',
+      data: { action: 'refreshToken', uid }
+    })
+    const r = (res && res.result) || res
+    if (!r || r.code !== 0 || !r.token) {
+      throw new Error(r && r.message ? `refreshToken 失败: ${r.message}` : 'refreshToken 失败')
+    }
+    // 复用既有落地逻辑：写本地存储 + 广播事件（store 会同步内存与 expired）
+    persistRefreshedToken({ newToken: r.token, newTokenExpired: r.tokenExpired })
+    return r.token
+  })()
+  try {
+    return await refreshingPromise
+  } finally {
+    refreshingPromise = null
+  }
+}
+
 /** sparejar-finance 支持的 action 名称 */
 export const ACTIONS = Object.freeze({
   INIT_USER: 'initUser',
@@ -74,8 +121,11 @@ export const ACTIONS = Object.freeze({
   CREATE_WISH: 'createWish',
   UPDATE_WISH: 'updateWish',
   ARCHIVE_WISH: 'archiveWish',
+  DELETE_WISH: 'deleteWish',
+  LIST_ARCHIVED_WISHES: 'listArchivedWishes',
   LIST_WISH_FUND_LOGS: 'listWishFundLogs',
   LIST_SURPLUS_ALLOCATIONS: 'listSurplusAllocations',
+  LIST_SAVINGS_POOL_LOGS: 'listSavingsPoolLogs',
   GET_PENDING_ALLOCATION: 'getPendingAllocation',
   DEPOSIT_WISH_MANUAL: 'depositWishManual',
   DEPOSIT_WISH_FROM_SURPLUS: 'depositWishFromSurplus',
@@ -190,6 +240,18 @@ export async function callSparejarRaw(action, data = {}) {
 
   // 静默续期：透明落地云函数回传的新 token（若有）
   persistRefreshedToken(res.result)
+
+  // 主动续期：token 已彻底失效时，刷新后自动重放一次原请求
+  if (isTokenExpired(res.result)) {
+    await refreshToken()
+    const retry = await uniCloud.callFunction({
+      name: CLOUD_FUNCTION_NAME,
+      data: { action, data }
+    })
+    const rr = (retry && retry.result) || retry
+    if (rr && typeof rr === 'object') persistRefreshedToken(rr)
+    return rr
+  }
 
   return res.result
 }
@@ -493,9 +555,24 @@ export function archiveWish(wishId) {
   return callSparejar(ACTIONS.ARCHIVE_WISH, { wish_id: wishId })
 }
 
+/** 手动删除心愿（标记归档，进入历史心愿，原因=deleted）。 */
+export function deleteWish(wishId) {
+  return callSparejar(ACTIONS.DELETE_WISH, { wish_id: wishId })
+}
+
+/** 读取历史心愿（已归档），可按原因二级筛选：completed/deleted/expired，不传=全部。 */
+export function listArchivedWishes(reasonFilter) {
+  return callSparejar(ACTIONS.LIST_ARCHIVED_WISHES, { reason_filter: reasonFilter || '' })
+}
+
 /** 读取单个心愿的攒钱流水。 */
 export function listWishFundLogs(wishId) {
   return callSparejar(ACTIONS.LIST_WISH_FUND_LOGS, { wish_id: wishId })
+}
+
+/** 读取通用存款池流水。 */
+export function listSavingsPoolLogs() {
+  return callSparejar(ACTIONS.LIST_SAVINGS_POOL_LOGS, {})
 }
 
 /** 读取结余分配历史。 */
@@ -770,7 +847,10 @@ export default {
   createWish,
   updateWish,
   archiveWish,
+  deleteWish,
+  listArchivedWishes,
   listWishFundLogs,
+  listSavingsPoolLogs,
   listSurplusAllocations,
   getPendingAllocation,
   depositWishManual,

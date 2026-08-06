@@ -182,11 +182,10 @@ const leftText = computed(() => formatFen(leftTodayFen.value));
 // 未设限额时，悬浮面板展示"已用"金额；已设限额时展示"还可花"金额
 const hasLimit = computed(() => totalDailyLimitFen.value > 0);
 const hudLabel = computed(() => (hasLimit.value ? "还可花" : "已用"));
-// 紧凑显示（自动转 千/万/亿）；完整金额用于点击气泡
+// 主显示：已设限额（还可花）用紧凑格式避免过长；未设限额（已用）用标准两位小数格式
+// 完整金额用于点击气泡（hudAmountFull 始终为标准格式）
 const hudAmount = computed(() =>
-  hasLimit.value
-    ? formatFenCompact(leftTodayFen.value)
-    : formatFenCompact(spentTodayFen.value)
+  hasLimit.value ? formatFenCompact(leftTodayFen.value) : formatFen(spentTodayFen.value)
 );
 const hudAmountFull = computed(() => (hasLimit.value ? leftText.value : spentText.value));
 // 仅当显示值被缩写（≠完整值）时才允许点击查看完整金额

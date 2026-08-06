@@ -29,7 +29,12 @@
         <TopBar @refresh="handleRefresh" />
 
         <!-- 引导未完成提示条 -->
-        <view v-if="!onboardingDone" class="onboard-tip" @click="goOnboarding">
+        <!-- 待：替换一个小狗拿着引导棒的图标 -->
+        <view
+          v-if="isLoggedIn && !onboardingDone"
+          class="onboard-tip"
+          @click="goOnboarding"
+        >
           <text class="ot-icon">👋</text>
           <view class="ot-info">
             <text class="ot-title">完成新手设置，开启存钱之旅</text>
@@ -62,7 +67,10 @@
         </view>
 
         <!-- 总余额卡片（阶段 10 资产账户） -->
-        <view class="total-balance-placeholder card-in-1" @click="onTotalBalancePlaceholder">
+        <view
+          class="total-balance-placeholder card-in-1"
+          @click="onTotalBalancePlaceholder"
+        >
           <view class="tb-left">
             <text class="tb-icon">🏦</text>
             <view class="tb-info">
@@ -79,7 +87,7 @@
           <view class="glass-mid pool-row">
             <view class="pool-icon-box">
               <!-- 待：根据余钱罐和小狗的图，设计一个简版的图标 -->
-              <text style="font-size:36rpx;">🐷</text>
+              <text style="font-size: 36rpx">🐷</text>
             </view>
             <view class="pool-info">
               <text class="pool-label">存款池余额</text>
@@ -109,24 +117,25 @@
     </view>
 
     <TabBar :current="0" />
-      
+
     <!-- 全局数字键盘（单例）：由 main.js 全局注册 -->
     <amount-keyboard />
-</view>
+  </view>
 </template>
 
 <script setup>
-import TabBar from '@/components/tabbar/tabbar.vue';
-import PrivacyPopup from '@/components/PrivacyPopup.vue';
-import { ref, computed, onMounted } from 'vue';
-import BillList from './components/BillList.vue';
-import BudgetGaugeCard from './components/BudgetGaugeCard.vue';
-import HealthDualTrack from './components/HealthDualTrack.vue';
-import SurplusBanner from './components/SurplusBanner.vue';
-import TopBar from './components/TopBar.vue';
-import WishMiniCard from './components/WishMiniCard.vue';
-import { useUserStore } from '@/stores/user.js';
-import { formatFen } from '@/utils/money.js';
+import TabBar from "@/components/tabbar/tabbar.vue";
+import PrivacyPopup from "@/components/PrivacyPopup.vue";
+import { ref, computed, onMounted } from "vue";
+import BillList from "./components/BillList.vue";
+import BudgetGaugeCard from "./components/BudgetGaugeCard.vue";
+import HealthDualTrack from "./components/HealthDualTrack.vue";
+import SurplusBanner from "./components/SurplusBanner.vue";
+import TopBar from "./components/TopBar.vue";
+import WishMiniCard from "./components/WishMiniCard.vue";
+import { useUserStore } from "@/stores/user.js";
+import { formatFen } from "@/utils/money.js";
+import { todayDateKey } from "@/utils/date.js";
 
 const {
   state,
@@ -141,17 +150,19 @@ const {
   loadCategories,
   loadWishes,
   loadAssetAccounts,
-  onboardingDone
+  onboardingDone,
 } = useUserStore();
 
 const isOver = computed(() => isOverLimit.value);
 
 // 阶段 10：总余额（可支配）来自资产账户汇总
-const disposableFen = computed(() => (state.assetTotals ? state.assetTotals.disposable : 0));
+const disposableFen = computed(() =>
+  state.assetTotals ? state.assetTotals.disposable : 0
+);
 const savingsPoolText = computed(() => formatFen(surplusPoolBalanceFen.value));
 
 const goOnboarding = () => {
-  uni.navigateTo({ url: '/pages/onboarding/onboarding' });
+  uni.navigateTo({ url: "/pages/onboarding/onboarding" });
 };
 
 const refreshing = ref(false);
@@ -161,10 +172,10 @@ const handleRefresh = async () => {
     await Promise.all([
       refreshTodayDashboard({ force: true }),
       loadCategories(),
-      loadWishes()
+      loadWishes(),
     ]);
   } catch (err) {
-    console.error('[index] 刷新看板失败', err);
+    console.error("[index] 刷新看板失败", err);
   } finally {
     refreshing.value = false;
   }
@@ -173,26 +184,28 @@ const handleRefresh = async () => {
 onMounted(async () => {
   if (!isLoggedIn.value) return;
   try {
+    // 首页所需数据在 bootstrap 中已预加载；若缓存仍新鲜，直接复用避免重复请求
+    const needDashboard = !state.dashboard.loadedAt || state.dashboard.dateKey !== todayDateKey();
     await Promise.all([
-      refreshTodayDashboard(),
+      needDashboard ? refreshTodayDashboard() : Promise.resolve(state.dashboard.settlement),
       loadCategories(),
       loadWishes()
     ]);
   } catch (err) {
-    console.error('[index] 初始化看板失败', err);
+    console.error("[index] 初始化看板失败", err);
   }
 });
 
 const goSurplusHistory = () => {
-  uni.navigateTo({ url: '/pages/surplus-history/surplus-history' });
+  uni.navigateTo({ url: "/pages/surplus-history/surplus-history" });
 };
 
 const goOcr = () => {
-  uni.navigateTo({ url: '/pages/ocr/ocr' });
+  uni.navigateTo({ url: "/pages/ocr/ocr" });
 };
 
 const onTotalBalancePlaceholder = () => {
-  uni.navigateTo({ url: '/pages/asset-mgr/asset-mgr' });
+  uni.navigateTo({ url: "/pages/asset-mgr/asset-mgr" });
 };
 </script>
 
@@ -208,7 +221,7 @@ const onTotalBalancePlaceholder = () => {
     --radius-pill: 40rpx;
     --radius-badge: 24rpx;
     --radius-icon: 28rpx;
-    --font-family: 'Inter', -apple-system, 'PingFang SC', 'Helvetica Neue', sans-serif;
+    --font-family: "Inter", -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
     /* 渐变所需通道值（与主题 --g2/--g3 同源） */
     --g2-rgb: 194, 242, 200;
     --g3-rgb: 137, 229, 156;
@@ -230,17 +243,38 @@ const onTotalBalancePlaceholder = () => {
       display: flex;
       align-items: center;
       gap: 16rpx;
-      margin: 0 var(--page-margin) 20rpx;
+      margin: 20rpx var(--page-margin) 20rpx;
       padding: 20rpx 24rpx;
       border-radius: var(--radius-badge);
-      background: linear-gradient(135deg, rgba(79,217,116,0.18), rgba(37,204,93,0.12));
-      border: 1px solid rgba(79,217,116,0.4);
+      background: linear-gradient(
+        135deg,
+        rgba(37, 204, 93, 0.1),
+        rgba(37, 204, 93, 0.06)
+      );
+      border: 2rpx solid var(--g4);
 
-      .ot-icon { font-size: 36rpx; }
-      .ot-info { flex: 1; display: flex; flex-direction: column; }
-      .ot-title { font-size: 26rpx; font-weight: 700; color: #0f1c14; }
-      .ot-sub { font-size: 20rpx; color: #6b8c7a; margin-top: 4rpx; }
-      .ot-arrow { font-size: 36rpx; color: #25cc5d; }
+      .ot-icon {
+        font-size: 36rpx;
+      }
+      .ot-info {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
+      .ot-title {
+        font-size: 26rpx;
+        font-weight: 700;
+        color: var(--ink);
+      }
+      .ot-sub {
+        font-size: 20rpx;
+        color: var(--g6);
+        margin-top: 4rpx;
+      }
+      .ot-arrow {
+        font-size: 36rpx;
+        color: var(--g5);
+      }
     }
 
     /* 刷新指示器 */
@@ -323,7 +357,11 @@ const onTotalBalancePlaceholder = () => {
         width: 72rpx;
         height: 72rpx;
         border-radius: 22rpx;
-        background: linear-gradient(135deg, rgba(194, 242, 200, 0.45), rgba(137, 229, 156, 0.3));
+        background: linear-gradient(
+          135deg,
+          rgba(194, 242, 200, 0.45),
+          rgba(137, 229, 156, 0.3)
+        );
         border: 2rpx solid rgba(137, 229, 156, 0.35);
         display: flex;
         align-items: center;
@@ -363,7 +401,11 @@ const onTotalBalancePlaceholder = () => {
         width: 72rpx;
         height: 72rpx;
         border-radius: 22rpx;
-        background: linear-gradient(135deg, rgba(194, 242, 200, 0.5), rgba(137, 229, 156, 0.32));
+        background: linear-gradient(
+          135deg,
+          rgba(194, 242, 200, 0.5),
+          rgba(137, 229, 156, 0.32)
+        );
         border: 2rpx solid rgba(137, 229, 156, 0.35);
         display: flex;
         align-items: center;
@@ -398,10 +440,11 @@ const onTotalBalancePlaceholder = () => {
       -webkit-backdrop-filter: blur(32rpx) saturate(1.3);
       border: 1px solid rgba(255, 255, 255, 0.84);
       border-radius: 36rpx;
-      box-shadow: 0 4rpx 24rpx rgba(37, 204, 93, 0.06), inset 0 2rpx 0 rgba(255, 255, 255, 0.90);
+      box-shadow: 0 4rpx 24rpx rgba(37, 204, 93, 0.06),
+        inset 0 2rpx 0 rgba(255, 255, 255, 0.9);
       position: relative;
 
-      .pool-inner{
+      .pool-inner {
         width: 40rpx;
         height: 40rpx;
         border-radius: 14rpx 0 0 0;
@@ -426,7 +469,11 @@ const onTotalBalancePlaceholder = () => {
       width: 80rpx;
       height: 80rpx;
       border-radius: var(--radius-icon);
-      background: linear-gradient(135deg, rgba(var(--g2-rgb), 0.5), rgba(var(--g3-rgb), 0.4));
+      background: linear-gradient(
+        135deg,
+        rgba(var(--g2-rgb), 0.5),
+        rgba(var(--g3-rgb), 0.4)
+      );
       border: 2rpx solid rgba(var(--g3-rgb), 0.35);
       display: flex;
       align-items: center;
@@ -493,10 +540,6 @@ const onTotalBalancePlaceholder = () => {
         }
       }
     }
-
-
-
-
 
     /* 鼓励横幅 */
     .encourage-band {

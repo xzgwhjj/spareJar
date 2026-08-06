@@ -91,7 +91,35 @@ async function upsertUniIdUser(openid, unionid) {
 }
 
 exports.main = async (event, context) => {
-  const { action, code } = event || {}
+  const { action, code, uid } = event || {}
+
+  if (action === 'refreshToken') {
+    // 无感续期：凭本地持久化的 uid 重新签发 token，无需微信 code / 重新授权
+    if (!uid) {
+      return fail('uid is required for refreshToken', 400)
+    }
+    try {
+      const uniIdIns = uniID.createInstance({ context })
+      // 校验用户是否仍有效（status=0），无效则拒绝续期
+      const userRes = await uniCloud.database().collection('uni-id-users').doc(uid).get()
+      const user = userRes.data && userRes.data[0]
+      if (!user || (typeof user.status === 'number' && user.status !== 0)) {
+        return fail('用户不存在或已被禁用', 403)
+      }
+      const tokenRes = await uniIdIns.createToken({ uid })
+      if (tokenRes.errCode !== 0) {
+        return fail(tokenRes.errMsg || 'create token failed', 500)
+      }
+      return ok({
+        uid,
+        token: tokenRes.token,
+        tokenExpired: tokenRes.tokenExpired
+      })
+    } catch (err) {
+      console.error('[sparejar-auth] refreshToken failed', uid, err)
+      return fail(err.message || 'refresh token failed', 500)
+    }
+  }
 
   if (action !== 'loginByWeixin') {
     return fail(`unknown action: ${action}`, 404)

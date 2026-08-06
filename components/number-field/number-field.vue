@@ -52,7 +52,7 @@ function open() {
   display: flex;
   align-items: center;
   width: 100%;
-  min-height: 100%;
+  height: 100%;
   cursor: pointer;
 }
 .nf-field {
