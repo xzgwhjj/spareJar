@@ -17,7 +17,7 @@ import {
   listLedgers,
   isSparejarApiError
 } from './core/api.js'
-import { refreshToken } from '@/api/sparejar.js'
+import { refreshToken, getSurplusPoolLogs } from '@/api/sparejar.js'
 import { loadWishes, loadArchivedWishesAction } from './wish.js'
 import { loadChallengeSummary, evaluateAchievementsAction, loadAchievements } from './challenge.js'
 import { loadAssetAccounts } from './asset.js'
@@ -283,10 +283,20 @@ export async function loadStreak() {
   return state.streak
 }
 
-/** 加载盈余池余额 */
+/** 加载盈余池余额，并推导滚入次日可用额度 P（存于 surplusPool.rollOverPending） */
 export async function loadSurplusPool() {
   if (!state.uid) return null
   state.surplusPool = await getDoc('surplus_pools')
+  try {
+    const logsRes = await getSurplusPoolLogs()
+    if (state.surplusPool) {
+      state.surplusPool.rollOverPending = logsRes.roll_over_pending || 0
+    }
+  } catch (e) {
+    // 推导 P 失败不阻塞主流程，回落为 0
+    console.warn('[auth] 推导滚入次日额度失败', e)
+    if (state.surplusPool) state.surplusPool.rollOverPending = 0
+  }
   return state.surplusPool
 }
 

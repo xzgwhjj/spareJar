@@ -44,13 +44,13 @@ function pad2(n) {
 }
 
 /**
- * 将 'YYYY-MM-DD HH:MM:SS' 规范为 ISO 片段 'YYYY-MM-DDTHH:MM:SS'，
+ * 将 'YYYY-MM-DD HH:MM:SS' 或 'YYYY-MM-DD HH:MM:SS.sss' 规范为 ISO 片段，
  * 以便 new Date() 在各引擎（含 iOS/Safari）正确解析。
  * @param {string} s
  * @returns {string}
  */
 function normalizeTimestamp(s) {
-  return s.replace(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})$/, '$1T$2')
+  return s.replace(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?)$/, '$1T$2')
 }
 
 /**

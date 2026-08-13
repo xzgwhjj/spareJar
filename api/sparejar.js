@@ -121,16 +121,19 @@ export const ACTIONS = Object.freeze({
   CREATE_WISH: 'createWish',
   UPDATE_WISH: 'updateWish',
   ARCHIVE_WISH: 'archiveWish',
+  ADVANCE_WISH_PHASE: 'advanceWishPhase',
   DELETE_WISH: 'deleteWish',
   LIST_ARCHIVED_WISHES: 'listArchivedWishes',
   LIST_WISH_FUND_LOGS: 'listWishFundLogs',
   LIST_SURPLUS_ALLOCATIONS: 'listSurplusAllocations',
   LIST_SAVINGS_POOL_LOGS: 'listSavingsPoolLogs',
   GET_PENDING_ALLOCATION: 'getPendingAllocation',
-  DEPOSIT_WISH_MANUAL: 'depositWishManual',
+  DEPOSIT_WISH_FROM_ACCOUNT: 'depositWishFromAccount',
   DEPOSIT_WISH_FROM_SURPLUS: 'depositWishFromSurplus',
   DEPOSIT_WISH_FROM_SAVINGS: 'depositWishFromSavings',
   WITHDRAW_WISH_TO_SURPLUS: 'withdrawWishToSurplus',
+  WITHDRAW_WISH_TO_ACCOUNT: 'withdrawWishToAccount',
+  WITHDRAW_WISH_TO_SAVINGS: 'withdrawWishToSavings',
   DEPOSIT_SAVINGS_POOL: 'depositSavingsPool',
   WITHDRAW_SAVINGS_POOL: 'withdrawSavingsPool',
   GET_CHALLENGE_SUMMARY: 'getChallengeSummary',
@@ -173,7 +176,8 @@ export const ACTIONS = Object.freeze({
   LINK_MEMBER: 'linkMember',
   UNLINK_MEMBER: 'unlinkMember',
   GET_MEMBERS: 'getMembers',
-  GET_LEDGER_MEMBERS: 'getLedgerMembers'
+  GET_LEDGER_MEMBERS: 'getLedgerMembers',
+  GET_SURPLUS_POOL_LOGS: 'getSurplusPoolLogs'
 })
 
 export class SparejarApiError extends Error {
@@ -555,6 +559,19 @@ export function archiveWish(wishId) {
   return callSparejar(ACTIONS.ARCHIVE_WISH, { wish_id: wishId })
 }
 
+/** 开启下一阶段（提前开：不要求当前阶段存满）。 */
+export function advanceWishPhase(wishId, nextTarget, nextMode = 'add', nextStartDate = '', nextEndDate = '', nextStartTime = '', nextEndTime = '') {
+  return callSparejar(ACTIONS.ADVANCE_WISH_PHASE, {
+    wish_id: wishId,
+    next_target: nextTarget,
+    next_mode: nextMode,
+    next_start_date: nextStartDate,
+    next_end_date: nextEndDate,
+    next_start_time: nextStartTime,
+    next_end_time: nextEndTime,
+  })
+}
+
 /** 手动删除心愿（标记归档，进入历史心愿，原因=deleted）。 */
 export function deleteWish(wishId) {
   return callSparejar(ACTIONS.DELETE_WISH, { wish_id: wishId })
@@ -776,24 +793,39 @@ export function getWeeklyHealth(endDateKey) {
   return callSparejar(ACTIONS.GET_WEEKLY_HEALTH, { end_date_key: endDateKey })
 }
 
-/** 心愿手动虚拟存入。amount 为「分」。 */
-export function depositWishManual(wishId, amount) {
-  return callSparejar(ACTIONS.DEPOSIT_WISH_MANUAL, { wish_id: wishId, amount })
+/** 读取结余池流水 + 推导的滚入次日可用额度 P */
+export function getSurplusPoolLogs() {
+  return callSparejar(ACTIONS.GET_SURPLUS_POOL_LOGS, {})
+}
+
+/** 从指定资产账户划拨到心愿。amount 为「分」。 */
+export function depositWishFromAccount(wishId, amount, accountId, note = '') {
+  return callSparejar(ACTIONS.DEPOSIT_WISH_FROM_ACCOUNT, { wish_id: wishId, amount, account_id: accountId, note })
 }
 
 /** 从累计结余池转入心愿。amount 为「分」。 */
-export function depositWishFromSurplus(wishId, amount) {
-  return callSparejar(ACTIONS.DEPOSIT_WISH_FROM_SURPLUS, { wish_id: wishId, amount })
+export function depositWishFromSurplus(wishId, amount, note = '') {
+  return callSparejar(ACTIONS.DEPOSIT_WISH_FROM_SURPLUS, { wish_id: wishId, amount, note })
 }
 
 /** 从通用存款池转入心愿。amount 为「分」。 */
-export function depositWishFromSavings(wishId, amount) {
-  return callSparejar(ACTIONS.DEPOSIT_WISH_FROM_SAVINGS, { wish_id: wishId, amount })
+export function depositWishFromSavings(wishId, amount, note = '') {
+  return callSparejar(ACTIONS.DEPOSIT_WISH_FROM_SAVINGS, { wish_id: wishId, amount, note })
 }
 
 /** 心愿取出退回累计结余池。amount 为「分」。 */
-export function withdrawWishToSurplus(wishId, amount) {
-  return callSparejar(ACTIONS.WITHDRAW_WISH_TO_SURPLUS, { wish_id: wishId, amount })
+export function withdrawWishToSurplus(wishId, amount, note = '') {
+  return callSparejar(ACTIONS.WITHDRAW_WISH_TO_SURPLUS, { wish_id: wishId, amount, note })
+}
+
+/** 心愿取出退回指定资产账户。amount 为「分」。 */
+export function withdrawWishToAccount(wishId, amount, accountId, note = '') {
+  return callSparejar(ACTIONS.WITHDRAW_WISH_TO_ACCOUNT, { wish_id: wishId, amount, account_id: accountId, note })
+}
+
+/** 心愿取出退回通用存款池。amount 为「分」。 */
+export function withdrawWishToSavings(wishId, amount, note = '') {
+  return callSparejar(ACTIONS.WITHDRAW_WISH_TO_SAVINGS, { wish_id: wishId, amount, note })
 }
 
 /** 通用存款池手动存入。amount 为「分」。 */
@@ -853,7 +885,6 @@ export default {
   listSavingsPoolLogs,
   listSurplusAllocations,
   getPendingAllocation,
-  depositWishManual,
   depositWishFromSurplus,
   depositWishFromSavings,
   withdrawWishToSurplus,

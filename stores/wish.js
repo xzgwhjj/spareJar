@@ -3,13 +3,14 @@
  */
 
 import { computed } from 'vue'
-import { state, pickDbRows, UserStoreError } from './core/state.js'
+import { state, UserStoreError } from './core/state.js'
 import {
   listWishes,
   createWish,
   updateWish,
   archiveWish,
   deleteWish,
+  advanceWishPhase,
   listArchivedWishes,
   listWishFundLogs,
   setFavoriteLedger,
@@ -78,6 +79,30 @@ export async function archiveWishAction(wishId) {
   return res
 }
 
+/** 开启下一阶段（提前开：不要求当前阶段存满）。 */
+export async function advanceWishPhaseAction(
+  wishId,
+  nextTarget,
+  nextMode = 'add',
+  nextStartDate = '',
+  nextEndDate = '',
+  nextStartTime = '',
+  nextEndTime = ''
+) {
+  ENSURE_LOGGED_IN()
+  const res = await advanceWishPhase(
+    wishId,
+    nextTarget,
+    nextMode,
+    nextStartDate,
+    nextEndDate,
+    nextStartTime,
+    nextEndTime
+  )
+  await loadWishes()
+  return res
+}
+
 /** 手动删除心愿（进入历史心愿）。 */
 export async function deleteWishAction(wishId) {
   ENSURE_LOGGED_IN()
@@ -90,8 +115,7 @@ export async function deleteWishAction(wishId) {
 export async function loadWishFundLogsAction(wishId) {
   ENSURE_LOGGED_IN()
   try {
-    const res = await listWishFundLogs(wishId)
-    return pickDbRows(res)
+    return await listWishFundLogs(wishId)
   } catch (err) {
     if (isSparejarApiError(err)) return []
     throw err

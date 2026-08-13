@@ -194,6 +194,34 @@ async function initUser(userId, profile = {}) {
     month_withdrawn: 0, withdraw_month_key: null, updated_at: ts
   }))
 
+  // 默认主账户（"我的钱"）：满足"不想分开成真实各账户"的用户，开箱即用。
+  // 单账户即等价于"总账户"，无需新机制。幂等：按用户名唯一索引跳过已建。
+  const DEFAULT_ACCOUNT_NAME = '我的钱包'
+  const existAcc = await getDb().collection('asset_accounts')
+    .where({ user_id: userId, name: DEFAULT_ACCOUNT_NAME, deleted_at: null })
+    .limit(1)
+    .get()
+  if (!(existAcc.data && existAcc.data[0])) {
+    await getDb().collection('asset_accounts').add({
+      user_id: userId,
+      account_class: 'daily',
+      account_subtype: 'cash',
+      name: DEFAULT_ACCOUNT_NAME,
+      initial_balance: 0,
+      current_balance: 0,
+      include_in_disposable: true,
+      include_in_daily_limit: true,
+      include_in_total_asset: true,
+      annual_withdraw_quota: 0,
+      annual_withdrawn: 0,
+      quota_year: String(new Date().getFullYear()),
+      sort_order: 0,
+      deleted_at: null,
+      created_at: ts,
+      updated_at: ts,
+    })
+  }
+
   await ensureDoc('user_streaks', userId, () => ({
     user_id: userId,
     daily_current_streak: 0,

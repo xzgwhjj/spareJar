@@ -4,7 +4,9 @@ const dbApi = require('sparejar-db')
 const uniID = require('uni-id-common')
 
 function getUid(event, context) {
-  return event.user_id || context.CLIENTINFO && context.CLIENTINFO.uid || context.auth && context.auth.uid
+  // event.user_id：常规 action 由 token 校验后注入；调试 case 跳过鉴权，前端直接放在 event.data.user_id
+  const dataUid = event.data && event.data.user_id
+  return event.user_id || dataUid || context.CLIENTINFO && context.CLIENTINFO.uid || context.auth && context.auth.uid
 }
 
 function fail(message, code = 400) {
@@ -132,6 +134,10 @@ exports.main = async (event, context) => {
         if (!data.wish_id) return fail('wish_id is required')
         return ok(await dbApi.archiveWish(userId, data.wish_id))
 
+      case 'advanceWishPhase':
+        if (!data.wish_id) return fail('wish_id is required')
+        return ok(await dbApi.advanceWishPhase(userId, data.wish_id, data))
+
       case 'deleteWish':
         if (!data.wish_id) return fail('wish_id is required')
         return ok(await dbApi.deleteWish(userId, data.wish_id))
@@ -251,21 +257,29 @@ exports.main = async (event, context) => {
           )
         })
 
-      case 'depositWishManual':
-        if (!data.wish_id || !data.amount) return fail('wish_id and amount are required')
-        return ok({ saved_after: await dbApi.depositWishManual(userId, data.wish_id, data.amount) })
+      case 'depositWishFromAccount':
+        if (!data.wish_id || !data.amount || !data.account_id) return fail('wish_id, amount and account_id are required')
+        return ok({ saved_after: await dbApi.depositWishFromAccount(userId, data.wish_id, data.amount, data.account_id, data.note) })
 
       case 'depositWishFromSurplus':
         if (!data.wish_id || !data.amount) return fail('wish_id and amount are required')
-        return ok({ saved_after: await dbApi.depositWishFromSurplus(userId, data.wish_id, data.amount) })
+        return ok({ saved_after: await dbApi.depositWishFromSurplus(userId, data.wish_id, data.amount, data.note) })
 
       case 'depositWishFromSavings':
         if (!data.wish_id || !data.amount) return fail('wish_id and amount are required')
-        return ok({ saved_after: await dbApi.depositWishFromSavings(userId, data.wish_id, data.amount) })
+        return ok({ saved_after: await dbApi.depositWishFromSavings(userId, data.wish_id, data.amount, data.note) })
 
       case 'withdrawWishToSurplus':
         if (!data.wish_id || !data.amount) return fail('wish_id and amount are required')
-        return ok({ saved_after: await dbApi.withdrawWishToSurplus(userId, data.wish_id, data.amount) })
+        return ok({ saved_after: await dbApi.withdrawWishToSurplus(userId, data.wish_id, data.amount, data.note) })
+
+      case 'withdrawWishToAccount':
+        if (!data.wish_id || !data.amount || !data.account_id) return fail('wish_id, amount and account_id are required')
+        return ok({ saved_after: await dbApi.withdrawWishToAccount(userId, data.wish_id, data.amount, data.account_id, data.note) })
+
+      case 'withdrawWishToSavings':
+        if (!data.wish_id || !data.amount) return fail('wish_id and amount are required')
+        return ok({ saved_after: await dbApi.withdrawWishToSavings(userId, data.wish_id, data.amount, data.note) })
 
       case 'depositSavingsPool':
         if (!data.amount) return fail('amount is required')
@@ -395,6 +409,9 @@ exports.main = async (event, context) => {
       // ===== 只读查询（前端统一经云函数读取，禁止 clientDB 直读） =====
       case 'listLedgers':
         return ok(await dbApi.listLedgers(userId))
+
+      case 'getSurplusPoolLogs':
+        return ok(await dbApi.getSurplusPoolLogs(userId))
 
       case 'getLedgerDetail':
         if (!data.ledger_id) return fail('ledger_id is required')

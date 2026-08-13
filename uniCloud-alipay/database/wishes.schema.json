@@ -30,14 +30,54 @@
     },
     "target_amount": {
       "bsonType": "int",
-      "description": "目标金额(分)",
+      "description": "当前阶段目标金额(分)",
       "minimum": 1
     },
     "saved_amount": {
       "bsonType": "int",
-      "description": "已存(分)",
+      "description": "当前阶段已存(分)",
       "minimum": 0,
       "defaultValue": 0
+    },
+    "current_phase": {
+      "bsonType": "int",
+      "description": "当前阶段指针(0-based，指向 phases 数组下标)",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "cumulative_target": {
+      "bsonType": "int",
+      "description": "累计总目标(分)，由 phases 按模式还原得出，前端直接展示",
+      "minimum": 1,
+      "defaultValue": 0
+    },
+    "phases": {
+      "bsonType": "array",
+      "description": "分阶段进度时间线；每阶段为独立攒钱区间",
+      "defaultValue": [],
+      "items": {
+        "bsonType": "object",
+        "properties": {
+          "index": { "bsonType": "int", "description": "阶段序号(从1开始)" },
+          "mode": {
+            "bsonType": "string",
+            "enum": ["add", "total"],
+            "description": "add=本阶段新增攒X；total=累计总目标推到X"
+          },
+          "target": { "bsonType": "int", "description": "本阶段目标(分)" },
+          "saved": { "bsonType": "int", "description": "本阶段已存(分)", "minimum": 0 },
+          "status": {
+            "bsonType": "string",
+            "enum": ["active", "done", "skipped"],
+            "description": "active=进行中；done=已完成；skipped=被提前开启下一阶段而跳过"
+          },
+          "done_at": { "bsonType": "string", "description": "完成/跳过时间", "maxLength": 19 },
+          "start_date": { "bsonType": "string", "description": "阶段开始日期(YYYY-MM-DD)，缺省为开启当天", "maxLength": 10 },
+          "end_date": { "bsonType": "string", "description": "阶段目标截止日期(YYYY-MM-DD)，可空", "maxLength": 10 },
+          "start_time": { "bsonType": "string", "description": "阶段开始时间(HH:mm:ss)，可空", "maxLength": 8 },
+          "end_time": { "bsonType": "string", "description": "阶段截止时间(HH:mm:ss)，可空", "maxLength": 8 }
+        }
+      }
     },
     "cover_image_url": {
       "bsonType": "string",

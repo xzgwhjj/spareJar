@@ -76,8 +76,10 @@ export const dailyLimitFen = computed(() => {
   return 0
 })
 export const pendingRolloverFen = computed(() => {
-  const s = state.settings
-  return s && typeof s.pending_rollover_fen === 'number' ? s.pending_rollover_fen : 0
+  // 滚入次日可用额度 P，由结余池流水推导（surplusPool.rollOverPending 由 loadSurplusPool 计算）
+  return state.surplusPool && typeof state.surplusPool.rollOverPending === 'number'
+    ? state.surplusPool.rollOverPending
+    : 0
 })
 export const totalDailyLimitFen = computed(() => dailyLimitFen.value + pendingRolloverFen.value)
 export const hasLimit = computed(() => totalDailyLimitFen.value > 0)
@@ -179,10 +181,12 @@ export function useUserStore() {
     archivedWishes: wish.archivedWishes,
 
     // pool
-    depositWishManualAction: pool.depositWishManualAction,
+    depositWishFromAccountAction: pool.depositWishFromAccountAction,
     depositWishFromSurplusAction: pool.depositWishFromSurplusAction,
     depositWishFromSavingsAction: pool.depositWishFromSavingsAction,
     withdrawWishToSurplusAction: pool.withdrawWishToSurplusAction,
+    withdrawWishToAccountAction: pool.withdrawWishToAccountAction,
+    withdrawWishToSavingsAction: pool.withdrawWishToSavingsAction,
     depositSavingsPoolAction: pool.depositSavingsPoolAction,
     withdrawSavingsPoolAction: pool.withdrawSavingsPoolAction,
     loadSavingsPoolLogsAction: pool.loadSavingsPoolLogsAction,

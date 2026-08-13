@@ -52,8 +52,11 @@
       "bsonType": "string",
       "enum": [
         "surplus_allocation",
+        "surplus_pool",
         "manual",
+        "account",
         "savings_pool",
+        "withdraw",
         "withdraw_to_surplus",
         "withdraw_to_savings"
       ],

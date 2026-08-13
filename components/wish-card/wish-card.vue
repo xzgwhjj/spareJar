@@ -1,25 +1,35 @@
 <template>
-  <view class="wish-card-in wish-item-card" :style="cardStyle" @click="emit('click')">
-    <!-- 背景色点缀 -->
-    <view class="wish-card-glow" :style="{ background: glowColor }" />
-
-    <!-- 第一层：图片 -->
-    <view class="wish-cover" :style="{ background: gradient }">
-      <view v-if="isLogo" class="wish-cover-logo-wrap">
-        <image class="wish-cover-logo" :src="logoUrl" mode="aspectFit" />
+  <view class="wish-card-in" :style="cardStyle">
+    <!-- 底部错位渐变衬底（叠在卡片下方，使用接口 gradient 色） -->
+    <view
+      class="ticket-inner-bg"
+      :style="{ background: gradient }"
+      @click="emit('click')"
+    />
+    <!-- 卡片本体 -->
+    <view class="wish-item-card" @click="emit('click')">
+      <!-- 第一层：图片 -->
+      <view class="wish-cover">
+        <view v-if="isLogo" class="wish-cover-logo-wrap">
+          <image class="wish-cover-logo" :src="logoUrl" mode="aspectFit" />
+        </view>
+        <view v-else-if="isSysLogo" class="wish-cover-sys" :style="{ background: sysBg }">
+          <text class="wish-cover-sys-text">{{ sysLabel }}</text>
+        </view>
+        <text v-else class="wish-cover-emoji">{{ emoji }}</text>
       </view>
-      <view
-        v-else-if="isSysLogo"
-        class="wish-cover-sys"
-        :style="{ background: sysBg }"
-      >
-        <text class="wish-cover-sys-text">{{ sysLabel }}</text>
-      </view>
-      <text v-else class="wish-cover-emoji">{{ emoji }}</text>
 
-      <!-- 进度条常驻悬浮在封面底部 -->
+      <!-- 第二层：姓名 -->
+      <text class="wish-card-name">{{ wish.name }}</text>
+
+      <!-- 第三层：日期 -->
+      <view v-if="deadlineText" class="wish-card-deadline">
+        <text>{{ deadlineText }}</text>
+      </view>
+
+      <!-- 第四层：进度条（点击触发毛玻璃覆盖层） -->
       <view
-        class="wish-progress wish-progress--float"
+        class="wish-progress wish-progress--bar"
         :style="{ background: progressTrackBg }"
         @click.stop="toggleRingOverlay"
       >
@@ -30,74 +40,58 @@
           <view class="progress-shimmer" />
         </view>
       </view>
-    </view>
-
-    <!-- 第二层：姓名 -->
-    <text class="wish-card-name">{{ wish.name }}</text>
-
-    <!-- 第三层：日期 -->
-    <view v-if="deadlineText" class="wish-card-deadline">
-      <text class="wish-card-cal">📅</text>
-      <text>{{ deadlineText }}</text>
-    </view>
-
-    <!-- 第四层：进度条（点击触发毛玻璃覆盖层） -->
-    <view
-      class="wish-progress wish-progress--bar"
-      :style="{ background: progressTrackBg }"
-      @click.stop="toggleRingOverlay"
-    >
-      <view
-        class="wish-progress-fill"
-        :style="{ width: Math.min(pct, 100) + '%', background: progressFillBg }"
-      >
-        <view class="progress-shimmer" />
-      </view>
-    </view>
-
-    <!-- 底部：金额 + 状态徽章 -->
-    <view class="wish-card-foot">
-      <view class="wish-amount-block">
-        <text class="wish-amount-saved">¥{{ savedText }}</text>
-        <text class="wish-amount-target">/ ¥{{ targetText }}</text>
-      </view>
-      <view class="wish-badges">
-        <text v-if="isNotStarted" class="wish-badge badge-wait">未开始⏳</text>
-        <text v-else-if="isDone" class="wish-badge badge-done">已达成✨</text>
-        <text v-else-if="isNearDone" class="wish-badge badge-near">快到了🎯</text>
-        <text v-else class="wish-badge badge-left">还差 ¥{{ remainText }}</text>
-        <text class="wish-chev">›</text>
-      </view>
-    </view>
-
-    <!-- 毛玻璃覆盖层：从底部升起，中央展示大号环形进度 -->
-    <view
-      v-if="overlayMounted"
-      class="ring-overlay"
-      :class="{ 'ring-overlay--show': showRingOverlay }"
-      @click.stop="toggleRingOverlay"
-    >
-      <view class="ring-overlay-glass" :style="{ background: ringOverlayBg }">
-        <view
-          class="wish-ring wish-ring--big"
-          :style="{ width: ringBigSize + 'px', height: ringBigSize + 'px' }"
-        >
-          <canvas
-            type="2d"
-            class="wish-ring-canvas"
-            :id="bigCanvasId"
-            :style="{ width: ringBigSize + 'px', height: ringBigSize + 'px' }"
-          />
-          <text class="wish-ring-label" :style="{ color: ringLabelColor, fontSize: '40rpx' }">{{
-            isDone ? "✓" : pct + "%"
-          }}</text>
+      <!-- 待：出个已过期徽章/各种历史状态的徽章样式 -->
+      <!-- 底部：金额 + 状态徽章 -->
+      <view class="wish-card-foot">
+        <view class="wish-amount-block">
+          <text class="wish-amount-saved" :style="{ color: amountTextColor }"
+            >¥{{ savedText }}</text
+          >
+          <text class="wish-amount-target">/ ¥{{ targetText }}</text>
         </view>
-        <text class="ring-overlay-tip">点击进度条关闭</text>
+        <!-- 右下角状态按钮（示例 card__arrow 风格：#7257fa 方块，hover 变 #111） -->
+        <view
+          class="wish-badges"
+          :style="{ background: coverBaseColor }"
+          @click.stop="emit('click')"
+        >
+          <text v-if="isNotStarted" class="wish-badge badge-wait">未开始⏳</text>
+          <text v-else-if="isDone" class="wish-badge badge-done">已达成✨</text>
+          <text v-else-if="isNearDone" class="wish-badge badge-near">快到了🎯</text>
+          <text v-else class="wish-badge badge-left">还差 ¥{{ remainText }}</text>
+        </view>
+      </view>
+
+      <!-- 毛玻璃覆盖层：从底部升起，中央展示大号环形进度 -->
+      <view
+        v-if="overlayMounted"
+        class="ring-overlay"
+        :class="{ 'ring-overlay--show': showRingOverlay }"
+        @click.stop="toggleRingOverlay"
+      >
+        <view class="ring-overlay-glass" :style="{ background: ringOverlayBg }">
+          <view
+            class="wish-ring wish-ring--big"
+            :style="{ width: ringBigSize + 'px', height: ringBigSize + 'px' }"
+          >
+            <canvas
+              type="2d"
+              class="wish-ring-canvas"
+              :id="bigCanvasId"
+              :style="{ width: '100%', height: '100%' }"
+            />
+            <text
+              class="wish-ring-label"
+              :style="{ color: ringLabelColor, fontSize: '40rpx' }"
+              >{{ isDone ? "100%" : pct + "%" }}</text
+            >
+          </view>
+          <text class="ring-overlay-tip">点击进度条关闭</text>
+        </view>
       </view>
     </view>
   </view>
 </template>
-
 
 <script setup>
 import { computed, ref, watch, onMounted, nextTick } from "vue";
@@ -136,6 +130,27 @@ function resolveGradient(arg) {
   return FALLBACK_GRADIENT;
 }
 const gradient = computed(() => resolveGradient(props.wish));
+// 按钮底色：接口返回基色加深一档（保持色相，降低亮度），避免用完整渐变太花
+const coverBaseColor = computed(() => {
+  const [, , tail] = extractGradientColors(gradient.value);
+  const baseHex = tail || "#8ae99b";
+  const [, , deep] = buildThreeTone(baseHex);
+  return deep;
+});
+// 按钮文字色：基于实际按钮底色（已加深）判断亮度，淡则用 ink2，否则白色
+const badgeTextColor = computed(() => {
+  const { r, g, b } = hexToRgb(coverBaseColor.value);
+  const { l } = rgbToHsl(r, g, b);
+  return l > 62 ? "var(--ink2)" : "#fff";
+});
+// 金额文字色：沿用原绿 --g5(#25cc5d) 的明度/饱和度，仅取接口色的色相，保持同色阶协调
+const amountTextColor = computed(() => {
+  const base = hexToRgb("#25cc5d");
+  const { s, l } = rgbToHsl(base.r, base.g, base.b);
+  const theme = hexToRgb(coverBaseColor.value);
+  const { h } = rgbToHsl(theme.r, theme.g, theme.b);
+  return hslToHex(h, s, l);
+});
 
 // 从 cover_gradient（如 linear-gradient(135deg,#ebfded 0%,#c6fbce 60%,#8ae99b 100%)）
 // 提取色标，并自动派生与原始色视觉一致的进度条配色：
@@ -279,12 +294,14 @@ const emoji = computed(() => {
 // 截止文案
 const deadlineText = computed(() => {
   const w = props.wish;
-  if (w.start_date && w.end_date) {
-    const s = w.start_time ? w.start_date + " " + w.start_time : w.start_date;
-    const e = w.end_time ? w.end_date + " " + w.end_time : w.end_date;
-    return s + " ~ " + e;
+  // 只显示年月日，去掉时分秒
+  const startDate = (w.start_date || "").slice(0, 10);
+  const endDate = (w.end_date || "").slice(0, 10);
+  if (startDate && endDate) {
+    return startDate + " ~ " + endDate;
   }
-  return w.deadline ? "截止 " + w.deadline : "";
+  const deadline = (w.deadline || "").slice(0, 10);
+  return deadline ? "截止 " + deadline : "";
 });
 
 // 未开始：设定了开始时间且当前还没到（用于区分「还没启动」与「进行中-还差¥」）
@@ -302,9 +319,14 @@ const isNotStarted = computed(() => {
 // ===== 金额（分 → 元，千分位） =====
 const savedText = computed(() => formatFen(savedAmount.value).replace(/\.00$/, ""));
 const targetText = computed(() => formatFen(targetAmount.value).replace(/\.00$/, ""));
-const remainText = computed(() =>
-  formatFen(Math.max(targetAmount.value - savedAmount.value, 0)).replace(/\.00$/, "")
-);
+const remainText = computed(() => {
+  const over = savedAmount.value - targetAmount.value;
+  if (over > 0) return "超存 ¥" + formatFen(over).replace(/\.00$/, "");
+  return (
+    "还差 ¥" +
+    formatFen(Math.max(targetAmount.value - savedAmount.value, 0)).replace(/\.00$/, "")
+  );
+});
 
 // ===== 交错偏移 / 旋转 =====
 const offsetY = computed(() => (props.index % 2 === 1 ? -12 : 0));
@@ -321,10 +343,25 @@ const rotate = computed(() => {
 // 小程序下 rpx→px 由框架处理，canvas 内部坐标按 ringSize(px) 计算即可。
 const ringSize = 56; // 环形外径（rpx 显示 / px 绘制，数值一致）
 const ringSw = 7; // 环宽（px，canvas 坐标系）
-const ringTrack = "rgba(235,253,237,0.55)"; // 轨道底色（malachite-200 @ 0.55）
-const ringLabelColor = computed(() =>
-  isDone.value ? "#25cc5d" : pct.value >= 50 ? "#3a5244" : "#6b8c7a"
-);
+// 环形轨道底色：与卡片进度条底色一致（封面基色淡色系），0% 时仍可见
+const ringTrack = computed(() => {
+  const [, , tail] = extractGradientColors(gradient.value);
+  const baseHex = tail || "#8ae99b";
+  return hexToRgbaFromRgb(hexToRgb(baseHex), 0.32);
+});
+// 环形进度描边色：取封面基色派生的三段同色系（浅→中→深），替代原固定绿色
+const ringGrad = computed(() => {
+  const [, , tail] = extractGradientColors(gradient.value);
+  const baseHex = tail || "#8ae99b";
+  const [light, base, deep] = buildThreeTone(baseHex);
+  return { light, base, deep };
+});
+// 中心文字色：与封面同色系（达成用深档，进度中按深浅档切换，不再固定绿）
+const ringLabelColor = computed(() => {
+  const { deep, base } = ringGrad.value;
+  if (isDone.value) return deep;
+  return pct.value >= 50 ? base : deep;
+});
 // 每条卡片独立 canvas id（type=2d 用 id 选择节点）
 const canvasId = `wish-ring-${props.index}-${props.wish._id || "x"}`;
 
@@ -348,15 +385,16 @@ function drawRing() {
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.lineWidth = sw;
-  ctx.strokeStyle = ringTrack;
+  ctx.strokeStyle = ringTrack.value;
   ctx.lineCap = "round";
   ctx.stroke();
 
-  // 进度（线性渐变描边 + 圆角端点）
+  // 进度（线性渐变描边 + 圆角端点，同封面色系）
   if (pct.value > 0) {
     const grad = ctx.createLinearGradient(0, 0, size, size);
-    grad.addColorStop(0, "#8ae99b");
-    grad.addColorStop(1, "#25cc5d");
+    const { light, deep } = ringGrad.value;
+    grad.addColorStop(0, light);
+    grad.addColorStop(1, deep);
     ctx.beginPath();
     ctx.arc(cx, cy, r, start, end);
     ctx.lineWidth = sw;
@@ -372,6 +410,9 @@ async function initCanvas() {
     // #ifdef H5
     const el = document.getElementById(canvasId);
     if (el) {
+      // H5 下需显式设置位图尺寸，否则默认 300x150 导致绘制偏移/不居中
+      el.width = ringSize;
+      el.height = ringSize;
       canvasCtx = el.getContext("2d");
       canvasReady = true;
       drawRing();
@@ -416,7 +457,7 @@ watch(
 // ===== 毛玻璃覆盖层（点击进度条升起，再次点击平滑退出） =====
 const overlayMounted = ref(false); // 是否渲染（退场动画结束后才卸载）
 const showRingOverlay = ref(false); // 显隐动画开关
-const ringBigSize = 160; // 覆盖层内大环外径（px）
+const ringBigSize = 128; // 覆盖层内大环外径（px），缩小并留出四周空隙
 const bigCanvasId = `wish-ring-big-${props.index}-${props.wish._id || "x"}`;
 
 let bigCtx = null;
@@ -436,13 +477,14 @@ function drawBigRing() {
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.lineWidth = sw;
-  ctx.strokeStyle = ringTrack;
+  ctx.strokeStyle = ringTrack.value;
   ctx.lineCap = "round";
   ctx.stroke();
   if (pct.value > 0) {
     const grad = ctx.createLinearGradient(0, 0, size, size);
-    grad.addColorStop(0, "#8ae99b");
-    grad.addColorStop(1, "#25cc5d");
+    const { light, deep } = ringGrad.value;
+    grad.addColorStop(0, light);
+    grad.addColorStop(1, deep);
     ctx.beginPath();
     ctx.arc(cx, cy, r, start, end);
     ctx.lineWidth = sw;
@@ -457,6 +499,9 @@ async function initBigCanvas() {
     // #ifdef H5
     const el = document.getElementById(bigCanvasId);
     if (el) {
+      // H5 下需显式设置位图尺寸，否则默认 300x150 导致绘制偏移/不居中
+      el.width = ringBigSize;
+      el.height = ringBigSize;
       bigCtx = el.getContext("2d");
       bigReady = true;
       drawBigRing();
@@ -485,12 +530,8 @@ async function initBigCanvas() {
   }
 }
 
-// 覆盖层背景（基于 cover_gradient 基色生成的半透明毛玻璃色调）
-const ringOverlayBg = computed(() => {
-  const [, , tail] = extractGradientColors(gradient.value);
-  const baseHex = tail || "#8ae99b";
-  return hexToRgbaFromRgb(hexToRgb(baseHex), 0.55);
-});
+// 覆盖层背景（纯白毛玻璃，不随封面色变化）
+const ringOverlayBg = "rgba(255, 255, 255, 0.82)";
 
 function toggleRingOverlay() {
   if (!showRingOverlay.value) {
@@ -509,20 +550,20 @@ function toggleRingOverlay() {
   }
 }
 
-// ===== 背景光晕色 =====
-const glowColor = computed(() => "#8ae99b14");
-
 // ===== 卡片样式 =====
 // rotate 通过 CSS 变量传入，避免与浮动动画的 transform 冲突
 const cardStyle = computed(() => ({
   marginTop: offsetY.value + "rpx",
   "--wish-rotate": `${rotate.value}deg`,
+  "--cover-base": coverBaseColor.value,
+  "--badge-text": badgeTextColor.value,
   animationDelay: `${props.index * 0.06}s, ${props.index * 0.5}s`,
 }));
 </script>
 
 <style scoped lang="scss">
 .wish-card-in {
+  position: relative;
   transform: rotate(var(--wish-rotate, 0deg));
   animation: wishCardIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) both,
     wishFloat 4s ease-in-out 0.5s infinite;
@@ -559,33 +600,66 @@ const cardStyle = computed(() => ({
   box-sizing: border-box;
   overflow: hidden;
   border-radius: 48rpx;
-  padding: 32rpx;
+  padding: 32rpx 32rpx 48rpx;
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.62);
-  backdrop-filter: blur(32rpx) saturate(1.5);
-  -webkit-backdrop-filter: blur(32rpx) saturate(1.5);
-  box-shadow: 0 16rpx 56rpx rgba(37, 204, 93, 0.1), 0 4rpx 16rpx rgba(0, 0, 0, 0.04),
-    inset 0 2rpx 0 rgba(255, 255, 255, 0.88);
-  border: 3rpx solid rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(48rpx) saturate(1.8);
+  -webkit-backdrop-filter: blur(48rpx) saturate(1.8);
+  // box-shadow: 0 16rpx 56rpx rgba(37, 204, 93, 0.1), 0 4rpx 16rpx rgba(0, 0, 0, 0.04),
+  //   inset 0 2rpx 0 rgba(255, 255, 255, 0.9);
+  box-shadow: 0rpx 0rpx 10rpx -6rpx rgba(0, 0, 0, 0.54);
+  border: 3rpx solid rgba(255, 255, 255, 0.85);
   transition: box-shadow 0.22s;
 
-  // 悬浮时放大并抬升，叠加卡片自身旋转，避免与浮动动画 transform 冲突
+  // 顶部高光，强化玻璃质感
+  &::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 120rpx;
+    border-radius: 48rpx 48rpx 0 0;
+    background: linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0.45),
+      rgba(255, 255, 255, 0)
+    );
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  // 悬浮时放大（旋转已由外层 .wish-card-in 负责，避免 transform 冲突）
   &:active {
-    transform: rotate(var(--wish-rotate, 0deg)) scale(0.98);
+    transform: scale(0.98);
     box-shadow: 0 10rpx 40rpx rgba(37, 204, 93, 0.18), 0 2rpx 10rpx rgba(0, 0, 0, 0.06),
       inset 0 2rpx 0 rgba(255, 255, 255, 0.88);
   }
 }
 
-.wish-card-glow {
+// ===== 叠在卡片下方的错位渐变衬底（左右内缩 12rpx，向下探出 16rpx，背景用接口 gradient） =====
+.ticket-inner-bg {
   position: absolute;
-  top: -32rpx;
-  right: -32rpx;
-  width: 160rpx;
-  height: 160rpx;
-  border-radius: 50%;
-  filter: blur(32rpx);
-  pointer-events: none;
+  left: 12rpx;
+  right: 12rpx;
+  top: 12rpx;
+  bottom: 0rpx;
+  border-radius: 24rpx;
+  z-index: 0;
+  pointer-events: auto;
+  // 背景由内联 :style="{ background: gradient }" 提供
+  box-shadow: inset 0 2rpx 0 rgba(255, 255, 255, 0.9),
+    0 10rpx 28rpx rgba(37, 204, 93, 0.12);
+
+  // 叠白色半透明，让 gradient 变淡
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: rgba(255, 255, 255, 0.75);
+    pointer-events: none;
+  }
 }
 
 // ===== 第一层：图片 =====
@@ -598,22 +672,23 @@ const cardStyle = computed(() => ({
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 20rpx;
+  margin-bottom: 10rpx;
 
   .wish-cover-logo-wrap {
-    width: 140rpx;
-    height: 140rpx;
+    width: 200rpx;
+    height: 200rpx;
     border-radius: 32rpx;
-    overflow: hidden;
-    background: rgba(255, 255, 255, 0.85);
+    // overflow: hidden;
+    // background: rgba(255, 255, 255, 0.85);
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 8rpx 28rpx rgba(0, 0, 0, 0.1);
   }
   .wish-cover-logo {
     width: 100%;
     height: 100%;
+    border-radius: 32rpx;
+    // box-shadow: 0 8rpx 28rpx rgba(0, 0, 0, 0.1);
   }
   .wish-cover-sys {
     width: 140rpx;
@@ -632,15 +707,6 @@ const cardStyle = computed(() => ({
   .wish-cover-emoji {
     font-size: 96rpx;
   }
-
-  // 进度条悬浮在封面底部
-  .wish-progress--float {
-    position: absolute;
-    left: 20rpx;
-    right: 20rpx;
-    bottom: 20rpx;
-    height: 14rpx;
-  }
 }
 
 // ===== 第二层：姓名 =====
@@ -653,6 +719,14 @@ const cardStyle = computed(() => ({
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: color 0.2s;
+
+  // hover：标题变色 + 下划线（用接口返回基色，真机用 :active 兜底）
+  .wish-card-in:hover &,
+  .wish-card-in:active & {
+    color: var(--cover-base, #25cc5d);
+    text-decoration: underline;
+  }
 }
 
 // ===== 第三层：日期 =====
@@ -678,6 +752,8 @@ const cardStyle = computed(() => ({
     position: absolute;
     left: 0;
     top: 0;
+    width: 100%;
+    height: 100%;
   }
 
   .wish-ring-label {
@@ -690,23 +766,15 @@ const cardStyle = computed(() => ({
     line-height: 1;
     white-space: nowrap;
   }
-
-  &--big {
-    margin: 0 auto;
-  }
 }
 
 .wish-progress {
-  height: 12rpx;
+  height: 20rpx;
   border-radius: 198rpx;
   overflow: hidden;
 
   &--bar {
     margin-top: 16rpx;
-    cursor: pointer;
-  }
-
-  &--float {
     cursor: pointer;
   }
 
@@ -743,15 +811,17 @@ const cardStyle = computed(() => ({
 }
 
 .wish-card-foot {
+  position: relative;
   display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
+  flex-direction: column;
+  align-items: stretch;
   margin-top: 20rpx;
   min-width: 0;
 
   .wish-amount-block {
     display: flex;
     align-items: baseline;
+    justify-content: flex-start;
     min-width: 0;
   }
 
@@ -768,45 +838,61 @@ const cardStyle = computed(() => ({
     margin-left: 4rpx;
   }
 
+  // 右下角状态按钮（示例 card__arrow 风格：底色用接口返回色，hover 叠深色）
   .wish-badges {
+    position: absolute;
+    right: -32rpx;
+    bottom: -48rpx;
     display: flex;
     align-items: center;
-    gap: 8rpx;
+    gap: 10rpx;
+    padding: 6rpx 24rpx 6rpx 20rpx;
     min-width: 0;
     flex-shrink: 0;
+    // 背景由内联 :style="{ background: coverBaseColor }" 提供（接口 cover_gradient 基色）
+    border-top-left-radius: 24rpx;
+    border-bottom-right-radius: 24rpx;
+    cursor: pointer;
+    overflow: hidden;
+    transition: filter 0.2s;
+
+    // hover/active 叠一层半透明黑，让任意基色都变深（不写死具体色）
+
+    .wish-chev-icon {
+      color: var(--badge-text, #fff);
+      font-size: 36rpx;
+      line-height: 1;
+      transition: transform 0.2s;
+    }
+
+    // hover：按钮变深（黑遮罩），箭头右移，标题变色+下划线
+    .wish-card-in:hover &,
+    .wish-card-in:active & {
+      filter: brightness(0.92);
+    }
+    .wish-card-in:hover &::after,
+    .wish-card-in:active &::after {
+      opacity: 1;
+    }
+    .wish-card-in:hover & .wish-chev-icon,
+    .wish-card-in:active & .wish-chev-icon {
+      transform: translateX(3rpx);
+    }
   }
 
   .wish-badge {
     font-size: 22rpx;
-    padding: 6rpx 20rpx;
-    border-radius: 40rpx;
     font-weight: 600;
+    color: var(--badge-text, #fff);
     white-space: nowrap;
   }
 
-  .badge-done {
-    color: var(--g5);
-    background: rgba(37, 204, 93, 0.15);
-  }
-
-  .badge-near {
-    color: var(--y5);
-    background: rgba(245, 158, 11, 0.18);
-  }
-
-  .badge-left {
-    color: var(--ink4);
-    background: rgba(155, 184, 168, 0.25);
-  }
-
+  .badge-done,
+  .badge-near,
+  .badge-left,
   .badge-wait {
-    color: var(--ink4);
-    background: rgba(170, 180, 190, 0.22);
-  }
-
-  .wish-chev {
-    font-size: 28rpx;
-    color: var(--ink4);
+    color: #fff;
+    background: transparent;
   }
 }
 
@@ -833,17 +919,27 @@ const cardStyle = computed(() => ({
   .ring-overlay-glass {
     position: absolute;
     inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 28rpx;
-    // 毛玻璃效果
-    backdrop-filter: blur(40rpx) saturate(1.4);
-    -webkit-backdrop-filter: blur(40rpx) saturate(1.4);
+    text-align: center;
+    padding: 48rpx;
+    box-sizing: border-box;
+    // 毛玻璃效果（更透、更强模糊）
+    backdrop-filter: blur(56rpx) saturate(1.5);
+    -webkit-backdrop-filter: blur(56rpx) saturate(1.5);
     border-radius: inherit;
 
+    .wish-ring--big {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      margin: 0;
+    }
+
     .ring-overlay-tip {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 48rpx;
       font-size: 22rpx;
       color: rgba(255, 255, 255, 0.85);
       font-weight: 600;

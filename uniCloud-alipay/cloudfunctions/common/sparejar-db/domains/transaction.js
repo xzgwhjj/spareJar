@@ -11,14 +11,35 @@ const misc = require('./misc')
 const category = require('./category')
 const pool = require('./pool')
 
+/**
+ * 推导滚入次日可用额度 P = Σ(in:roll_over) − Σ(out:roll_over_used)，并取 min(P, 池余额)。
+ * 取代原 user_settings.pending_rollover_fen 独立字段，避免双计与多笔滚存丢失。
+ * @param {string} userId
+ * @param {number} [poolBalance] 当前结余池余额，用于防御 P > B
+ */
+async function computeRollOverPending(userId, poolBalance = 0) {
+  const db = getDb()
+  const logs = await db.collection('surplus_pool_logs')
+    .where({ user_id: userId })
+    .get()
+  let p = 0
+  for (const l of logs.data || []) {
+    if (l.reason === 'roll_over' && l.direction === 'in') p += l.amount || 0
+    else if (l.reason === 'roll_over_used' && l.direction === 'out') p -= l.amount || 0
+  }
+  if (p < 0) p = 0
+  if (p > poolBalance) p = poolBalance
+  return p
+}
+
 async function recalculateDailySettlement(userId, dateKey) {
   const db = getDb()
   const settings = await getDocByUser('user_settings', userId)
   const baseLimit = await category.getEffectiveBaseLimit(userId, dateKey)
   const surplusPoolDoc = await getDocByUser('surplus_pools', userId)
   const surplusPoolBalance = surplusPoolDoc ? surplusPoolDoc.balance || 0 : 0
-  // 次日待滚入结余额（与 surplus_pools.balance 分离；滚入次日限额的临时额度）
-  const pendingRollover = settings ? (settings.pending_rollover_fen || 0) : 0
+  // 滚入次日可用额度 P：由流水推导（in:roll_over 之和 - out:roll_over_used 之和），恒 ≤ 池余额
+  const pendingRollover = await computeRollOverPending(userId, surplusPoolBalance)
   // 退款恢复当日可用额度：受 user_settings.refund_restore_limit 控制（默认开启）
   const refundRestore = settings ? settings.refund_restore_limit !== false : true
   const consumed = await category.sumDailyLimitExpenses(userId, dateKey, refundRestore, false)
@@ -26,7 +47,7 @@ async function recalculateDailySettlement(userId, dateKey) {
   const challengeConsumed = await category.sumDailyLimitExpenses(userId, dateKey, true, true)
   const consumedFromBase = Math.min(consumed, baseLimit)
   const consumedFromSurplus = Math.max(0, consumed - baseLimit)
-  // 生效总限额 = 固定限额 + 已确认滚入的次日结余（pending 滚动为临时额度）
+  // 生效总限额 = 固定限额 + 滚入次日的结余（P 为池余额子集，不脱离池）
   const availableStart = baseLimit + pendingRollover
   const availableEnd = availableStart - consumed
   const surplus = Math.max(0, baseLimit - consumedFromBase)
@@ -355,23 +376,62 @@ async function allocateSurplus(userId, dateKey, items, isAuto = false) {
 
   for (const item of allocItems) {
     if (item.target_type === 'roll_over') {
-      // 滚入次日限额：写入 user_settings.pending_rollover_fen（临时待确认额度，与 surplus_pools 分离）
-      const s = await getDocByUser('user_settings', userId)
-      const cur = s ? (s.pending_rollover_fen || 0) : 0
-      await db.collection('user_settings').where({ user_id: userId }).update({
-        pending_rollover_fen: cur + item.amount,
-        pending_rollover_date: dateKey,
-        updated_at: nowTs()
+      // 滚入次日：日结盈余先作为 daily_surplus 进池，再补记 roll_over 标签（不改动池余额 B）
+      await pool.applySurplusPoolChange(userId, 'in', item.amount, 'daily_surplus', {
+        ref_type: 'allocation',
+        ref_id: allocRes.id,
+        date_key: dateKey
+      })
+      await pool.markRollOverLog(userId, item.amount, {
+        ref_type: 'allocation',
+        ref_id: allocRes.id,
+        date_key: dateKey
       })
     } else if (item.target_type === 'wish') {
+      // 立即消耗型：先 daily_surplus 进池，再 to_wish 出池（净 B 不变，钱去心愿）
+      await pool.applySurplusPoolChange(userId, 'in', item.amount, 'daily_surplus', {
+        ref_type: 'allocation',
+        ref_id: allocRes.id,
+        date_key: dateKey
+      })
       await wish.applyWishFundChange(userId, item.wish_id, 'in', item.amount, 'surplus_allocation', {
         ref_id: allocRes.id
       })
+      await pool.applySurplusPoolChange(userId, 'out', item.amount, 'to_wish', {
+        ref_type: 'allocation',
+        ref_id: allocRes.id,
+        date_key: dateKey,
+        consumeRollOver: false
+      })
     } else if (item.target_type === 'savings_pool') {
+      await pool.applySurplusPoolChange(userId, 'in', item.amount, 'daily_surplus', {
+        ref_type: 'allocation',
+        ref_id: allocRes.id,
+        date_key: dateKey
+      })
       await pool.applySavingsPoolChange(userId, 'in', item.amount, 'surplus_in', {
         ref_type: 'allocation',
         ref_id: allocRes.id,
         date_key: dateKey
+      })
+      await pool.applySurplusPoolChange(userId, 'out', item.amount, 'to_savings', {
+        ref_type: 'allocation',
+        ref_id: allocRes.id,
+        date_key: dateKey,
+        consumeRollOver: false
+      })
+    } else {
+      // DIY 自定义：立即消耗型，进池后按 to_<diy> 出池
+      await pool.applySurplusPoolChange(userId, 'in', item.amount, 'daily_surplus', {
+        ref_type: 'allocation',
+        ref_id: allocRes.id,
+        date_key: dateKey
+      })
+      await pool.applySurplusPoolChange(userId, 'out', item.amount, 'to_' + String(item.target_type || 'diy'), {
+        ref_type: 'allocation',
+        ref_id: allocRes.id,
+        date_key: dateKey,
+        consumeRollOver: false
       })
     }
   }
@@ -397,43 +457,45 @@ async function confirmSurplusRollover(userId, decision, opts = {}) {
   const db = getDb()
   const settings = await getDocByUser('user_settings', userId)
   if (!settings) throw new Error('user settings not found')
-  const pending = settings.pending_rollover_fen || 0
-  const pendingDate = settings.pending_rollover_date || null
+  const poolDoc = await getDocByUser('surplus_pools', userId)
+  const poolBalance = poolDoc ? (poolDoc.balance || 0) : 0
+  // 滚入次日可用额度由流水推导（不再读 pending_rollover_fen 字段）
+  const pending = await computeRollOverPending(userId, poolBalance)
   if (pending <= 0) {
     return { ok: true, changed: false, pending_rollover_fen: 0 }
   }
 
   const ts = nowTs()
   if (decision === 'confirm') {
+    // 保持滚入次日：钱已在池且已标记 roll_over，此处仅标记已确认
     await db.collection('user_settings').where({ user_id: userId }).update({
       pending_rollover_confirmed: true,
       updated_at: ts
     })
   } else {
+    // 实际用掉滚入次日的额度：记 out:roll_over_used（消耗 P，池 B 减 pending），并转给目标
+    // consumeRollOver:false 避免自身再补一条 roll_over_used（否则 P 双扣）
+    await pool.applySurplusPoolChange(userId, 'out', pending, 'roll_over_used', { date_key: settings.pending_rollover_date || null, consumeRollOver: false })
     const target = opts.target_type || 'savings_pool'
     if (target === 'wish') {
       if (!opts.wish_id) throw new Error('wish_id required for wish target')
       await wish.applyWishFundChange(userId, opts.wish_id, 'in', pending, 'surplus_rollover', {})
-    } else if (target === 'savings_pool') {
-      await pool.applySavingsPoolChange(userId, 'in', pending, 'surplus_rollover', { date_key: pendingDate })
     } else {
-      // 其他自定义去向默认进存款池
-      await pool.applySavingsPoolChange(userId, 'in', pending, 'surplus_rollover', { date_key: pendingDate })
+      // savings_pool 或自定义去向：进存款池
+      await pool.applySavingsPoolChange(userId, 'in', pending, 'surplus_rollover', { date_key: settings.pending_rollover_date || null })
     }
     await db.collection('user_settings').where({ user_id: userId }).update({
-      pending_rollover_fen: 0,
-      pending_rollover_date: null,
       pending_rollover_confirmed: false,
       updated_at: ts
     })
   }
 
   // 把对应日结标记已处理，避免重复触发
-  if (pendingDate) {
-    const sRes = await db.collection('daily_settlements').where({ user_id: userId, date_key: pendingDate }).limit(1).get()
+  if (settings.pending_rollover_date) {
+    const sRes = await db.collection('daily_settlements').where({ user_id: userId, date_key: settings.pending_rollover_date }).limit(1).get()
     if (sRes.data && sRes.data[0]) {
       await db.collection('daily_settlements').doc(sRes.data[0]._id).update({
-        allocation_status: decision === 'confirm' ? 'allocated' : 'allocated',
+        allocation_status: 'allocated',
         updated_at: ts
       })
     }

@@ -37,13 +37,13 @@ function todayDateKey() {
   return formatDateKey(new Date())
 }
 
-// 'YYYY-MM-DD HH:MM:SS' -> 'YYYY-MM-DDTHH:MM:SS'，兼容各 JS 引擎解析
+// 'YYYY-MM-DD HH:MM:SS' 或 'YYYY-MM-DD HH:MM:SS.sss' -> ISO 片段，兼容各 JS 引擎解析
 
 function normalizeTimestamp(s) {
-  return s.replace(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})$/, '$1T$2')
+  return s.replace(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?)$/, '$1T$2')
 }
 
-// 数据库时间统一存储为 'YYYY-MM-DD HH:MM:SS' 字符串（本地时区）
+// 数据库时间统一存储为 'YYYY-MM-DD HH:MM:SS.sss' 字符串（本地时区，含毫秒，避免同秒流水 created_at 重复）
 
 function formatDateTime(date = new Date()) {
   let d
@@ -51,7 +51,8 @@ function formatDateTime(date = new Date()) {
   else if (typeof date === 'number') d = new Date(date)
   else d = new Date(normalizeTimestamp(String(date)))
   if (Number.isNaN(d.getTime())) throw new Error(`无法解析时间: ${date}`)
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  const ms = d.getMilliseconds()
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(ms).padStart(3, '0')}`
 }
 
 // 将任意时间输入（Date/时间戳/字符串）规范为存储字符串；已是该格式则原样返回

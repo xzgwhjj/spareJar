@@ -18,6 +18,33 @@ async function listSavingsPoolLogs(userId) {
  * @param {string} userId
  */
 
+async function getSurplusPoolLogs(userId) {
+  const db = getDb()
+  const pool = await getDocByUser('surplus_pools', userId)
+  const poolBalance = pool ? (pool.balance || 0) : 0
+  const logsRes = await db.collection('surplus_pool_logs')
+    .where({ user_id: userId })
+    .orderBy('created_at', 'asc')
+    .get()
+  const logs = (logsRes.data || []).map((l) => ({
+    direction: l.direction,
+    amount: l.amount || 0,
+    reason: l.reason || '',
+    balance_after: l.balance_after,
+    created_at: l.created_at,
+    note: l.note || ''
+  }))
+  // 推导滚入次日可用额度 P
+  let p = 0
+  for (const l of logs) {
+    if (l.reason === 'roll_over' && l.direction === 'in') p += l.amount
+    else if (l.reason === 'roll_over_used' && l.direction === 'out') p -= l.amount
+  }
+  if (p < 0) p = 0
+  if (p > poolBalance) p = poolBalance
+  return { logs, roll_over_pending: p, pool_balance: poolBalance }
+}
+
 async function listSurplusAllocations(userId) {
   const db = getDb()
   const res = await db.collection('surplus_allocations')
@@ -60,6 +87,22 @@ async function applySurplusPoolChange(userId, direction, amount, reason, refs = 
   const delta = direction === 'in' ? amount : -amount
   const balanceAfter = current + delta
   if (balanceAfter < 0) throw new Error('surplus pool balance insufficient')
+
+  // 出池时优先消耗滚入次日的额度 P（规格 3.3/3.4）：补记 roll_over_used 流水，使 P 同步减少。
+  // 仅当用户主动从结余池取出（consumeRollOver !== false）时生效；日结配对出入（allocateSurplus）传 false 跳过。
+  const consumeRollOver = refs.consumeRollOver !== false
+  let rollOverConsumed = 0
+  if (direction === 'out' && consumeRollOver) {
+    const logsRes = await db.collection('surplus_pool_logs').where({ user_id: userId }).get()
+    let p = 0
+    for (const l of logsRes.data || []) {
+      if (l.reason === 'roll_over' && l.direction === 'in') p += l.amount || 0
+      else if (l.reason === 'roll_over_used' && l.direction === 'out') p -= l.amount || 0
+    }
+    if (p < 0) p = 0
+    if (p > current) p = current
+    rollOverConsumed = Math.min(amount, p)
+  }
 
   const ts = nowTs()
   if (pool) {
@@ -107,6 +150,22 @@ async function applySurplusPoolChange(userId, direction, amount, reason, refs = 
     note: refs.note || '',
     created_at: ts
   })
+
+  // 补记 roll_over_used（消耗滚入次日额度），不影响池余额 B（已在上面的 out 中扣除）
+  if (rollOverConsumed > 0) {
+    await db.collection('surplus_pool_logs').add({
+      user_id: userId,
+      direction: 'out',
+      amount: rollOverConsumed,
+      balance_after: balanceAfter,
+      reason: 'roll_over_used',
+      ref_type: refs.ref_type || null,
+      ref_id: refs.ref_id || null,
+      date_key: refs.date_key || null,
+      note: refs.note || '',
+      created_at: ts
+    })
+  }
   return balanceAfter
 }
 
@@ -245,9 +304,37 @@ async function applyAccountBalanceChange(userId, accountId, amountDelta, changeT
   return balanceAfter
 }
 
+/**
+ * 滚入次日标记流水：日结盈余已通过 applySurplusPoolChange(in, 'daily_surplus') 进池，
+ * 此处仅补记一条 reason='roll_over' 的标签流水（不改动池余额 B），用于推导滚入次日可用额度 P。
+ * @param {string} userId
+ * @param {number} amount 分
+ * @param {object} [refs]
+ */
+async function markRollOverLog(userId, amount, refs = {}) {
+  const db = getDb()
+  const pool = await getDocByUser('surplus_pools', userId)
+  const balanceAfter = pool ? (pool.balance || 0) : 0
+  const ts = nowTs()
+  await db.collection('surplus_pool_logs').add({
+    user_id: userId,
+    direction: 'in',
+    amount,
+    balance_after: balanceAfter,
+    reason: 'roll_over',
+    ref_type: refs.ref_type || null,
+    ref_id: refs.ref_id || null,
+    date_key: refs.date_key || null,
+    note: refs.note || '',
+    created_at: ts
+  })
+  return balanceAfter
+}
+
 
 module.exports = {
   listSavingsPoolLogs,
+  getSurplusPoolLogs,
   listSurplusAllocations,
   getPendingAllocation,
   applySurplusPoolChange,
@@ -255,4 +342,5 @@ module.exports = {
   depositSavingsPool,
   withdrawSavingsPool,
   applyAccountBalanceChange,
+  markRollOverLog,
 }

@@ -1,0 +1,10 @@
+{
+  "name": "sparejar-migrate-wish",
+  "version": "1.0.0",
+  "description": "一次性迁移：重算存量心愿的总目标/总已存/完成次数（按 phases 汇总）",
+  "main": "index.js",
+  "cloudfunction-config": {
+    "memorySize": 256,
+    "timeout": 60
+  }
+}

@@ -234,7 +234,7 @@
               display: flex;
               flex-direction: column;
               gap: 24rpx;
-              margin-top: 40rpx;
+              margin-top: 20rpx;
             "
           >
             <WishCard
@@ -262,136 +262,569 @@
     </scroll-view>
 
     <!-- 心愿详情弹窗 -->
-    <view v-if="detailWish" class="sheet-overlay" @click="detailWish = null">
-      <view class="sheet-panel" @click.stop>
-        <view class="sheet-handle">
-          <view class="handle-bar" />
-        </view>
-        <view
-          class="detail-header"
-          :style="{ background: grad(detailWish, detailIndex) }"
-        >
-          <image
-            v-if="isLogoWish(detailWish) && !isSysLogoWish(detailWish)"
-            class="detail-logo"
-            :src="logoUrlMap[logoFileIdOf(detailWish)]"
-            mode="aspectFit"
-          />
-          <view
-            v-else-if="isSysLogoWish(detailWish)"
-            class="detail-syslogo"
-            :style="{ background: sysLogoPlaceholderBg(sysLogoIndex(detailWish)) }"
-          >
-            <text class="detail-syslogo-text">{{
-              SYS_LOGO_PRESETS[sysLogoIndex(detailWish)]?.label
-            }}</text>
+    <view v-if="detailWish" class="sheet-overlay" @click="closeDetail">
+      <view class="sheet-panel wish-sheet sheet-slide-up" @click.stop>
+        <!-- 把手 -->
+        <view class="wish-sheet-handle" :style="{ background: detailHandleBg }" />
+
+        <!-- 封面 header -->
+        <view class="detail-header">
+          <!-- 底衬：白底 + 居中 logo（毛玻璃后朦胧可见） -->
+          <view class="detail-header-bg">
+            <image
+              v-if="isLogoWish(detailWish) && !isSysLogoWish(detailWish)"
+              class="detail-bg-logo"
+              :class="{ 'detail-bg-logo--fill': logoModeOf(detailWish) === 'aspectFill' }"
+              :src="logoUrlMap[logoFileIdOf(detailWish)]"
+              :mode="logoModeOf(detailWish)"
+            />
+            <view
+              v-else-if="isSysLogoWish(detailWish)"
+              class="detail-bg-syslogo"
+              :style="{ background: sysLogoPlaceholderBg(sysLogoIndex(detailWish)) }"
+            >
+              <text class="detail-bg-syslogo-text">{{
+                SYS_LOGO_PRESETS[sysLogoIndex(detailWish)]?.label
+              }}</text>
+            </view>
+            <text v-else class="detail-bg-emoji">{{ coverEmoji(detailWish) }}</text>
           </view>
-          <text v-else class="detail-emoji">{{ coverEmoji(detailWish) }}</text>
-          <text class="detail-name">{{ detailWish.name }}</text>
+          <view class="detail-header-glass" />
+          <view class="detail-header-glow" />
+          <view class="detail-header-top">
+            <view class="detail-header-left">
+              <view class="detail-title-wrap">
+                <text class="detail-name">{{ detailWish.name }}</text>
+                <text v-if="detailWish.start_date" class="detail-deadline">{{
+                  detailStartText
+                }}</text>
+                <text
+                  v-if="detailWish.end_date || detailWish.deadline"
+                  class="detail-deadline"
+                  >{{ detailEndText }}</text
+                >
+              </view>
+            </view>
+            <view class="detail-close" @click="closeDetail"><text>✕</text></view>
+          </view>
+
+          <view class="detail-progress">
+            <view class="detail-progress-top">
+              <text class="detail-progress-saved"
+                >已存 ¥{{ formatFen(detailWish.saved_amount || 0) }}</text
+              >
+              <text class="detail-progress-pct" :style="{ color: detailProgressPctColor }"
+                >{{
+                  Math.round(
+                    ((detailWish.saved_amount || 0) / (detailWish.target_amount || 1)) *
+                      100
+                  )
+                }}%</text
+              >
+            </view>
+            <view class="detail-bar" :style="{ background: detailProgressTrackBg }">
+              <view
+                class="detail-bar-fill"
+                :style="{
+                  width:
+                    Math.min(
+                      ((detailWish.saved_amount || 0) / (detailWish.target_amount || 1)) *
+                        100,
+                      100
+                    ) + '%',
+                  background: detailProgressFillBg,
+                }"
+              />
+            </view>
+            <view class="detail-progress-bottom">
+              <text class="detail-progress-target"
+                >目标 ¥{{ formatFen(detailWish.target_amount || 0) }}</text
+              >
+              <text
+                class="detail-progress-left"
+                :class="
+                  (detailWish.saved_amount || 0) > (detailWish.target_amount || 0)
+                    ? 'detail-progress-over'
+                    : ''
+                "
+                >{{
+                  (detailWish.saved_amount || 0) > (detailWish.target_amount || 0)
+                    ? "超存 ¥" +
+                      formatFen(
+                        (detailWish.saved_amount || 0) - (detailWish.target_amount || 0)
+                      )
+                    : "还差 ¥" +
+                      formatFen(
+                        Math.max(
+                          0,
+                          (detailWish.target_amount || 0) - (detailWish.saved_amount || 0)
+                        )
+                      )
+                }}</text
+              >
+            </view>
+          </view>
+
+          <view
+            v-if="
+              (detailWish.saved_amount || 0) >= (detailWish.target_amount || 0) &&
+              (detailWish.target_amount || 0) > 0 &&
+              !isDetailArchived
+            "
+            class="detail-done-badge"
+            :style="detailDoneBadgeStyle"
+          >
+            <text v-if="hasPhaseTasks">✨ 达成 {{ donePhaseCount }} 阶段目标！</text>
+            <text v-else>✨ 目标达成！</text>
+          </view>
           <text v-if="detailWish.archived_reason" class="detail-reason-badge">{{
             reasonLabel(detailWish.archived_reason)
           }}</text>
         </view>
-        <view class="detail-body">
-          <view class="detail-amount-row">
-            <text class="detail-amount"
-              >¥{{ formatFen(detailWish.saved_amount || 0) }}</text
-            >
-            <text class="detail-target"
-              >/ ¥{{ formatFen(detailWish.target_amount || 0) }}</text
-            >
-          </view>
-          <view class="detail-bar">
-            <view
-              class="detail-bar-fill"
-              :style="{
-                width:
-                  Math.min(
-                    ((detailWish.saved_amount || 0) / (detailWish.target_amount || 1)) *
-                      100,
-                    100
-                  ) + '%',
-              }"
-            />
-          </view>
-          <text class="detail-left-text"
-            >还差 ¥{{
-              formatFen(
-                Math.max(
-                  0,
-                  (detailWish.target_amount || 0) - (detailWish.saved_amount || 0)
-                )
-              )
-            }}</text
+
+        <!-- Tab 切换 -->
+        <view class="wish-tabs" :style="{ background: detailTabBg }">
+          <view
+            class="wish-tab"
+            :class="{ active: detailTab === 'detail' }"
+            :style="
+              detailTab === 'detail'
+                ? {
+                    color: detailTabActiveColor,
+                    boxShadow: `0 4rpx 16rpx ${detailTabActiveColor}1f`,
+                  }
+                : {}
+            "
+            @click="detailTab = 'detail'"
+            >进度详情</view
           >
+          <view
+            class="wish-tab"
+            :class="{ active: detailTab === 'records' }"
+            :style="
+              detailTab === 'records'
+                ? {
+                    color: detailTabActiveColor,
+                    boxShadow: `0 4rpx 16rpx ${detailTabActiveColor}1f`,
+                  }
+                : {}
+            "
+            @click="detailTab = 'records'"
+            >存入明细</view
+          >
+        </view>
 
-          <!-- 存入（仅进行中心愿） -->
-          <template v-if="!isDetailArchived">
-            <view class="op-block">
-              <text class="op-title">存入来源</text>
-              <view class="op-sources">
-                <view
-                  class="op-source"
-                  :class="{ active: depositSource === 'manual' }"
-                  @click="depositSource = 'manual'"
-                  >手动虚拟</view
-                >
-                <view
-                  class="op-source"
-                  :class="{ active: depositSource === 'surplus' }"
-                  @click="depositSource = 'surplus'"
-                  >从结余池</view
-                >
-                <view
-                  class="op-source"
-                  :class="{ active: depositSource === 'savings' }"
-                  @click="depositSource = 'savings'"
-                  >从存款池</view
-                >
+        <!-- 进度详情（仅进行中心愿） -->
+        <view v-if="detailTab === 'detail'" class="detail-panel">
+          <view class="detail-cards">
+            <view class="detail-stat">
+              <text class="detail-stat-label">已存金额</text>
+              <text class="detail-stat-value" :style="{ color: detailTabActiveColor }"
+                >¥{{ formatFen(detailWish.saved_amount || 0) }}</text
+              >
+            </view>
+            <view class="detail-stat">
+              <text class="detail-stat-label">剩余金额</text>
+              <text class="detail-stat-value" :style="{ color: detailTabActiveColor }"
+                >¥{{
+                  formatFen(
+                    Math.max(
+                      0,
+                      (detailWish.target_amount || 0) - (detailWish.saved_amount || 0)
+                    )
+                  )
+                }}</text
+              >
+            </view>
+            <view class="detail-stat">
+              <text class="detail-stat-label">完成阶段</text>
+              <text class="detail-stat-value" :style="{ color: detailTabActiveColor }"
+                >{{ detailWish.done_phases || 0 }} / {{ wishPhasesCum.length || 0 }}</text
+              >
+            </view>
+          </view>
+
+          <!-- 分阶段进度时间线 -->
+          <view class="phase-timeline" v-if="!isDetailArchived && detailTab === 'detail'">
+            <view class="phase-tl-title" :style="{ color: detailTabActiveColor }"
+              >阶段进度</view
+            >
+            <view
+              v-for="ph in wishPhasesCum"
+              :key="ph.index"
+              class="phase-tl-item"
+              :class="ph.effStatus"
+            >
+              <view
+                class="phase-tl-node"
+                :style="{
+                  background:
+                    ph.effStatus === 'done' ? detailTabActiveColor : detailAccentTint,
+                  color: ph.effStatus === 'done' ? '#fff' : detailTabActiveColor,
+                }"
+              >
+                <text>{{ ph.index }}</text>
               </view>
-              <view class="op-input-row">
-                <number-field
-                  class="op-input"
-                  :model-value="depositAmount"
-                  placeholder="金额(元)"
-                  title="存入金额"
-                  :decimal-places="2"
-                  :max-integer="9"
-                  @update:model-value="(v) => (depositAmount = v)"
-                />
-                <view class="op-confirm" @click="doDeposit"><text>存入 +</text></view>
+              <view class="phase-tl-body">
+                <view class="phase-tl-head">
+                  <text class="phase-tl-name">第{{ ph.index }}阶段</text>
+                  <text
+                    class="phase-tl-state"
+                    :class="ph.effStatus"
+                    :style="{
+                      color:
+                        ph.effStatus === 'expired' ? 'var(--ink4)' : detailTabActiveColor,
+                    }"
+                    >{{
+                      ph.effStatus === "done"
+                        ? "已完成"
+                        : ph.effStatus === "expired"
+                        ? "已过期"
+                        : "进行中"
+                    }}</text
+                  >
+                </view>
+                <view class="phase-tl-bar">
+                  <view
+                    class="phase-tl-fill"
+                    :style="{
+                      width:
+                        Math.min(
+                          100,
+                          Math.round(((ph.saved || 0) / (ph.target || 1)) * 100)
+                        ) + '%',
+                      background: detailProgressFillBg,
+                    }"
+                  />
+                </view>
+                <view class="phase-tl-num">
+                  <text>¥{{ formatFen(ph.saved || 0) }}</text>
+                  <text class="phase-tl-target">/ ¥{{ formatFen(ph.target || 0) }}</text>
+                  <text class="phase-tl-cum"
+                    >总 ¥{{ formatFen(ph.cumSaved) }} / ¥{{
+                      formatFen(ph.cumTarget)
+                    }}</text
+                  >
+                  <text v-if="ph.done_at" class="phase-tl-date">{{
+                    fmtDate(ph.done_at)
+                  }}</text>
+                </view>
+                <view v-if="ph.start_date || ph.end_date" class="phase-tl-range">
+                  <text v-if="ph.start_date" class="phase-tl-range-item"
+                    >📅 {{ ph.start_date
+                    }}<text v-if="ph.start_time"> {{ ph.start_time }}</text></text
+                  >
+                  <text v-if="ph.end_date" class="phase-tl-range-item"
+                    >→ {{ ph.end_date
+                    }}<text v-if="ph.end_time"> {{ ph.end_time }}</text></text
+                  >
+                  <text v-else class="phase-tl-range-item phase-tl-range-open"
+                    >→ 无限期</text
+                  >
+                </view>
               </view>
             </view>
 
-            <!-- 取出 -->
-            <view class="op-block">
-              <text class="op-title">取出（退回累计结余池）</text>
-              <view class="op-input-row">
-                <number-field
-                  class="op-input"
-                  :model-value="withdrawAmount"
-                  placeholder="金额(元)"
-                  title="取出金额"
-                  :decimal-places="2"
-                  :max-integer="9"
-                  @update:model-value="(v) => (withdrawAmount = v)"
-                />
-                <view class="op-confirm withdraw" @click="doWithdraw"
-                  ><text>取回</text></view
-                >
+            <!-- 进行中且尚无下一阶段：可随时预设下一阶段（不要求当前阶段达成） -->
+            <view
+              v-if="!isDetailArchived && !hasNextPhase"
+              class="phase-tl-advance"
+              :style="{ borderColor: detailAccentBorder, color: detailTabActiveColor }"
+              @click="openAdvance"
+            >
+              <text>➕ 开启下一阶段</text>
+            </view>
+          </view>
+
+          <!-- 操作区（仅进行中心愿） -->
+          <template v-if="!isDetailArchived">
+            <view v-if="detailAction === 'none'" class="detail-op-row">
+              <view
+                class="wish-btn-primary"
+                :style="{ background: detailPrimaryBg, color: detailBtnTextColor }"
+                @click="detailAction = 'deposit'"
+              >
+                <text>⬇ 存入</text>
               </view>
+              <view
+                class="wish-btn-ghost"
+                :style="{
+                  borderColor: detailAccentBorder,
+                  color: detailTabActiveColor,
+                }"
+                @click="detailAction = 'withdraw'"
+              >
+                <text>⬆ 取出</text>
+              </view>
+              <view
+                v-if="currentPhaseDone"
+                class="wish-btn-ghost wish-btn-archive-mini"
+                :style="{ borderColor: detailAccentBorder, color: detailTabActiveColor }"
+                @click="doArchive"
+                ><text>归档</text></view
+              >
             </view>
 
             <view
-              class="detail-actions"
-              style="margin-top: 16rpx; display: flex; gap: 20rpx"
+              v-else
+              class="detail-op-card"
+              :style="{ borderColor: detailAccentBorder }"
             >
-              <view class="archive-btn" @click="doArchive"><text>达成归档</text></view>
-              <view class="delete-btn" @click="doDelete"><text>删除</text></view>
+              <text class="detail-op-title">{{
+                detailAction === "deposit" ? "📥 存入心愿" : "📤 从心愿取出"
+              }}</text>
+
+              <view v-if="detailAction === 'deposit'" class="detail-sources">
+                <view
+                  v-for="s in depositSources"
+                  :key="s.value"
+                  class="detail-source"
+                  :class="{
+                    active: depositSource === s.value,
+                    disabled: isDepositSourceDisabled(s.value),
+                  }"
+                  :style="
+                    depositSource === s.value
+                      ? {
+                          background: detailAccentTint,
+                          borderColor: detailTabActiveColor,
+                          color: detailTabActiveColor,
+                        }
+                      : { borderColor: detailAccentBorder }
+                  "
+                  @click="!isDepositSourceDisabled(s.value) && (depositSource = s.value)"
+                  >{{ s.label }}</view
+                >
+              </view>
+
+              <view
+                v-if="detailAction === 'deposit' && depositSource === 'account'"
+                class="detail-account-picker"
+              >
+                <picker
+                  mode="selector"
+                  :range="accountList"
+                  range-key="name"
+                  @change="(e) => (depositAccountId = accountList[e.detail.value]._id)"
+                >
+                  <view
+                    class="detail-account-item"
+                    :style="{ borderColor: detailAccentBorder }"
+                  >
+                    <text>{{
+                      depositAccount
+                        ? depositAccount.name +
+                          "（¥" +
+                          formatFen(depositAccount.current_balance || 0) +
+                          "）"
+                        : "选择资产账户"
+                    }}</text>
+                    <text class="detail-account-arrow">▾</text>
+                  </view>
+                </picker>
+                <text v-if="depositAmount && depositAccount" class="detail-balance-after"
+                  >存入后余额 ¥{{ formatFen(depositAccountAfter) }}</text
+                >
+              </view>
+
+              <view
+                v-if="detailAction === 'deposit' && depositSource === 'savings'"
+                class="detail-pool-tip"
+                :style="{
+                  background: detailAccentTint,
+                  color: detailTabActiveColor,
+                }"
+                >存款池余额 ¥{{ savingsBalance }}</view
+              >
+              <view
+                v-if="detailAction === 'deposit' && depositSource === 'surplus'"
+                class="detail-pool-tip"
+                :style="{
+                  background: detailAccentTint,
+                  color: detailTabActiveColor,
+                }"
+                >结余池余额 ¥{{ surplusBalance }}</view
+              >
+
+              <view v-if="detailAction === 'deposit'" class="detail-quick">
+                <view
+                  class="detail-quick-btn"
+                  :style="{
+                    borderColor: detailAccentBorder,
+                    color: detailTabActiveColor,
+                  }"
+                  @click="setDepositQuick(depositRemain)"
+                  >存满剩余</view
+                >
+                <view
+                  class="detail-quick-btn"
+                  :style="{
+                    borderColor: detailAccentBorder,
+                    color: detailTabActiveColor,
+                  }"
+                  @click="setDepositQuick(Math.floor(depositSourceAvail / 2))"
+                  >存一半</view
+                >
+                <view
+                  class="detail-quick-btn"
+                  :style="{
+                    borderColor: detailAccentBorder,
+                    color: detailTabActiveColor,
+                  }"
+                  @click="setDepositQuick(Math.floor(depositSourceAvail / 3))"
+                  >存1/3</view
+                >
+                <view
+                  class="detail-quick-btn"
+                  :style="{
+                    borderColor: detailAccentBorder,
+                    color: detailTabActiveColor,
+                  }"
+                  @click="setDepositQuick(Math.floor(depositSourceAvail / 4))"
+                  >存1/4</view
+                >
+              </view>
+
+              <view v-if="detailAction === 'withdraw'" class="detail-sources">
+                <view
+                  v-for="s in withdrawSources"
+                  :key="s.value"
+                  class="detail-source"
+                  :class="{
+                    active: withdrawSource === s.value,
+                    disabled: isWithdrawSourceDisabled(s.value),
+                  }"
+                  :style="
+                    withdrawSource === s.value
+                      ? {
+                          background: detailAccentTint,
+                          borderColor: detailTabActiveColor,
+                          color: detailTabActiveColor,
+                        }
+                      : { borderColor: detailAccentBorder }
+                  "
+                  @click="
+                    !isWithdrawSourceDisabled(s.value) && (withdrawSource = s.value)
+                  "
+                  >{{ s.label }}</view
+                >
+              </view>
+
+              <view
+                v-if="detailAction === 'withdraw' && withdrawSource === 'account'"
+                class="detail-account-picker"
+              >
+                <picker
+                  mode="selector"
+                  :range="accountList"
+                  range-key="name"
+                  @change="(e) => (withdrawAccountId = accountList[e.detail.value]._id)"
+                >
+                  <view
+                    class="detail-account-item"
+                    :style="{ borderColor: detailAccentBorder }"
+                  >
+                    <text>{{
+                      withdrawAccount
+                        ? withdrawAccount.name +
+                          "（¥" +
+                          formatFen(withdrawAccount.current_balance || 0) +
+                          "）"
+                        : "选择资产账户"
+                    }}</text>
+                    <text class="detail-account-arrow">▾</text>
+                  </view>
+                </picker>
+                <text
+                  v-if="withdrawAmount && withdrawAccount"
+                  class="detail-balance-after"
+                  >取出后余额 ¥{{ formatFen(withdrawAccountAfter) }}</text
+                >
+              </view>
+
+              <view
+                v-if="detailAction === 'withdraw' && withdrawSource === 'savings'"
+                class="detail-pool-tip"
+                :style="{
+                  background: detailAccentTint,
+                  color: detailTabActiveColor,
+                }"
+                >存款池余额 ¥{{ savingsBalance }}</view
+              >
+              <view
+                v-if="detailAction === 'withdraw' && withdrawSource === 'surplus'"
+                class="detail-pool-tip"
+                :style="{
+                  background: detailAccentTint,
+                  color: detailTabActiveColor,
+                }"
+                >结余池余额 ¥{{ surplusBalance }}</view
+              >
+
+              <view class="detail-note-row">
+                <input
+                  class="detail-note-input"
+                  :model-value="detailAction === 'deposit' ? depositNote : withdrawNote"
+                  :placeholder="
+                    detailAction === 'deposit'
+                      ? '备注（选填，如：发工资存一笔）'
+                      : '备注（选填，如：临时取用）'
+                  "
+                  :style="{ borderColor: detailAccentBorder }"
+                  @input="
+                    (e) =>
+                      detailAction === 'deposit'
+                        ? (depositNote = e.detail.value)
+                        : (withdrawNote = e.detail.value)
+                  "
+                />
+              </view>
+
+              <view class="detail-input-row" :style="{ borderColor: detailAccentBorder }">
+                <number-field
+                  class="detail-input"
+                  :model-value="
+                    detailAction === 'deposit' ? depositAmount : withdrawAmount
+                  "
+                  :placeholder="
+                    detailAction === 'deposit' ? '存入金额(元)' : '取出金额(元)'
+                  "
+                  title=""
+                  :decimal-places="2"
+                  :max-integer="9"
+                  @update:model-value="
+                    (v) =>
+                      detailAction === 'deposit'
+                        ? (depositAmount = v)
+                        : (withdrawAmount = v)
+                  "
+                />
+              </view>
+
+              <view class="detail-op-actions">
+                <view
+                  class="wish-btn-ghost"
+                  :style="{
+                    borderColor: detailAccentBorder,
+                    color: detailTabActiveColor,
+                  }"
+                  @click="detailAction = 'none'"
+                  ><text>取消</text></view
+                >
+                <view
+                  class="wish-btn-primary"
+                  :style="{ background: detailPrimaryBg, color: detailBtnTextColor }"
+                  @click="detailAction === 'deposit' ? doDeposit() : doWithdraw()"
+                >
+                  <text>确认</text></view
+                >
+              </view>
             </view>
+
+            <view class="detail-danger" @click="doDelete"><text>删除心愿</text></view>
           </template>
 
-          <!-- 历史心愿只读说明 -->
+          <!-- 历史心愿只读 -->
           <view v-else class="archived-readonly">
             <text class="archived-readonly-text"
               >该心愿已于
@@ -400,27 +833,167 @@
                 reasonLabel(detailWish.archived_reason)
               }}，已归档为历史记录，不可再存入或取出。</text
             >
-          </view>
-
-          <text class="detail-records-title">存取记录</text>
-          <view v-for="r in fundLogs" :key="r._id || r.created_at" class="record-row">
-            <view class="record-left">
-              <text class="record-type">{{
-                r.direction === "in" ? "💚 存入" : "💔 取出"
-              }}</text>
-              <text class="record-source">{{ sourceLabel(r.source) }}</text>
-            </view>
-            <view class="record-right">
-              <text class="record-amount" :class="r.direction"
-                >{{ r.direction === "in" ? "+" : "-" }}¥{{
-                  formatFen(r.amount || 0)
-                }}</text
+            <!-- 历史只读时间线 -->
+            <view class="phase-timeline">
+              <view class="phase-tl-title">阶段进度</view>
+              <view
+                v-for="ph in wishPhasesCum"
+                :key="ph.index"
+                class="phase-tl-item"
+                :class="ph.effStatus"
               >
-              <text class="record-date">{{ fmtDate(r.created_at) }}</text>
+                <!-- 待：完成的在圆圈的右上方 -->
+                <view class="phase-tl-node">
+                  <text>{{ ph.index }}</text>
+                </view>
+                <view class="phase-tl-body">
+                  <view class="phase-tl-head">
+                    <text class="phase-tl-name">第{{ ph.index }}阶段</text>
+                    <text class="phase-tl-state" :class="ph.effStatus">{{
+                      ph.effStatus === "done"
+                        ? "已完成"
+                        : ph.effStatus === "expired"
+                        ? "已过期"
+                        : "进行中"
+                    }}</text>
+                  </view>
+                  <view class="phase-tl-bar">
+                    <view
+                      class="phase-tl-fill"
+                      :style="{
+                        width:
+                          Math.min(
+                            100,
+                            Math.round(((ph.saved || 0) / (ph.target || 1)) * 100)
+                          ) + '%',
+                        background: detailProgressFillBg,
+                      }"
+                    />
+                  </view>
+                  <view class="phase-tl-num">
+                    <text>¥{{ formatFen(ph.saved || 0) }}</text>
+                    <text class="phase-tl-target"
+                      >/ ¥{{ formatFen(ph.target || 0) }}</text
+                    >
+                    <text class="phase-tl-cum"
+                      >总 ¥{{ formatFen(ph.cumSaved) }} / ¥{{
+                        formatFen(ph.cumTarget)
+                      }}</text
+                    >
+                    <text v-if="ph.done_at" class="phase-tl-date">{{
+                      fmtDate(ph.done_at)
+                    }}</text>
+                  </view>
+                  <view v-if="ph.start_date || ph.end_date" class="phase-tl-range">
+                    <text v-if="ph.start_date" class="phase-tl-range-item"
+                      >📅 {{ ph.start_date
+                      }}<text v-if="ph.start_time"> {{ ph.start_time }}</text></text
+                    >
+                    <text v-if="ph.end_date" class="phase-tl-range-item"
+                      >→ {{ ph.end_date
+                      }}<text v-if="ph.end_time"> {{ ph.end_time }}</text></text
+                    >
+                    <text v-else class="phase-tl-range-item phase-tl-range-open"
+                      >→ 无限期</text
+                    >
+                  </view>
+                </view>
+              </view>
             </view>
           </view>
-          <view v-if="!fundLogs.length" class="record-empty"><text>暂无记录</text></view>
         </view>
+
+        <!-- 存入明细 -->
+        <view v-else class="records-panel">
+          <view v-if="!fundLogs.length" class="record-empty"><text>暂无记录</text></view>
+          <view
+            v-for="r in fundLogs"
+            :key="r._id || r.created_at"
+            class="record-row"
+            :style="{ borderBottomColor: detailAccentBorder }"
+          >
+            <view class="record-left">
+              <view
+                class="record-icon"
+                :class="r.direction === 'in' ? 'in' : 'out'"
+                :style="
+                  r.direction === 'in'
+                    ? { background: detailAccentTint, color: detailTabActiveColor }
+                    : {}
+                "
+              >
+                <text>{{ r.direction === "in" ? "⬇" : "⬆" }}</text>
+              </view>
+              <view class="record-info">
+                <text class="record-type">{{ sourceLabel(r.source) }}</text>
+                <text class="record-date">{{ fmtDate(r.created_at) }}</text>
+              </view>
+            </view>
+            <text
+              class="record-amount"
+              :class="r.direction"
+              :style="r.direction === 'in' ? { color: detailTabActiveColor } : {}"
+              >{{ r.direction === "in" ? "+" : "-" }}¥{{ formatFen(r.amount || 0) }}</text
+            >
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 开启下一阶段弹窗 -->
+    <view v-if="advanceModal" class="sheet-overlay" @click="advanceModal = false">
+      <view class="sheet-panel advance-panel" @click.stop>
+        <view class="sheet-handle"><view class="handle-bar" /></view>
+        <view class="advance-head">
+          <text class="advance-title">➕ 开启下一阶段</text>
+          <view class="advance-close" @click="advanceModal = false"><text>×</text></view>
+        </view>
+        <view class="advance-input-row">
+          <text class="advance-input-label">本阶段目标（元）</text>
+          <view class="advance-input-wrap" :style="{ borderColor: detailAccentBorder }">
+            <number-field
+              class="advance-input"
+              :model-value="nextTargetYuan"
+              :placeholder="'本阶段目标(元)'"
+              title=""
+              :decimal-places="2"
+              :max-integer="9"
+              @update:model-value="(v) => (nextTargetYuan = v)"
+            />
+          </view>
+        </view>
+        <view class="advance-date-row">
+          <view
+            class="advance-date-box advance-date-full"
+            :style="{ borderColor: detailAccentBorder }"
+            @click="showAdvanceDatePicker = true"
+          >
+            <text class="advance-date-cap">起止</text>
+            <text class="advance-date-val">{{
+              nextStartKey
+                ? nextStartKey + "  ~  " + (nextEndKey || "可选")
+                : "选择日期区间"
+            }}</text>
+          </view>
+        </view>
+        <DateRangePicker
+          :visible="showAdvanceDatePicker"
+          :model-value="{
+            start: nextStartKey,
+            end: nextEndKey,
+            startTime: nextStartTime,
+            endTime: nextEndTime,
+          }"
+          quick-range-direction="future"
+          @update:visible="(v) => (showAdvanceDatePicker = v)"
+          @confirm="onAdvanceDateConfirm"
+        />
+        <view
+          class="wish-btn-primary advance-confirm"
+          :style="{ background: detailPrimaryBg, color: detailBtnTextColor }"
+          @click="confirmAdvance"
+          ><text>确认开启</text></view
+        >
       </view>
     </view>
 
@@ -694,6 +1267,7 @@
 import { ref, reactive, computed, onMounted, watch } from "vue";
 import TabBar from "@/components/tabbar/tabbar.vue";
 import { useUserStore } from "@/stores/user.js";
+import { advanceWishPhaseAction } from "@/stores/wish.js";
 import { formatFen, safeYuanToFen } from "@/utils/money.js";
 import { hexToHsv, hsvToHex } from "@/utils/coverColor.js";
 import { uploadWishLogo, deleteWishLogo } from "@/utils/cloudFile.js";
@@ -713,12 +1287,15 @@ const {
   deleteWishAction,
   loadWishFundLogsAction,
   loadSavingsPoolLogsAction,
-  depositWishManualAction,
+  depositWishFromAccountAction,
   depositWishFromSurplusAction,
   depositWishFromSavingsAction,
   withdrawWishToSurplusAction,
+  withdrawWishToAccountAction,
+  withdrawWishToSavingsAction,
   depositSavingsPoolAction,
   withdrawSavingsPoolAction,
+  loadAssetAccounts,
 } = useUserStore();
 
 const viewTab = ref("active");
@@ -789,6 +1366,104 @@ const grad = (arg) => {
   }
   return FALLBACK_GRADIENT;
 };
+/* 进度条配色：与 wish-card 一致的「浅/中/深」三段渐变 + 半透明轨道 */
+function extractGradientColors(str) {
+  const m = String(str).match(/#([0-9a-fA-F]{3,8})/g) || [];
+  const colors = m.map((c) => c);
+  if (colors.length === 0) return ["#acf5b7", "#8ae99b", "#25cc5d"];
+  if (colors.length === 1) return [colors[0], colors[0], colors[0]];
+  return [colors[0], colors[colors.length - 1], colors[colors.length - 1]];
+}
+function hexToRgb(hex) {
+  let h = String(hex).replace("#", "");
+  if (h.length === 3)
+    h = h
+      .split("")
+      .map((c) => c + c)
+      .join("");
+  if (h.length === 6) h += "ff";
+  return {
+    r: parseInt(h.slice(0, 2), 16),
+    g: parseInt(h.slice(2, 4), 16),
+    b: parseInt(h.slice(4, 6), 16),
+  };
+}
+function buildThreeTone(baseHex) {
+  const { h, s, l } = hexToHsl(baseHex);
+  const light = hslToHex(h, Math.max(0, s - 6), Math.min(100, l + 14));
+  const base = hslToHex(h, s, l);
+  const deep = hslToHex(h, Math.min(100, s + 4), Math.max(0, l - 16));
+  return [light, base, deep];
+}
+const detailProgressFillBg = computed(() => {
+  const [head, , tail] = extractGradientColors(grad(detailWish.value));
+  const baseHex = tail || head || "#8ae99b";
+  const [light, base, deep] = buildThreeTone(baseHex);
+  return `linear-gradient(90deg, ${light} 0%, ${base} 50%, ${deep} 100%)`;
+});
+const detailProgressTrackBg = computed(() => {
+  const [, , tail] = extractGradientColors(grad(detailWish.value));
+  const baseHex = tail || "#8ae99b";
+  const { r, g, b } = hexToRgb(baseHex);
+  // 动态色轨道：白混 30%（保留更多色相，更实），叠 0.5 透明度，比之前更清晰
+  const mix = (c) => Math.round(c + (255 - c) * 0.3);
+  return `rgba(${mix(r)},${mix(g)},${mix(b)},0.5)`;
+});
+// 百分比文字色：取封面基色派生的中段色，与进度条同色系（在浅底上清晰）
+const detailProgressPctColor = computed(() => {
+  const [, , tail] = extractGradientColors(grad(detailWish.value));
+  const baseHex = tail || "#8ae99b";
+  const [, base] = buildThreeTone(baseHex);
+  return base;
+});
+// Tab 容器底色：封面基色向中性浅灰混合（去饱和、更灰），对应 rgba(194,242,200,*) 色阶
+const detailTabBg = computed(() => {
+  const [, , tail] = extractGradientColors(grad(detailWish.value));
+  const baseHex = tail || "#8ae99b";
+  const { r, g, b } = hexToRgb(baseHex);
+  // 基色占比 16%，其余 84% 为极浅灰(244)，更白一点的灰白
+  const mix = (c) => Math.round(c * 0.16 + 250 * 0.84);
+  return `rgb(${mix(r)},${mix(g)},${mix(b)})`;
+});
+// Tab 选中文字色 + 阴影：封面基色派生的深一档（清晰可读）
+const detailTabActiveColor = computed(() => {
+  const [, , tail] = extractGradientColors(grad(detailWish.value));
+  const baseHex = tail || "#8ae99b";
+  const [, , deep] = buildThreeTone(baseHex);
+  return deep;
+});
+// 主按钮底色：直接用接口返回的封面原渐变（cover_gradient）
+const detailPrimaryBg = computed(() => grad(detailWish.value));
+// 主按钮文字色：按封面渐变深档基色的 HSL 亮度动态决定黑/白，保证可读
+const detailBtnTextColor = computed(() => {
+  const [, , tail] = extractGradientColors(grad(detailWish.value));
+  const baseHex = tail || "#8ae99b";
+  const { l } = hexToHsl(baseHex);
+  return l > 62 ? "var(--ink2)" : "#fff";
+});
+// 强调描边色：封面基色白混 60% 的淡实色
+const detailAccentBorder = computed(() => {
+  const [, , tail] = extractGradientColors(grad(detailWish.value));
+  const baseHex = tail || "#8ae99b";
+  const { r, g, b } = hexToRgb(baseHex);
+  const mix = (c) => Math.round(c + (255 - c) * 0.6);
+  return `rgb(${mix(r)},${mix(g)},${mix(b)})`;
+});
+// 强调浅底/浅描边：封面基色白混 84% 的淡实色（对应 rgba(194,242,200,*) 色阶）
+const detailAccentTint = computed(() => {
+  const [, , tail] = extractGradientColors(grad(detailWish.value));
+  const baseHex = tail || "#8ae99b";
+  const { r, g, b } = hexToRgb(baseHex);
+  const mix = (c) => Math.round(c + (255 - c) * 0.84);
+  return `rgb(${mix(r)},${mix(g)},${mix(b)})`;
+});
+// Sheet 把手底色：封面基色带 0.5 透明度（随心愿封面动态变化）
+const detailHandleBg = computed(() => {
+  const [, , tail] = extractGradientColors(grad(detailWish.value));
+  const baseHex = tail || "#8ae99b";
+  const { r, g, b } = hexToRgb(baseHex);
+  return `rgba(${r},${g},${b},0.5)`;
+});
 /* 解析封面展示 emoji：
    - 有图片(fileID / sys::) → 返回 ""（由 <image>/占位矩形显示）
    - 否则返回心愿名首字符或 ⭐ */
@@ -800,6 +1475,101 @@ const coverEmoji = (w) => {
 };
 /* 上传/系统 logo 回显：cover_image_url 为纯图片字段（fileID 或 sys::idx） */
 const logoUrlMap = reactive({});
+// 记录每个 logo fileID 是否为透明背景图（true=透明），用于切换 image 的 mode
+const logoHasAlphaMap = reactive({});
+/* 判断 logo 是否为透明背景图，用于切换 image 的 mode：
+   - 透明（png/webp/bmp 或检测到位图含 alpha<255）→ heightFix
+   - 不透明（jpg/jpeg 或检测确认全图无透明像素）→ aspectFill
+   判定优先级：扩展名 → 逐像素检测；两者都无法确定时保守按不透明(aspectFill)，
+   避免把不透明图误当透明（heightFix 居中会很难看）。 */
+function detectLogoAlpha(id, url) {
+  if (!id || !url) return;
+  // 先默认不透明（aspectFill），检测到透明再翻成 true
+  logoHasAlphaMap[id] = false;
+  const pathForExt = id || url;
+  const ext = (pathForExt
+    .split("?")[0]
+    .split("#")[0]
+    .match(/\.([a-z0-9]+)$/i) || [])[1];
+  const lower = (ext || "").toLowerCase();
+  const opaqueExt = ["jpg", "jpeg"];
+  const transExt = ["png", "webp", "bmp", "gif"];
+  if (transExt.includes(lower)) {
+    logoHasAlphaMap[id] = true; // 扩展名已能确定透明
+    return;
+  }
+  if (opaqueExt.includes(lower)) {
+    logoHasAlphaMap[id] = false; // 扩展名已能确定不透明
+    return;
+  }
+  const markIfTransparent = (data) => {
+    for (let i = 3; i < data.length; i += 4) {
+      if (data[i] < 255) {
+        logoHasAlphaMap[id] = true;
+        break;
+      }
+    }
+  };
+  // #ifdef H5
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  img.onload = () => {
+    const cv = document.createElement("canvas");
+    const w = (cv.width = img.naturalWidth || img.width);
+    const h = (cv.height = img.naturalHeight || img.height);
+    if (!w || !h) return;
+    const ctx = cv.getContext("2d");
+    ctx.drawImage(img, 0, 0);
+    try {
+      markIfTransparent(ctx.getImageData(0, 0, w, h).data);
+    } catch (e) {
+      // 跨域读不到：保留扩展名/默认判定
+    }
+  };
+  img.onerror = () => {};
+  img.src = url;
+  // #endif
+  // #ifndef H5
+  // 先下载到本地临时文件，避免直接 draw 网络图渲染时序问题导致读不到像素
+  uni.downloadFile({
+    url,
+    success: (dl) => {
+      const local = dl.tempFilePath;
+      uni.getImageInfo({
+        src: local,
+        success: (info) => {
+          const w = info.width;
+          const h = info.height;
+          if (!w || !h) return;
+          const ctx = uni.createCanvasContext("_logoAlphaProbe");
+          ctx.drawImage(local, 0, 0, w, h);
+          ctx.draw(false, () => {
+            uni.canvasGetImageData({
+              canvasId: "_logoAlphaProbe",
+              x: 0,
+              y: 0,
+              width: w,
+              height: h,
+              success: (res) => markIfTransparent(res.data),
+              fail: () => {}, // 读不到保留默认/扩展名判定
+            });
+          });
+        },
+        fail: () => {},
+      });
+    },
+    fail: () => {},
+  });
+  // #endif
+}
+/* 根据 logo 是否透明返回 image 的 mode：
+   - 透明背景图 → heightFix（保留比例，底部透出）
+   - 不透明图 → aspectFill（铺满裁切）
+   未检测完成 / 检测失败 → 默认 aspectFill（不透明假设），避免把不透明图误当透明 */
+function logoModeOf(w) {
+  const id = logoFileIdOf(w);
+  return logoHasAlphaMap[id] === false ? "aspectFill" : "heightFix";
+}
 function isLogoWish(w) {
   const img = String(w?.cover_image_url || "");
   // 系统图标无远程图，但也是「有封面图」分支（由本地预设渲染占位矩形）
@@ -809,6 +1579,21 @@ function isLogoWish(w) {
 function isSysLogoWish(w) {
   return String(w?.cover_image_url || "").startsWith("sys::");
 }
+// 详情页起止时间（完整：日期 + 时间）
+const detailStartText = computed(() => {
+  const w = detailWish.value;
+  if (!w) return "";
+  const s = w.start_date || "";
+  return "开始时间：" + (s + (w.start_time ? " " + w.start_time : ""));
+});
+const detailEndText = computed(() => {
+  const w = detailWish.value;
+  if (!w) return "";
+  // 优先显示整体 deadline（开启下一阶段后已同步为各阶段结束日的更晚者）
+  const e = w.deadline || w.end_date || "";
+  const et = w.deadline ? w.end_time : w.end_time;
+  return "结束时间：" + (e + (et ? " " + et : ""));
+});
 function logoFileIdOf(w) {
   const img = String(w.cover_image_url || "");
   return img.startsWith("cloud://") ? img : "";
@@ -823,7 +1608,10 @@ async function refreshLogoUrls(list) {
   if (!ids.length) return;
   const map = await getCloudTempUrls(ids);
   for (const id of ids) {
-    if (map[id]) logoUrlMap[id] = map[id];
+    if (map[id]) {
+      logoUrlMap[id] = map[id];
+      detectLogoAlpha(id, map[id]);
+    }
   }
 }
 
@@ -846,10 +1634,161 @@ const sourceLabel = (s) => {
   return map[s] || s || "";
 };
 
+/* ===== 分阶段进度时间线 ===== */
+// 当前阶段指针（0-based），缺失时按 0 处理（兼容旧数据无 phases）
+const currentPhaseIdx = computed(() => {
+  const w = detailWish.value;
+  if (!w) return 0;
+  return Math.max(0, w.current_phase || 0);
+});
+// 阶段列表（旧数据无 phases 时，用单阶段兼容展示）
+// effStatus：对外展示用的阶段状态，基于「是否达成」+「是否时间过期」推导，而非存储的 skipped：
+//   - 已存 >= 目标          → done（已完成）
+//   - 未达成且结束时间已过  → expired（已过期）
+//   - 否则                  → active（进行中）
+// （存储 status 的 skipped 仅表示「未达成旧阶段」，统一映射为 expired）
+const wishPhases = computed(() => {
+  const w = detailWish.value;
+  if (!w) return [];
+  const today = todayKey();
+  const raw =
+    Array.isArray(w.phases) && w.phases.length
+      ? w.phases
+      : [
+          {
+            index: 1,
+            mode: "add",
+            target: w.target_amount || 0,
+            saved: w.saved_amount || 0,
+            status: w.status === "archived" ? "done" : "active",
+            done_at: w.completed_at || null,
+          },
+        ];
+  return raw.map((p) => {
+    const saved = Number(p.saved) || 0;
+    const target = Number(p.target) || 0;
+    let eff = p.status;
+    if (target > 0 && saved >= target) eff = "done";
+    else if (p.status === "skipped") eff = "expired";
+    else if (p.end_date && p.end_date < today) eff = "expired";
+    return { ...p, effStatus: eff };
+  });
+});
+// 阶段列表（增强）：每个阶段附带「到该阶段为止的累计目标/已存」
+const wishPhasesCum = computed(() => {
+  const list = wishPhases.value;
+  let cumTarget = 0;
+  let cumSaved = 0;
+  return list.map((p) => {
+    cumTarget += Number(p.target) || 0;
+    cumSaved += Number(p.saved) || 0;
+    return { ...p, cumTarget, cumSaved };
+  });
+});
+// 当前阶段是否已达成（effStatus 为 done）
+const currentPhaseDone = computed(() => {
+  const ph = wishPhases.value[currentPhaseIdx.value];
+  return ph ? ph.effStatus === "done" : false;
+});
+// 是否还有下一阶段（非最后一阶段 active）
+const hasNextPhase = computed(() => {
+  const list = wishPhases.value;
+  return list.length > currentPhaseIdx.value + 1;
+});
+// 已达成阶段数（effStatus 为 done）
+const donePhaseCount = computed(
+  () => wishPhases.value.filter((p) => p.effStatus === "done").length
+);
+// 是否处于分阶段模式（已有多阶段或存在下一阶段）
+const hasPhaseTasks = computed(
+  () => wishPhases.value.length > 1 || hasNextPhase.value || donePhaseCount.value > 0
+);
+// 达成徽标样式：同封面色系（文字/描边/浅底）
+const detailDoneBadgeStyle = computed(() => {
+  const [, , tail] = extractGradientColors(grad(detailWish.value));
+  const baseHex = tail || "#8ae99b";
+  const { r, g, b } = hexToRgb(baseHex);
+  const mix = (c) => Math.round(c * 0.16 + 247 * 0.84);
+  return {
+    color: detailProgressPctColor.value,
+    borderColor: detailProgressPctColor.value,
+    background: `rgba(${mix(r)},${mix(g)},${mix(b)},0.5)`,
+  };
+});
+
+/* 开启下一阶段弹窗 */
+const advanceModal = ref(false);
+const nextTargetYuan = ref("");
+const nextStartKey = ref(""); // 阶段开始日期 YYYY-MM-DD
+const nextEndKey = ref(""); // 阶段结束日期 YYYY-MM-DD（可空）
+const nextStartTime = ref(""); // 阶段起始时间 HH:mm:ss（回显用）
+const nextEndTime = ref(""); // 阶段截止时间 HH:mm:ss（回显用）
+const showAdvanceDatePicker = ref(false); // 阶段起止连选组件
+const todayKey = () => {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+const nowHms = () => {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+};
+const openAdvance = () => {
+  const ph = wishPhases.value[currentPhaseIdx.value];
+  // 默认建议：沿用当前阶段目标（元）
+  const sugg = Math.round((ph?.target || 0) / 100) || 0;
+  nextTargetYuan.value = sugg ? String(sugg) : "";
+  // 默认开始时间 = 创建下一阶段的当天；结束时间留空由用户选
+  nextStartKey.value = todayKey();
+  nextEndKey.value = "";
+  // 起始/截止时分秒：优先用新建心愿时记录的时分秒，否则回退到当前真实时间（避免 00:00:00）
+  nextStartTime.value = newWishStartTime.value || nowHms();
+  nextEndTime.value = newWishEndTime.value || "23:59:59";
+  advanceModal.value = true;
+};
+const confirmAdvance = async () => {
+  const w = detailWish.value;
+  if (!w) return;
+  const res = safeYuanToFen(nextTargetYuan.value);
+  if (!res.ok || res.value < 1) return toast("请输入有效目标金额");
+  if (nextEndKey.value && nextStartKey.value && nextEndKey.value < nextStartKey.value)
+    return toast("结束日期不能早于开始日期");
+  try {
+    await advanceWishPhaseAction(
+      w._id,
+      res.value,
+      "add",
+      nextStartKey.value,
+      nextEndKey.value,
+      nextStartTime.value,
+      nextEndTime.value
+    );
+    advanceModal.value = false;
+    // 用云端返回的更新后文档（含总目标/总已存/完成次数等汇总字段）直接刷新详情，
+    // 保证进度条立即反映心愿接口写回的「总」金额；再同步 store 列表引用。
+    if (detailWish.value && res) {
+      detailWish.value = { ...detailWish.value, ...res };
+    }
+    detailWish.value = wishes.value.find((x) => x._id === w._id) || detailWish.value;
+    toast("已开启下一阶段", "success");
+  } catch (err) {
+    toast(err.message || "开启失败");
+  }
+};
+// 阶段起止连选确认：start 必填（默认今天），end 可空；回存时分秒用于再次打开时回显
+function onAdvanceDateConfirm(payload) {
+  nextStartKey.value = payload.start || todayKey();
+  nextEndKey.value = payload.end || "";
+  nextStartTime.value = payload.startTime || "";
+  nextEndTime.value = payload.endTime || "";
+}
+
 onMounted(async () => {
   try {
     await Promise.all([loadWishes(), loadSavingsPool(), loadArchivedWishesAction()]);
     await loadMonthlySaved();
+    await loadAssetAccounts().catch(() => {});
   } catch (err) {
     console.error("[wish] 加载失败", err);
   }
@@ -891,14 +1830,37 @@ async function loadMonthlySaved() {
 
 /* 详情 */
 const detailWish = ref(null);
+// 详情面板 tab：进度详情 / 存入明细
+const detailTab = ref("detail");
+// 操作状态：none / deposit / withdraw（点击按钮后展开输入区）
+const detailAction = ref("none");
+// 重置详情交互状态（打开/关闭时）
+function resetDetailUi() {
+  detailTab.value = "detail";
+  detailAction.value = "none";
+  depositSource.value = "account";
+  depositAccountId.value = "";
+  depositAmount.value = "";
+  depositNote.value = "";
+  withdrawSource.value = "surplus";
+  withdrawAccountId.value = "";
+  withdrawAmount.value = "";
+  withdrawNote.value = "";
+}
 const fundLogs = ref([]);
 const isDetailArchived = computed(
   () => !!(detailWish.value && detailWish.value.archived_reason)
 );
 const openDetail = (w) => {
+  resetDetailUi();
   detailWish.value = w;
   loadLogs(w._id);
 };
+// 统一关闭详情（重置交互状态）
+function closeDetail() {
+  detailWish.value = null;
+  resetDetailUi();
+}
 const loadLogs = async (wishId) => {
   fundLogs.value = await loadWishFundLogsAction(wishId);
 };
@@ -912,21 +1874,79 @@ const syncDetail = () => {
 };
 
 /* 存款 */
-const depositSource = ref("manual");
+const depositSource = ref("account");
+const depositSources = [
+  { value: "account", label: "从资产账户" },
+  { value: "surplus", label: "从结余池" },
+  { value: "savings", label: "从存款池" },
+];
+// 资产账户列表（供「从资产账户」选择）
+const accountList = computed(() => state.assets || []);
+const depositAccountId = ref("");
+const depositAccount = computed(() =>
+  accountList.value.find((a) => a._id === depositAccountId.value)
+);
 const depositAmount = ref("");
+const depositNote = ref("");
+// 来源可用性：无账户时禁用「从资产账户」；池子余额为 0 时禁用对应池子
+const noAccount = computed(() => accountList.value.length === 0);
+const depositAccountDisabled = computed(() => noAccount.value);
+const depositSavingsDisabled = computed(() => (savingsPoolBalanceFen.value || 0) <= 0);
+const depositSurplusDisabled = computed(() => (surplusPoolBalanceFen.value || 0) <= 0);
+const isDepositSourceDisabled = (v) =>
+  (v === "account" && depositAccountDisabled.value) ||
+  (v === "savings" && depositSavingsDisabled.value) ||
+  (v === "surplus" && depositSurplusDisabled.value);
+// 选账户时预览存入后余额
+const depositAccountAfter = computed(() => {
+  const amt = safeYuanToFen(depositAmount.value).value || 0;
+  return (depositAccount.value?.current_balance || 0) - amt;
+});
+// 当前选中来源的可用额度（用于快捷比例按钮的基数）
+const depositSourceAvail = computed(() => {
+  if (depositSource.value === "surplus") return surplusPoolBalanceFen.value || 0;
+  if (depositSource.value === "savings") return savingsPoolBalanceFen.value || 0;
+  return depositAccount.value?.current_balance || 0;
+});
+// 心愿剩余缺口（用于「存满剩余」按钮，且作为比例按钮的上限）
+const depositRemain = computed(() => {
+  const w = detailWish.value;
+  if (!w) return 0;
+  return Math.max(0, (w.target_amount || 0) - (w.saved_amount || 0));
+});
+const setDepositQuick = (fen) => {
+  depositAmount.value = (fen / 100).toString();
+};
 const doDeposit = async () => {
   const w = detailWish.value;
   if (!w) return;
   const res = safeYuanToFen(depositAmount.value);
   if (!res.ok) return toast("金额无效");
-  if (res.value > (w.target_amount || 0) - (w.saved_amount || 0))
-    return toast("超过目标剩余");
   try {
-    if (depositSource.value === "manual") await depositWishManualAction(w._id, res.value);
-    else if (depositSource.value === "surplus")
-      await depositWishFromSurplusAction(w._id, res.value);
-    else await depositWishFromSavingsAction(w._id, res.value);
+    if (depositSource.value === "account") {
+      if (!depositAccountId.value) return toast("请选择资产账户");
+      const bal = depositAccount.value?.current_balance || 0;
+      if (res.value > bal) return toast("账户余额不足");
+      await depositWishFromAccountAction(
+        w._id,
+        depositAmount.value,
+        depositAccountId.value,
+        depositNote.value.trim()
+      );
+    } else if (depositSource.value === "surplus")
+      await depositWishFromSurplusAction(
+        w._id,
+        depositAmount.value,
+        depositNote.value.trim()
+      );
+    else
+      await depositWishFromSavingsAction(
+        w._id,
+        depositAmount.value,
+        depositNote.value.trim()
+      );
     depositAmount.value = "";
+    depositNote.value = "";
     await loadLogs(w._id);
     syncDetail();
     toast("存入成功", "success");
@@ -936,7 +1956,29 @@ const doDeposit = async () => {
 };
 
 /* 取出 */
+const withdrawSource = ref("surplus");
+const withdrawSources = [
+  { value: "account", label: "到资产账户" },
+  { value: "surplus", label: "到结余池" },
+  { value: "savings", label: "到存款池" },
+];
+const withdrawAccountId = ref("");
+const withdrawAccount = computed(() =>
+  accountList.value.find((a) => a._id === withdrawAccountId.value)
+);
 const withdrawAmount = ref("");
+const withdrawNote = ref("");
+const withdrawAccountDisabled = computed(() => noAccount.value);
+const withdrawSavingsDisabled = computed(() => (savingsPoolBalanceFen.value || 0) <= 0);
+const withdrawSurplusDisabled = computed(() => (surplusPoolBalanceFen.value || 0) <= 0);
+const isWithdrawSourceDisabled = (v) =>
+  (v === "account" && withdrawAccountDisabled.value) ||
+  (v === "savings" && withdrawSavingsDisabled.value) ||
+  (v === "surplus" && withdrawSurplusDisabled.value);
+const withdrawAccountAfter = computed(() => {
+  const amt = safeYuanToFen(withdrawAmount.value).value || 0;
+  return (withdrawAccount.value?.current_balance || 0) + amt;
+});
 const doWithdraw = async () => {
   const w = detailWish.value;
   if (!w) return;
@@ -944,11 +1986,31 @@ const doWithdraw = async () => {
   if (!res.ok) return toast("金额无效");
   if (res.value > (w.saved_amount || 0)) return toast("超过已存金额");
   try {
-    await withdrawWishToSurplusAction(w._id, res.value);
+    if (withdrawSource.value === "account") {
+      if (!withdrawAccountId.value) return toast("请选择资产账户");
+      await withdrawWishToAccountAction(
+        w._id,
+        withdrawAmount.value,
+        withdrawAccountId.value,
+        withdrawNote.value.trim()
+      );
+    } else if (withdrawSource.value === "surplus")
+      await withdrawWishToSurplusAction(
+        w._id,
+        withdrawAmount.value,
+        withdrawNote.value.trim()
+      );
+    else
+      await withdrawWishToSavingsAction(
+        w._id,
+        withdrawAmount.value,
+        withdrawNote.value.trim()
+      );
     withdrawAmount.value = "";
+    withdrawNote.value = "";
     await loadLogs(w._id);
     syncDetail();
-    toast("已取回到结余池");
+    toast("取出成功");
   } catch (err) {
     toast(err.message || "取出失败");
   }
@@ -960,7 +2022,7 @@ const doArchive = async () => {
   if (!w || isDetailArchived.value) return;
   try {
     await archiveWishAction(w._id);
-    detailWish.value = null;
+    closeDetail();
     toast("已归档", "success");
   } catch (err) {
     toast(err.message || "归档失败");
@@ -980,7 +2042,7 @@ const doDelete = () => {
       if (!res.confirm) return;
       try {
         await deleteWishAction(w._id);
-        detailWish.value = null;
+        closeDetail();
         toast("已删除并归档", "success");
       } catch (err) {
         toast(err.message || "删除失败");
@@ -1305,6 +2367,7 @@ function selectPreset(i) {
 const showNewWish = ref(false);
 const newWishName = ref("");
 const newWishAmount = ref("");
+
 const newWishDeadline = ref("");
 const showDatePicker = ref(false);
 const newWishStart = ref(""); // YYYY-MM-DD 起始
@@ -1818,6 +2881,8 @@ const doSavings = async () => {
 
   /* 历史心愿二级筛选 */
   .archived-filter {
+    position: relative;
+    z-index: 10;
     display: flex;
     gap: 16rpx;
     padding: 20rpx 44rpx 4rpx;
@@ -1828,9 +2893,9 @@ const doSavings = async () => {
     padding: 10rpx 24rpx;
     border-radius: 999rpx;
     font-size: 24rpx;
-    color: var(--t2);
-    background: rgba(255, 255, 255, 0.55);
-    border: 2rpx solid transparent;
+    color: var(--t1);
+    background: rgba(255, 255, 255, 0.7);
+    border: 2rpx solid rgba(0, 0, 0, 0.08);
     transition: all 0.15s ease;
   }
 
@@ -2015,6 +3080,7 @@ const doSavings = async () => {
     align-items: center;
     justify-content: center;
   }
+
   .newwish-cover-syslogo-text,
   .wish-cover-syslogo-text,
   .detail-syslogo-text {
@@ -2034,14 +3100,17 @@ const doSavings = async () => {
     background: var(--g0);
     border-radius: 16rpx;
   }
+
   .newwish-logo-entry-icon {
     font-size: 32rpx;
   }
+
   .newwish-logo-entry-text {
     flex: 1;
     font-size: 26rpx;
     color: var(--ink5);
   }
+
   .newwish-logo-entry-clear {
     font-size: 24rpx;
     color: #e0556b;
@@ -2054,11 +3123,13 @@ const doSavings = async () => {
     color: var(--ink4);
     margin: 16rpx 0 12rpx;
   }
+
   .sys-logo-grid {
     display: flex;
     flex-wrap: wrap;
     gap: 16rpx;
   }
+
   .sys-logo-item {
     width: calc((100% - 32rpx) / 3);
     height: 120rpx;
@@ -2068,15 +3139,18 @@ const doSavings = async () => {
     justify-content: center;
     border: 3rpx solid transparent;
   }
+
   .sys-logo-item.active {
     border-color: #25cc5d;
   }
+
   .sys-logo-text {
     font-size: 22rpx;
     color: var(--ink6);
     text-align: center;
     padding: 0 6rpx;
   }
+
   .cp-divider {
     height: 1rpx;
     background: var(--g3, #e3e8eb);
@@ -2086,11 +3160,22 @@ const doSavings = async () => {
   .sheet-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.35);
-    z-index: 300;
+    // background: rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(4rpx);
+    -webkit-backdrop-filter: blur(4rpx);
+    z-index: 200;
     display: flex;
     align-items: flex-end;
     justify-content: center;
+  }
+
+  .wish-sheet {
+    background: rgba(248, 255, 250, 0.96);
+    backdrop-filter: blur(64rpx) saturate(2);
+    -webkit-backdrop-filter: blur(64rpx) saturate(2);
+    border-top: 3rpx solid rgba(255, 255, 255, 0.95);
+    border-radius: 64rpx 64rpx 0 0;
+    box-shadow: 0 -32rpx 96rpx rgba(37, 204, 93, 0.14), 0 -8rpx 32rpx rgba(0, 0, 0, 0.06);
   }
 
   .sheet-panel {
@@ -2103,7 +3188,22 @@ const doSavings = async () => {
       rgba(242, 252, 242, 0.96)
     );
     border-radius: 48rpx 48rpx 0 0;
-    animation: slideUpIn 0.32s cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+
+  /* ── Sheet 滑入 ── */
+  @keyframes sheetSlideUp {
+    0% {
+      transform: translateY(100%);
+      opacity: 0;
+    }
+    100% {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  .sheet-slide-up {
+    animation: sheetSlideUp 0.36s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
   .sheet-handle {
@@ -2243,7 +3343,8 @@ const doSavings = async () => {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 400; /* 高于 .sheet-overlay(300)，确保从面板内打开时位于最上层 */
+    z-index: 400;
+    /* 高于 .sheet-overlay(300)，确保从面板内打开时位于最上层 */
   }
 
   .cp-panel {
@@ -2430,11 +3531,13 @@ const doSavings = async () => {
     align-items: center;
     justify-content: space-between;
   }
+
   .date-range-text {
     flex: 1;
     font-size: 28rpx;
     color: var(--ink5);
   }
+
   .date-range-arrow {
     font-size: 36rpx;
     color: var(--g5);
@@ -2461,208 +3564,853 @@ const doSavings = async () => {
     cursor: pointer;
   }
 
+  /* ── 详情 Sheet（对齐示例 React 版） ── */
+
+  .wish-sheet-handle {
+    width: 72rpx;
+    height: 8rpx;
+    border-radius: 99rpx;
+    background: rgba(137, 229, 156, 0.5);
+    margin: 24rpx auto 0;
+  }
+
+  /* 封面 header */
   .detail-header {
-    padding: 60rpx 40rpx;
-    text-align: center;
+    position: relative;
+    margin: 128rpx 40rpx 0;
+    border-radius: 44rpx;
+    padding: 36rpx 40rpx;
+    // overflow: hidden;
+    border: 2rpx solid rgba(255, 255, 255, 0.45);
+    /* 内浮雕：外阴影 + 内高光/内暗，营造浮起又内凹的白玻璃质感 */
+    box-shadow: 0 16rpx 48rpx rgba(37, 204, 93, 0.1),
+      inset 0 3rpx 0 rgba(255, 255, 255, 0.9),
+      inset 0 -10rpx 24rpx rgba(37, 204, 93, 0.06);
 
-    .detail-emoji {
-      font-size: 96rpx;
-      display: block;
+    // 底层：白色背景 + 居中 logo（毛玻璃后朦胧可见，z-index:0）
+    &-bg {
+      position: absolute;
+      top: 0rpx;
+      left: 0;
+      inset: 0;
+      border-radius: inherit;
+      z-index: 0;
+      pointer-events: none;
+      // background: #c9c0c0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
-    .detail-name {
-      font-size: 36rpx;
-      font-weight: 800;
-      color: var(--ink);
-      margin-top: 16rpx;
-      display: block;
+    // 中层：更白一点的内浮雕毛玻璃罩（叠在渐变上，z-index:1）
+    &-glass {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      z-index: 1;
+      background: rgba(255, 255, 255, 0.8);
+      backdrop-filter: blur(10rpx) saturate(1.25);
+      -webkit-backdrop-filter: blur(10rpx) saturate(1.25);
+      /* 内浮雕高光（顶）+ 内暗（底），加强白玻璃的凹凸感 */
+      box-shadow: inset 0 3rpx 10rpx rgba(255, 255, 255, 0.85),
+        inset 0 -8rpx 20rpx rgba(0, 0, 0, 0.05);
+      pointer-events: none;
     }
   }
 
-  .detail-body {
-    padding: 0 40rpx 60rpx;
+  /* 底衬内 logo（class 名与模板一致：detail-bg-*），统一绝对定位钉在顶部上移 */
+  .detail-bg-logo {
+    position: absolute;
+    top: -104rpx;
+    width: 250rpx;
+    height: 250rpx;
+    /* 覆盖父级 flex 居中，改为贴顶上移 */
+    align-self: flex-start;
+    margin-top: 8rpx;
   }
 
-  .detail-amount-row {
+  /* 不透明图（aspectFill）：铺满整张卡片，跟随圆角裁切 */
+  .detail-bg-logo--fill {
+    position: absolute;
+    top: -104rpx;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    object-fit: cover;
+    object-position: center top;
+  }
+
+  .detail-bg-syslogo {
+    width: 100%;
+    height: 100%;
     display: flex;
-    align-items: baseline;
-    gap: 8rpx;
-    margin-bottom: 16rpx;
+    align-items: center;
+    justify-content: center;
+
+    &-text {
+      font-size: 80rpx;
+      color: #fff;
+      font-weight: 700;
+    }
   }
 
-  .detail-amount {
-    font-size: 56rpx;
-    font-weight: 900;
+  .detail-bg-emoji {
+    font-size: 200rpx;
+    line-height: 1;
+  }
+
+  .detail-header-glow {
+    position: absolute;
+    top: -40rpx;
+    right: -40rpx;
+    width: 200rpx;
+    height: 200rpx;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    filter: blur(40rpx);
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  .detail-header-top {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
+  .detail-header-left {
+    display: flex;
+    align-items: center;
+    gap: 20rpx;
+  }
+
+  .detail-logo {
+    width: 96rpx;
+    height: 96rpx;
+    border-radius: 28rpx;
+    background: rgba(255, 255, 255, 0.85);
+  }
+
+  .detail-syslogo {
+    width: 96rpx;
+    height: 96rpx;
+    border-radius: 28rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    &-text {
+      font-size: 24rpx;
+      color: #fff;
+      font-weight: 700;
+    }
+  }
+
+  .detail-emoji {
+    font-size: 64rpx;
+    line-height: 1;
+  }
+
+  .detail-title-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 6rpx;
+  }
+
+  .detail-name {
+    font-size: 36rpx;
+    font-weight: 800;
     color: var(--ink);
   }
 
-  .detail-target {
-    font-size: 28rpx;
-    color: var(--ink4);
+  .detail-deadline {
+    font-size: 24rpx;
+    color: var(--ink2);
+  }
+
+  .detail-close {
+    width: 60rpx;
+    height: 60rpx;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 30rpx;
+    color: var(--ink3);
+    cursor: pointer;
+  }
+
+  /* 进度 */
+  .detail-progress {
+    position: relative;
+    z-index: 2;
+    margin-top: 28rpx;
+  }
+
+  .detail-progress-top,
+  .detail-progress-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .detail-progress-top {
+    margin-bottom: 24rpx;
+  }
+
+  .detail-progress-saved {
+    font-size: 24rpx;
+    color: var(--ink2);
+  }
+
+  .detail-progress-pct {
+    font-size: 24rpx;
+    font-weight: 700;
+    color: var(--g5);
+    /* 实际颜色由 :style 动态绑定 detailProgressPctColor（封面同色系）覆盖 */
   }
 
   .detail-bar {
-    height: 16rpx;
-    border-radius: 10rpx;
-    background: rgba(194, 242, 200, 0.3);
+    height: 24rpx;
+    border-radius: 12rpx;
+    background: rgba(255, 255, 255, 0.45);
     overflow: hidden;
+    box-shadow: inset 0 1rpx 3rpx rgba(0, 0, 0, 0.06);
 
     &-fill {
       height: 100%;
       border-radius: 10rpx;
-      background: linear-gradient(90deg, var(--g4), var(--g5));
+      box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.12);
     }
   }
 
-  .detail-left-text {
-    font-size: 24rpx;
-    color: var(--ink3);
-    font-weight: 600;
-    display: block;
+  .detail-progress-bottom {
     margin-top: 12rpx;
   }
 
-  .op-block {
-    margin-top: 32rpx;
+  .detail-progress-target,
+  .detail-progress-left {
+    font-size: 22rpx;
+    color: var(--ink3);
+  }
+  .detail-progress-over {
+    color: #f53f3f;
+    font-weight: 600;
   }
 
-  .op-title {
+  /* 达成徽章 */
+  .detail-done-badge {
+    position: relative;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 12rpx;
+    margin-top: 20rpx;
+    padding: 8rpx 24rpx;
+    border-radius: 40rpx;
+    background: rgba(37, 204, 93, 0.13);
+    border: 2rpx solid rgba(37, 204, 93, 0.33);
     font-size: 24rpx;
     font-weight: 700;
-    color: var(--ink2);
-    display: block;
-    margin-bottom: 16rpx;
+    color: var(--g5);
   }
 
-  .op-sources {
+  .detail-reason-badge {
+    position: relative;
+    z-index: 2;
+    display: inline-block;
+    margin-top: 16rpx;
+    font-size: 22rpx;
+    color: var(--ink3);
+  }
+
+  /* Tab 切换 */
+  .wish-tabs {
     display: flex;
-    gap: 16rpx;
+    gap: 0;
+    margin: 32rpx 40rpx 0;
+    background: rgba(194, 242, 200, 0.22); /* 兜底，实际由 :style detailTabBg 覆盖 */
+    border-radius: 32rpx;
+    padding: 8rpx;
   }
 
-  .op-source {
+  .wish-tab {
     flex: 1;
     text-align: center;
     padding: 16rpx 0;
     border-radius: 24rpx;
-    background: rgba(242, 252, 242, 0.8);
-    border: 2rpx solid rgba(194, 242, 200, 0.4);
-    font-size: 24rpx;
+    font-size: 26rpx;
     font-weight: 600;
     color: var(--ink3);
     cursor: pointer;
 
     &.active {
-      @include sj-brand-gradient(135deg);
-      color: #fff;
-      border-color: transparent;
+      background: #fff;
+      color: var(--g5); /* 兜底，实际由 :style detailTabActiveColor 覆盖 */
+      box-shadow: 0 4rpx 16rpx rgba(37, 204, 93, 0.12); /* 兜底 */
     }
   }
 
-  .op-input-row {
+  /* 详情面板 */
+  .detail-panel {
+    padding: 32rpx 40rpx 56rpx;
+  }
+
+  .detail-cards {
     display: flex;
     gap: 20rpx;
-    margin-top: 20rpx;
-    align-items: center;
+    margin-bottom: 28rpx;
   }
 
-  .op-input {
+  .detail-stat {
     flex: 1;
-    height: 84rpx;
-    border-radius: 24rpx;
-    background: rgba(242, 252, 242, 0.8);
-    border: 2rpx solid rgba(194, 242, 200, 0.4);
-    padding: 0 28rpx;
-    font-size: 28rpx;
-  }
+    background: rgba(255, 255, 255, 0.68);
+    border-radius: 32rpx;
+    padding: 24rpx 28rpx;
+    border: 2rpx solid rgba(255, 255, 255, 0.8);
 
-  .op-confirm {
-    padding: 0 36rpx;
-    height: 84rpx;
-    border-radius: 24rpx;
-    @include sj-brand-gradient(135deg);
-    color: #fff;
-    font-size: 26rpx;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    cursor: pointer;
+    &-label {
+      font-size: 22rpx;
+      color: var(--ink4);
+      display: block;
+    }
 
-    &.withdraw {
-      background: rgba(255, 255, 255, 0.7);
-      border: 2rpx solid #c2f2c8;
-      color: var(--ink3);
+    &-value {
+      font-size: 40rpx;
+      font-weight: 800;
+      color: var(--g5);
+      margin-top: 4rpx;
+      display: block;
     }
   }
 
-  .archive-btn {
+  /* 操作按钮区 */
+  .detail-op-row {
+    display: flex;
+    gap: 20rpx;
+    margin-bottom: 28rpx;
+  }
+
+  .wish-btn-primary {
     flex: 1;
-    padding: 24rpx;
+    padding: 28rpx 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12rpx;
+    border-radius: 28rpx;
+    @include sj-brand-gradient(135deg);
+    color: #fff;
+    font-size: 28rpx;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .wish-btn-ghost {
+    flex: 1;
+    padding: 28rpx 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12rpx;
     border-radius: 28rpx;
     background: rgba(255, 255, 255, 0.7);
     border: 2rpx solid #c2f2c8;
-    text-align: center;
     color: var(--ink3);
     font-size: 28rpx;
     font-weight: 700;
     cursor: pointer;
   }
 
-  .delete-btn {
+  .wish-btn-archive {
     flex: 1;
+    padding: 28rpx 16rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10rpx;
+    border-radius: 28rpx;
+    background: linear-gradient(135deg, #fffbe6 0%, #fff3c0 100%);
+    border: 2rpx solid rgba(245, 158, 11, 0.4);
+    color: #d97706;
+    font-size: 26rpx;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  /* 展开输入区 */
+  .detail-op-card {
+    background: rgba(255, 255, 255, 0.7);
+    border-radius: 36rpx;
+    padding: 28rpx 32rpx;
+    margin-bottom: 28rpx;
+    border: 2rpx solid rgba(194, 242, 200, 0.6);
+  }
+
+  .detail-op-title {
+    font-size: 26rpx;
+    font-weight: 600;
+    color: var(--ink2);
+    display: block;
+    margin-bottom: 20rpx;
+  }
+
+  .detail-sources {
+    display: flex;
+    gap: 16rpx;
+    margin-bottom: 20rpx;
+  }
+
+  .detail-source {
+    flex: 1;
+    text-align: center;
+    padding: 16rpx 0;
+    border-radius: 24rpx;
+    border: 2rpx solid rgba(194, 242, 200, 0.6);
+    background: transparent;
+    font-size: 22rpx;
+    font-weight: 600;
+    color: var(--ink3);
+    cursor: pointer;
+
+    &.active {
+      background: rgba(194, 242, 200, 0.18);
+      border-color: var(--g5);
+      color: var(--g5);
+    }
+  }
+
+  .detail-pool-tip {
+    font-size: 22rpx;
+    color: var(--ink4);
+    background: rgba(194, 242, 200, 0.2);
+    border-radius: 20rpx;
+    padding: 12rpx 20rpx;
+    margin-bottom: 20rpx;
+
+    &.warn {
+      background: rgba(255, 180, 180, 0.18);
+      color: #e0556b;
+    }
+  }
+
+  /* 资产账户选择 */
+  .detail-account-picker {
+    margin-bottom: 20rpx;
+  }
+
+  .detail-account-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20rpx 24rpx;
+    border-radius: 24rpx;
+    border: 2rpx solid rgba(194, 242, 200, 0.6);
+    background: rgba(255, 255, 255, 0.7);
+    font-size: 26rpx;
+    color: var(--ink2);
+    cursor: pointer;
+  }
+
+  .detail-account-arrow {
+    color: var(--ink4);
+    font-size: 24rpx;
+  }
+
+  /* 来源禁用态 */
+  .detail-source.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    background: rgba(0, 0, 0, 0.04);
+    color: var(--ink4);
+    border-color: rgba(0, 0, 0, 0.08) !important;
+  }
+
+  /* 存入/取出后余额预览 */
+  .detail-balance-after {
+    display: block;
+    margin-top: 12rpx;
+    font-size: 22rpx;
+    color: var(--g5);
+    font-weight: 600;
+  }
+
+  /* 快捷金额 */
+  .detail-quick {
+    display: flex;
+    gap: 16rpx;
+    margin-bottom: 20rpx;
+  }
+
+  .detail-quick-btn {
+    flex: 1;
+    text-align: center;
+    padding: 14rpx 0;
+    border-radius: 20rpx;
+    border: 2rpx solid rgba(194, 242, 200, 0.6);
+    background: rgba(255, 255, 255, 0.6);
+    font-size: 24rpx;
+    color: var(--g5);
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  /* 备注框 */
+  .detail-note-row {
+    margin-bottom: 20rpx;
+  }
+
+  .detail-note-input {
+    width: 100%;
+    height: 80rpx;
+    border-radius: 24rpx;
+    background: rgba(255, 255, 255, 0.85);
+    border: 2rpx solid rgba(194, 242, 200, 0.5);
+    padding: 0 28rpx;
+    font-size: 26rpx;
+    color: var(--ink2);
+    box-sizing: border-box;
+  }
+
+  .detail-input-row {
+    margin-bottom: 20rpx;
+    height: 80rpx;
+    border-radius: 24rpx;
+    background: rgba(255, 255, 255, 0.85);
+    border: 2rpx solid rgba(194, 242, 200, 0.5);
+    padding: 0 28rpx;
+    box-sizing: border-box;
+  }
+
+  .detail-input {
+    width: 100%;
+    height: 100%;
+    font-size: 26rpx;
+    color: var(--ink2);
+  }
+
+  .detail-op-actions {
+    display: flex;
+    gap: 20rpx;
+  }
+
+  .detail-danger {
+    text-align: center;
     padding: 24rpx;
     border-radius: 28rpx;
     background: rgba(255, 255, 255, 0.7);
     border: 2rpx solid #f3c2cb;
-    text-align: center;
     color: #e0556b;
     font-size: 28rpx;
     font-weight: 700;
     cursor: pointer;
   }
 
-  .detail-records-title {
+  .archived-readonly {
+    padding: 28rpx;
+    background: rgba(255, 255, 255, 0.6);
+    border-radius: 32rpx;
+    border: 2rpx solid rgba(255, 255, 255, 0.8);
+
+    &-text {
+      font-size: 24rpx;
+      color: var(--ink3);
+      line-height: 1.6;
+    }
+  }
+
+  /* 分阶段时间线 */
+  .phase-timeline {
+    margin-top: 28rpx;
+    padding: 24rpx 28rpx;
+    background: rgba(255, 255, 255, 0.6);
+    border-radius: 32rpx;
+    border: 2rpx solid rgba(255, 255, 255, 0.8);
+  }
+  .phase-tl-title {
     font-size: 24rpx;
     font-weight: 700;
+    color: var(--ink2);
+    margin-bottom: 16rpx;
+  }
+  .phase-tl-item {
+    display: flex;
+    gap: 20rpx;
+    padding: 14rpx 0;
+    position: relative;
+  }
+  .phase-tl-node {
+    flex: 0 0 48rpx;
+    width: 48rpx;
+    height: 48rpx;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24rpx;
+    font-weight: 700;
+    background: rgba(194, 242, 200, 0.4);
+    color: var(--g5);
+    position: relative;
+    // 两圆中间的连接短线：从本圆底下方留白处起，到下一圆顶上方留白处止
+    &::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      top: calc(100% + 8rpx);
+      width: 4rpx;
+      height: 90rpx;
+      background: rgba(120, 120, 120, 0.28);
+    }
+    &.done {
+      background: var(--g5);
+      color: #fff;
+    }
+    &.expired {
+      background: rgba(150, 150, 150, 0.25);
+      color: var(--ink4);
+    }
+  }
+  // 最后一个阶段圆点不画向下连接线
+  .phase-tl-item:last-child .phase-tl-node::after {
+    display: none;
+  }
+  .phase-tl-body {
+    flex: 1;
+    min-width: 0;
+  }
+  .phase-tl-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8rpx;
+  }
+  .phase-tl-name {
+    font-size: 24rpx;
+    font-weight: 600;
     color: var(--ink);
+  }
+  .phase-tl-state {
+    font-size: 20rpx;
+    color: var(--g5);
+    &.done {
+      color: var(--g5);
+    }
+    &.expired {
+      color: var(--ink4);
+    }
+    &.active {
+      color: var(--g5);
+    }
+  }
+  .phase-tl-bar {
+    height: 12rpx;
+    border-radius: 6rpx;
+    background: rgba(194, 242, 200, 0.28);
+    overflow: hidden;
+  }
+  .phase-tl-fill {
+    height: 100%;
+    border-radius: 6rpx;
+  }
+  .phase-tl-num {
+    display: flex;
+    align-items: baseline;
+    gap: 8rpx;
+    margin-top: 6rpx;
+    font-size: 22rpx;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .phase-tl-target {
+    color: var(--ink4);
+    font-weight: 400;
+  }
+  .phase-tl-cum {
+    margin-left: auto;
+    color: var(--ink3);
+    font-weight: 600;
+    font-size: 20rpx;
+  }
+  .phase-tl-date {
+    margin-left: auto;
+    color: var(--ink4);
+    font-weight: 400;
+    font-size: 20rpx;
+  }
+  .phase-tl-range {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16rpx;
+    margin-top: 6rpx;
+  }
+  .phase-tl-range-item {
+    font-size: 20rpx;
+    color: var(--ink3);
+    font-weight: 400;
+  }
+  .phase-tl-range-open {
+    color: var(--ink4);
+  }
+  .phase-tl-advance {
+    margin-top: 16rpx;
+    padding: 18rpx;
+    text-align: center;
+    font-size: 26rpx;
+    font-weight: 600;
+    border: 2rpx dashed;
+    border-radius: 24rpx;
+  }
+
+  /* 开启下一阶段弹窗 */
+  .advance-panel {
+    padding: 28rpx 36rpx 48rpx;
+  }
+  .advance-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24rpx;
+  }
+  .advance-title {
+    font-size: 32rpx;
+    font-weight: 800;
+    color: var(--ink);
+  }
+  .advance-close {
+    width: 56rpx;
+    height: 56rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 40rpx;
+    color: var(--ink3);
+  }
+  .advance-input-row {
+    margin-bottom: 28rpx;
+  }
+  .advance-input-label {
+    font-size: 24rpx;
+    color: var(--ink3);
     display: block;
-    margin: 40rpx 0 20rpx;
+    margin-bottom: 12rpx;
+  }
+  .advance-input-wrap {
+    width: 100%;
+    box-sizing: border-box;
+    height: 80rpx;
+    padding: 0 24rpx;
+    border: 2rpx solid rgba(255, 255, 255, 0.8);
+    border-radius: 20rpx;
+    background: rgba(255, 255, 255, 0.7);
+    overflow: hidden;
+  }
+  .advance-input {
+    width: 100%;
+    height: 100%;
+    font-size: 32rpx;
+    line-height: 80rpx;
+    color: var(--ink5);
+  }
+  .advance-input .nf-field {
+    width: 100%;
+    font-size: 32rpx;
+    line-height: 80rpx;
+    color: var(--ink5);
+  }
+  .advance-confirm {
+    margin-top: 8rpx;
+  }
+  .advance-date-row {
+    display: flex;
+    gap: 20rpx;
+    margin-bottom: 28rpx;
+  }
+  .advance-date-picker {
+    flex: 1;
+    min-width: 0;
+  }
+  .advance-date-box {
+    display: flex;
+    align-items: center;
+    gap: 12rpx;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 72rpx;
+    padding: 14rpx 24rpx;
+    border: 2rpx solid rgba(255, 255, 255, 0.8);
+    border-radius: 20rpx;
+    background: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+  }
+  .advance-date-full {
+    width: 100%;
+  }
+  .advance-date-cap {
+    font-size: 22rpx;
+    color: var(--ink3);
+    flex: 0 0 auto;
+  }
+  .advance-date-val {
+    font-size: 26rpx;
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  /* 明细面板 */
+  .records-panel {
+    padding: 32rpx 40rpx 56rpx;
   }
 
   .record-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 20rpx 0;
-    border-bottom: 2rpx solid rgba(15, 28, 20, 0.04);
+    padding: 20rpx;
+    border-bottom: 2rpx solid var(--rec-divider, rgba(194, 242, 200, 0.28));
+  }
+
+  .record-left {
+    display: flex;
+    align-items: center;
+    gap: 20rpx;
+  }
+
+  .record-icon {
+    width: 64rpx;
+    height: 64rpx;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28rpx;
+
+    &.in {
+      background: rgba(194, 242, 200, 0.33);
+      color: var(--g5);
+    }
+
+    &.out {
+      background: rgba(255, 180, 180, 0.25);
+      color: #ff6b6b;
+    }
+  }
+
+  .record-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4rpx;
   }
 
   .record-type {
-    font-size: 24rpx;
-    color: var(--ink2);
-    display: block;
-  }
-
-  .record-source {
-    font-size: 20rpx;
-    color: var(--ink4);
-  }
-
-  .record-right {
-    text-align: right;
-  }
-
-  .record-amount {
-    font-size: 28rpx;
-    font-weight: 700;
-    display: block;
-  }
-
-  .record-amount.in {
-    color: var(--g5);
-  }
-
-  .record-amount.out {
-    color: var(--r8);
+    font-size: 26rpx;
+    font-weight: 600;
+    color: var(--ink);
   }
 
   .record-date {
@@ -2670,11 +4418,24 @@ const doSavings = async () => {
     color: var(--ink4);
   }
 
+  .record-amount {
+    font-size: 30rpx;
+    font-weight: 700;
+
+    &.in {
+      color: var(--g5);
+    }
+
+    &.out {
+      color: #ff6b6b;
+    }
+  }
+
   .record-empty {
-    font-size: 24rpx;
+    font-size: 26rpx;
     color: var(--ink4);
     text-align: center;
-    padding: 32rpx 0;
+    padding: 64rpx 0;
   }
 
   .savings-balance-row {
