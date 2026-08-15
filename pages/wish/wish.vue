@@ -368,8 +368,7 @@
           <view
             v-if="
               (detailWish.saved_amount || 0) >= (detailWish.target_amount || 0) &&
-              (detailWish.target_amount || 0) > 0 &&
-              !isDetailArchived
+              (detailWish.target_amount || 0) > 0 && !isDetailArchived
             "
             class="detail-done-badge"
             :style="detailDoneBadgeStyle"
@@ -415,7 +414,7 @@
         </view>
 
         <!-- 进度详情（仅进行中心愿） -->
-        <view v-if="detailTab === 'detail'" class="detail-panel">
+        <view v-if="!isDetailArchived && detailTab === 'detail'" class="detail-panel">
           <view class="detail-cards">
             <view class="detail-stat">
               <text class="detail-stat-label">已存金额</text>
@@ -428,10 +427,7 @@
               <text class="detail-stat-value" :style="{ color: detailTabActiveColor }"
                 >¥{{
                   formatFen(
-                    Math.max(
-                      0,
-                      (detailWish.target_amount || 0) - (detailWish.saved_amount || 0)
-                    )
+                    Math.max(0, (detailWish.target_amount || 0) - (detailWish.saved_amount || 0))
                   )
                 }}</text
               >
@@ -445,7 +441,7 @@
           </view>
 
           <!-- 分阶段进度时间线 -->
-          <view class="phase-timeline" v-if="!isDetailArchived && detailTab === 'detail'">
+          <view class="phase-timeline">
             <view class="phase-tl-title" :style="{ color: detailTabActiveColor }"
               >阶段进度</view
             >
@@ -501,9 +497,7 @@
                   <text>¥{{ formatFen(ph.saved || 0) }}</text>
                   <text class="phase-tl-target">/ ¥{{ formatFen(ph.target || 0) }}</text>
                   <text class="phase-tl-cum"
-                    >总 ¥{{ formatFen(ph.cumSaved) }} / ¥{{
-                      formatFen(ph.cumTarget)
-                    }}</text
+                    >总 ¥{{ formatFen(ph.cumSaved) }} / ¥{{ formatFen(ph.cumTarget) }}</text
                   >
                   <text v-if="ph.done_at" class="phase-tl-date">{{
                     fmtDate(ph.done_at)
@@ -825,7 +819,7 @@
           </template>
 
           <!-- 历史心愿只读 -->
-          <view v-else class="archived-readonly">
+          <view v-if="isDetailArchived" class="archived-readonly">
             <text class="archived-readonly-text"
               >该心愿已于
               {{ detailWish.updated_at ? fmtDate(detailWish.updated_at) : "—" }}
@@ -876,9 +870,7 @@
                       >/ ¥{{ formatFen(ph.target || 0) }}</text
                     >
                     <text class="phase-tl-cum"
-                      >总 ¥{{ formatFen(ph.cumSaved) }} / ¥{{
-                        formatFen(ph.cumTarget)
-                      }}</text
+                      >总 ¥{{ formatFen(ph.cumSaved) }} / ¥{{ formatFen(ph.cumTarget) }}</text
                     >
                     <text v-if="ph.done_at" class="phase-tl-date">{{
                       fmtDate(ph.done_at)
@@ -904,7 +896,7 @@
         </view>
 
         <!-- 存入明细 -->
-        <view v-else class="records-panel">
+        <view v-if="!isDetailArchived && detailTab === 'records'" class="records-panel">
           <view v-if="!fundLogs.length" class="record-empty"><text>暂无记录</text></view>
           <view
             v-for="r in fundLogs"
@@ -1651,19 +1643,18 @@ const wishPhases = computed(() => {
   const w = detailWish.value;
   if (!w) return [];
   const today = todayKey();
-  const raw =
-    Array.isArray(w.phases) && w.phases.length
-      ? w.phases
-      : [
-          {
-            index: 1,
-            mode: "add",
-            target: w.target_amount || 0,
-            saved: w.saved_amount || 0,
-            status: w.status === "archived" ? "done" : "active",
-            done_at: w.completed_at || null,
-          },
-        ];
+  const raw = Array.isArray(w.phases) && w.phases.length
+    ? w.phases
+    : [
+        {
+          index: 1,
+          mode: "add",
+          target: w.target_amount || 0,
+          saved: w.saved_amount || 0,
+          status: w.status === "archived" ? "done" : "active",
+          done_at: w.completed_at || null,
+        },
+      ];
   return raw.map((p) => {
     const saved = Number(p.saved) || 0;
     const target = Number(p.target) || 0;
@@ -1770,7 +1761,8 @@ const confirmAdvance = async () => {
     if (detailWish.value && res) {
       detailWish.value = { ...detailWish.value, ...res };
     }
-    detailWish.value = wishes.value.find((x) => x._id === w._id) || detailWish.value;
+    detailWish.value =
+      wishes.value.find((x) => x._id === w._id) || detailWish.value;
     toast("已开启下一阶段", "success");
   } catch (err) {
     toast(err.message || "开启失败");
@@ -2881,8 +2873,6 @@ const doSavings = async () => {
 
   /* 历史心愿二级筛选 */
   .archived-filter {
-    position: relative;
-    z-index: 10;
     display: flex;
     gap: 16rpx;
     padding: 20rpx 44rpx 4rpx;
@@ -2893,9 +2883,9 @@ const doSavings = async () => {
     padding: 10rpx 24rpx;
     border-radius: 999rpx;
     font-size: 24rpx;
-    color: var(--t1);
-    background: rgba(255, 255, 255, 0.7);
-    border: 2rpx solid rgba(0, 0, 0, 0.08);
+    color: var(--t2);
+    background: rgba(255, 255, 255, 0.55);
+    border: 2rpx solid transparent;
     transition: all 0.15s ease;
   }
 

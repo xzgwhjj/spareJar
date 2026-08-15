@@ -28,6 +28,7 @@ export {
   depositSavingsPool,
   withdrawSavingsPool,
   getChallengeSummary,
+  getLimitStatus,
   setChallengeTarget,
   getAchievements,
   evaluateAchievements,

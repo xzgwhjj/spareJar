@@ -161,6 +161,12 @@ exports.main = async (event, context) => {
       case 'getChallengeSummary':
         return ok(await dbApi.getChallengeSummary(userId))
 
+      case 'getLimitStatus':
+        if (!data.dim || !data.key) {
+          return fail('dim and key are required')
+        }
+        return ok(await dbApi.getLimitStatus(userId, data.dim, data.key))
+
       case 'setChallengeTarget':
         if (!data.type || !data.period_key || !data.target_amount) {
           return fail('type, period_key and target_amount are required')

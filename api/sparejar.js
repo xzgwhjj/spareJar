@@ -137,6 +137,7 @@ export const ACTIONS = Object.freeze({
   DEPOSIT_SAVINGS_POOL: 'depositSavingsPool',
   WITHDRAW_SAVINGS_POOL: 'withdrawSavingsPool',
   GET_CHALLENGE_SUMMARY: 'getChallengeSummary',
+  GET_LIMIT_STATUS: 'getLimitStatus',
   SET_CHALLENGE_TARGET: 'setChallengeTarget',
   GET_ACHIEVEMENTS: 'getAchievements',
   EVALUATE_ACHIEVEMENTS: 'evaluateAchievements',
@@ -239,6 +240,7 @@ export async function callSparejarRaw(action, data = {}) {
   }
 
   if (!hasCloudResult(res)) {
+    console.error('[api] invalid cloud response for', action, '=> res =', JSON.stringify(res))
     throw new SparejarApiError('invalid cloud function response', 502, action)
   }
 
@@ -605,6 +607,15 @@ export function getPendingAllocation() {
 /** 读取挑战中心汇总数据（连续天数/今日/月/年挑战/7日热力图）。 */
 export function getChallengeSummary() {
   return callSparejar(ACTIONS.GET_CHALLENGE_SUMMARY, {})
+}
+
+/**
+ * 按时间规格读取限额使用状态。
+ * @param {'day'|'month'|'year'} dim
+ * @param {string} key dim=day→'YYYY-MM-DD' / month→'YYYY-MM' / year→'YYYY'
+ */
+export function getLimitStatus(dim, key) {
+  return callSparejar(ACTIONS.GET_LIMIT_STATUS, { dim, key })
 }
 
 /**

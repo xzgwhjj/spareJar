@@ -7,7 +7,11 @@
       @click="emit('click')"
     />
     <!-- 卡片本体 -->
-    <view class="wish-item-card" @click="emit('click')">
+    <view
+      class="wish-item-card"
+      :class="{ 'wish-item-card--expired': isExpired }"
+      @click="emit('click')"
+    >
       <!-- 第一层：图片 -->
       <view class="wish-cover">
         <view v-if="isLogo" class="wish-cover-logo-wrap">
@@ -40,7 +44,7 @@
           <view class="progress-shimmer" />
         </view>
       </view>
-      <!-- 待：出个已过期徽章/各种历史状态的徽章样式 -->
+
       <!-- 底部：金额 + 状态徽章 -->
       <view class="wish-card-foot">
         <view class="wish-amount-block">
@@ -57,6 +61,7 @@
         >
           <text v-if="isNotStarted" class="wish-badge badge-wait">未开始⏳</text>
           <text v-else-if="isDone" class="wish-badge badge-done">已达成✨</text>
+          <text v-else-if="isExpired" class="wish-badge badge-expired">已过期⌛</text>
           <text v-else-if="isNearDone" class="wish-badge badge-near">快到了🎯</text>
           <text v-else class="wish-badge badge-left">还差 ¥{{ remainText }}</text>
         </view>
@@ -119,6 +124,18 @@ const pct = computed(() => {
 });
 const isDone = computed(() => pct.value >= 100);
 const isNearDone = computed(() => pct.value >= 80 && pct.value < 100);
+// 已过期：截止日（deadline）已过今天且尚未达成
+function todayKey() {
+  const d = new Date();
+  const p = (n) => (n < 10 ? "0" + n : "" + n);
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+const isExpired = computed(() => {
+  const w = props.wish;
+  if (isDone.value) return false;
+  if (!w.deadline) return false;
+  return w.deadline < todayKey();
+});
 // ===== 封面 / 头像 =====
 // 无 cover_gradient 时的统一兜底色（不再按 index 猜测，避免错位）
 const FALLBACK_GRADIENT = "linear-gradient(135deg,#ebfded 0%,#c6fbce 60%,#8ae99b 100%)";
@@ -322,10 +339,7 @@ const targetText = computed(() => formatFen(targetAmount.value).replace(/\.00$/,
 const remainText = computed(() => {
   const over = savedAmount.value - targetAmount.value;
   if (over > 0) return "超存 ¥" + formatFen(over).replace(/\.00$/, "");
-  return (
-    "还差 ¥" +
-    formatFen(Math.max(targetAmount.value - savedAmount.value, 0)).replace(/\.00$/, "")
-  );
+  return "还差 ¥" + formatFen(Math.max(targetAmount.value - savedAmount.value, 0)).replace(/\.00$/, "");
 });
 
 // ===== 交错偏移 / 旋转 =====
@@ -635,6 +649,20 @@ const cardStyle = computed(() => ({
     box-shadow: 0 10rpx 40rpx rgba(37, 204, 93, 0.18), 0 2rpx 10rpx rgba(0, 0, 0, 0.06),
       inset 0 2rpx 0 rgba(255, 255, 255, 0.88);
   }
+
+  // 已过期：灰色滤镜 + 半透明灰罩（轻度，仅作提示）
+  &--expired {
+    filter: grayscale(0.55);
+  }
+  &--expired::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 48rpx;
+    background: rgba(120, 120, 120, 0.22);
+    pointer-events: none;
+    z-index: 3;
+  }
 }
 
 // ===== 叠在卡片下方的错位渐变衬底（左右内缩 12rpx，向下探出 16rpx，背景用接口 gradient） =====
@@ -893,6 +921,11 @@ const cardStyle = computed(() => ({
   .badge-wait {
     color: #fff;
     background: transparent;
+  }
+
+  .badge-expired {
+    color: #fff;
+    background: rgba(120, 120, 120, 0.92);
   }
 }
 

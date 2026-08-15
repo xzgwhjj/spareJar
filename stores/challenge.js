@@ -5,6 +5,7 @@
 import { state, pickDbRows, UserStoreError } from './core/state.js'
 import {
   getChallengeSummary,
+  getLimitStatus,
   setChallengeTarget,
   getAchievements,
   evaluateAchievements,
@@ -20,28 +21,41 @@ const ENSURE_LOGGED_IN = () => {
 
 /** 加载挑战汇总（含进行中+历史） */
 export async function loadChallengeSummary() {
+  console.log('[store] loadChallengeSummary called, uid=', state.uid)
   if (!state.uid) {
+    console.warn('[store] loadChallengeSummary: no uid, set challenges=null')
     state.challenges = null
     return null
   }
   try {
     const res = await getChallengeSummary()
+    console.log('[store] getChallengeSummary res =>', JSON.stringify(res).slice(0, 300))
     const rows = pickDbRows(res)
+    console.log('[store] pickDbRows =>', JSON.stringify(rows).slice(0, 300))
     state.challenges = rows && rows[0] ? rows[0] : null
+    console.log('[store] state.challenges keys =>', state.challenges ? Object.keys(state.challenges) : null)
   } catch (err) {
-    console.error('[store] loadChallengeSummary 失败', err)
+    console.error('[store] loadChallengeSummary 失败', err && (err.stack || err.message || err))
     state.challenges = null
   }
   return state.challenges
 }
 
-/** 设置挑战目标（仅更新数值，不动进度/历史） */
-export async function setChallengeTargetAction(target) {
+/**
+ * 设置月/年挑战目标（仅更新数值，不动进度/历史）。
+ * @param {'monthly'|'yearly'} type
+ * @param {string} periodKey  格式 YYYY-MM / YYYY
+ * @param {number} targetFen  目标金额（分）
+ * @param {string} [ledgerId] 绑定账本（可选）
+ */
+export async function setChallengeTargetAction(type, periodKey, targetFen, ledgerId) {
   ENSURE_LOGGED_IN()
   try {
-    const res = await setChallengeTarget(target)
+    const res = await setChallengeTarget(type, periodKey, targetFen, ledgerId || undefined)
     const rows = pickDbRows(res)
     if (rows && rows[0]) state.challenges = { ...state.challenges, ...rows[0] }
+    // 重新拉取汇总，保证月/年挑战卡片立即反映新目标
+    await loadChallengeSummary()
     return state.challenges
   } catch (err) {
     if (isSparejarApiError(err)) {
@@ -49,6 +63,24 @@ export async function setChallengeTargetAction(target) {
       throw err
     }
     throw err
+  }
+}
+
+/**
+ * 按时间规格加载限额使用状态（日/月/年）。
+ * @param {'day'|'month'|'year'} dim
+ * @param {string} key
+ * @returns {Promise<object|null>}
+ */
+export async function loadLimitStatus(dim, key) {
+  if (!state.uid) return null
+  try {
+    const res = await getLimitStatus(dim, key)
+    const rows = pickDbRows(res)
+    return rows && rows[0] ? rows[0] : null
+  } catch (err) {
+    console.error('[store] loadLimitStatus 失败', err)
+    return null
   }
 }
 

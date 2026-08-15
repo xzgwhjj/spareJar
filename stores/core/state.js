@@ -93,5 +93,8 @@ export function pickDbRows(res) {
     return /** @type {unknown[]} */ (res.result.data || [])
   }
   if ('data' in res) return /** @type {unknown[]} */ (res.data || [])
+  // 单条业务对象（如 getChallengeSummary 返回 { streak, monthly, yearly, history7 }，
+  // 经 callSparejar 解包后已是裸对象、无 result/data 包裹）：直接包成单行
+  if (!Array.isArray(res)) return [res]
   return []
 }
