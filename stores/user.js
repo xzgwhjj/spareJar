@@ -50,6 +50,45 @@ export const surplusPoolBalanceFen = computed(() => state.surplusPool?.balance ?
 export const savingsPoolBalanceFen = computed(() => state.savingsPool?.balance ?? 0)
 export const currentStreak = computed(() => state.streak?.daily_current_streak ?? 0)
 
+/**
+ * 连续存款天数：
+ *  - 以「最近一次存入日」为锚；若最近存入日既不是今天也不是昨天，说明已断更 → 0。
+ *  - 否则从该日往前连续计数（每自然日去重，断一天即停）。
+ * 例：已连续3天(到昨天)，今天未存 → 显示3；今天全天未存，到明天看 → 0（隐藏）；
+ *     明天存了 → 从1重新计。
+ */
+export const saveStreak = computed(() => {
+  const logs = Array.isArray(state.savingsPoolLogs) ? state.savingsPoolLogs : []
+  const daySet = new Set()
+  for (const r of logs) {
+    if (r.direction !== 'in') continue
+    const dk = r.date_key || (r.created_at ? String(r.created_at).slice(0, 10) : '')
+    if (dk) daySet.add(dk)
+  }
+  if (daySet.size === 0) return 0
+
+  const today = new Date()
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  const yesterday = new Date(start.getTime() - 86400000)
+  const todayKey = todayDateKey(start)
+  const yesterdayKey = todayDateKey(yesterday)
+
+  // 最近存入日必须今天或昨天，否则已断更
+  let anchor
+  if (daySet.has(todayKey)) anchor = start
+  else if (daySet.has(yesterdayKey)) anchor = yesterday
+  else return 0
+
+  // 从锚点往前连续计数，遇缺失即停
+  let cursor = anchor
+  let count = 0
+  while (daySet.has(todayDateKey(cursor))) {
+    count++
+    cursor = new Date(cursor.getTime() - 86400000)
+  }
+  return count
+})
+
 export const isLoggedIn = computed(() => !!state.uid)
 export const isGuest = computed(() => !state.uid)
 export const sessionReady = computed(() => !!(state.session && state.session.ready))
@@ -104,6 +143,16 @@ export async function confirmSurplusRolloverAction(decision, opts = {}) {
   await dashboard.refreshTodayDashboard()
   await auth.loadSurplusPool()
   await auth.loadSavingsPool()
+}
+
+/** 加载存款池流水，供 saveStreak 计算连续存款天数。 */
+export async function loadSaveStreakAction() {
+  if (!state.uid) return
+  try {
+    state.savingsPoolLogs = await pool.loadSavingsPoolLogsAction()
+  } catch (err) {
+    console.error('[store] 加载存款池流水失败', err)
+  }
 }
 
 export async function loadSurplusAllocationsAction() {
@@ -190,10 +239,13 @@ export function useUserStore() {
     depositSavingsPoolAction: pool.depositSavingsPoolAction,
     withdrawSavingsPoolAction: pool.withdrawSavingsPoolAction,
     loadSavingsPoolLogsAction: pool.loadSavingsPoolLogsAction,
+    loadSaveStreakAction,
 
     // challenge
     loadChallengeSummary: challenge.loadChallengeSummary,
+    loadLimitStatus: challenge.loadLimitStatus,
     setChallengeTargetAction: challenge.setChallengeTargetAction,
+    syncPeriodTargetsAction: challenge.syncPeriodTargetsAction,
     loadAchievements: challenge.loadAchievements,
     evaluateAchievementsAction: challenge.evaluateAchievementsAction,
     saveOnboardingAction: challenge.saveOnboardingAction,
@@ -236,6 +288,7 @@ export function useUserStore() {
     surplusPoolBalanceFen,
     savingsPoolBalanceFen,
     currentStreak,
+    saveStreak,
     isLoggedIn,
     isGuest,
     sessionReady,

@@ -1257,6 +1257,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from "vue";
+import { onLoad } from "@dcloudio/uni-app";
 import TabBar from "@/components/tabbar/tabbar.vue";
 import { useUserStore } from "@/stores/user.js";
 import { advanceWishPhaseAction } from "@/stores/wish.js";
@@ -1781,10 +1782,36 @@ onMounted(async () => {
     await Promise.all([loadWishes(), loadSavingsPool(), loadArchivedWishesAction()]);
     await loadMonthlySaved();
     await loadAssetAccounts().catch(() => {});
+    autoOpenFromQuery();
   } catch (err) {
     console.error("[wish] 加载失败", err);
   }
 });
+
+// 从心愿详情页跳回时，自动展开对应心愿的操作弹窗
+const pendingOpenId = ref("");
+const pendingAction = ref("none");
+onLoad((options) => {
+  if (options && options.id) {
+    pendingOpenId.value = decodeURIComponent(options.id);
+    pendingAction.value = options.action || "none";
+  }
+});
+function autoOpenFromQuery() {
+  if (!pendingOpenId.value) return;
+  const id = pendingOpenId.value;
+  const action = pendingAction.value;
+  const target =
+    wishes.value.find((w) => w._id === id) ||
+    archivedWishes.value.find((w) => w._id === id) ||
+    null;
+  pendingOpenId.value = "";
+  pendingAction.value = "none";
+  if (target) {
+    openDetail(target);
+    if (action && action !== "none") detailAction.value = action;
+  }
+}
 
 // 聚合本月"存入(in)"流水总额：心愿 + 通用存款池
 async function loadMonthlySaved() {

@@ -10,7 +10,7 @@
 
 <script setup>
 import { loadAnimation, setup } from 'lottie-miniprogram';
-import { getCurrentInstance, onMounted, onUnmounted } from 'vue';
+import { getCurrentInstance, onMounted, onUnmounted, watch } from 'vue';
 import { cdn } from '@/utils/cdn.js';
 
 // Lottie 动画资源（远程 CDN，失败自动回退本地打包）
@@ -249,6 +249,18 @@ function destroyLottie() {
 onMounted(() => {
   initLottie();
 });
+
+// 修复时序 bug：首帧 store 未就绪时 autoCycle 误判为 true 并锁死循环，
+// 数据到达后 autoCycle 翻转为 false（有限额）时，重建动画切回正常模式。
+watch(
+  () => props.autoCycle,
+  (val, old) => {
+    if (old === true && val === false && anim && anim.isLoaded) {
+      destroyLottie();
+      initLottie();
+    }
+  }
+);
 
 onUnmounted(() => {
   destroyLottie();

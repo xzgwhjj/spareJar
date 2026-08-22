@@ -119,7 +119,11 @@
             <view v-else class="week-bars">
               <view v-for="(d, i) in heatData" :key="i" class="week-col">
                 <!-- 固定高柱体，内部填充高度随比例变化（贴合原版规格） -->
-                <view class="week-bar" :class="['st-' + d.status, { 'is-today': d.dateKey === todayKey }]" @click="onBarTap(d)">
+                <view
+                  class="week-bar"
+                  :class="['st-' + d.status, { 'is-today': d.dateKey === todayKey }]"
+                  @click="onBarTap(d)"
+                >
                   <view
                     class="week-fill"
                     :class="['st-' + d.status]"
@@ -135,7 +139,9 @@
                     <text v-if="d.status === 'ok'" class="week-check">✓</text>
                   </view>
                 </view>
-                <text class="week-date" :class="{ 'is-today': d.dateKey === todayKey }">{{ d.date }}</text>
+                <text class="week-date" :class="{ 'is-today': d.dateKey === todayKey }">{{
+                  d.date
+                }}</text>
               </view>
             </view>
           </view>
@@ -144,64 +150,75 @@
             <text class="day-tip-close" @click="closeDayTip">×</text>
             <text class="day-tip-date">{{ dayTip.label }}</text>
             <view class="day-tip-status-row">
-              <text class="day-tip-status" :class="'st-' + (dayTip.statusText === '未超额' ? 'ok' : dayTip.statusText === '未消费' ? 'none' : 'over')">{{ dayTip.statusText }}</text>
-              <text class="day-tip-used">已用 ¥{{ dayTipSpent }} / 总限额 ¥{{ dayTipLimit }}</text>
+              <text
+                class="day-tip-status"
+                :class="
+                  'st-' +
+                  (dayTip.statusText === '未超额'
+                    ? 'ok'
+                    : dayTip.statusText === '未消费'
+                    ? 'none'
+                    : 'over')
+                "
+                >{{ dayTip.statusText }}</text
+              >
+              <text class="day-tip-used"
+                >已用 ¥{{ dayTipSpent }} / 总限额 ¥{{ dayTipLimit }}</text
+              >
             </view>
             <view class="day-tip-divider" />
             <!-- 所有天都拆解：固定限额 + 滚入结余 = 总限额（字段来自 daily_settlements） -->
             <text class="day-tip-row">固定限额 ¥{{ dayTipFixed }}</text>
-            <text class="day-tip-row" v-if="dayTip.rolloverLimit > 0">+ 滚入结余 ¥{{ dayTipRoll }}</text>
+            <text class="day-tip-row" v-if="dayTip.rolloverLimit > 0"
+              >+ 滚入结余 ¥{{ dayTipRoll }}</text
+            >
             <view class="day-tip-divider" v-if="dayTip.rolloverLimit > 0" />
             <text class="day-tip-row day-tip-total">= 总限额 ¥{{ dayTipLimit }}</text>
             <view class="day-tip-divider" />
-            <text class="day-tip-row day-tip-surplus" v-if="dayTip.surplus > 0">🎉 已省下 ¥{{ dayTipSurplus }}</text>
-            <text class="day-tip-row day-tip-over" v-if="dayTip.overAmount > 0">⚠️ 超额 ¥{{ dayTipOver }}</text>
+            <text class="day-tip-row day-tip-surplus" v-if="dayTip.surplus > 0"
+              >🎉 已省下 ¥{{ dayTipSurplus }}</text
+            >
+            <text class="day-tip-row day-tip-over" v-if="dayTip.overAmount > 0"
+              >⚠️ 超额 ¥{{ dayTipOver }}</text
+            >
           </view>
         </view>
       </view>
 
-      <!-- 月度挑战 -->
+      <!-- 年度挑战（采用月度卡片样式；内部嵌入当月卡片，其余月份点击下钻查看） -->
       <view class="ch-glass card-slide-2" style="margin: 0 32rpx 32rpx; padding: 36rpx">
         <view class="section-title-row">
-          <text class="section-title">📆 月度挑战</text>
-          <text class="ch-count">共 {{ monthlyChallenges.length }} 个</text>
+          <text class="section-title">🎯 年度挑战</text>
+          <text class="ch-count">{{
+            yearlyChallenges.length ? yearlyChallenges[0].period_key + " 年" : ""
+          }}</text>
         </view>
-        <view v-if="!monthlyChallenges.length" class="ch-empty"
-          ><text>本月还没有挑战目标，点「设目标」开启</text></view
+        <view v-if="!yearlyChallenges.length" class="ch-empty"
+          ><text>今年还没有挑战目标，点「设目标」开启</text></view
         >
         <view
-          v-for="mc in monthlyChallenges"
-          :key="mc._id"
+          v-for="yc in yearlyChallenges"
+          :key="yc._id"
           class="challenge-card"
           style="margin-top: 24rpx"
+          @click="onYearTap(yc)"
         >
           <view class="ch-card-inner">
             <!-- 状态色带 -->
             <view
               class="ch-card-stripe"
               :class="
-                mc.status === 'completed'
-                  ? mc.is_success
-                    ? 'ok'
-                    : 'fail'
-                  : 'pending'
+                yc.status === 'completed' ? (yc.is_success ? 'ok' : 'fail') : 'pending'
               "
             />
             <view class="ch-card-body">
               <view class="ch-card-top">
                 <view class="ch-card-title-wrap">
-                  <text class="ch-card-title">{{ mc.ledger_id ? "绑定账本挑战" : "本月消费挑战" }}</text>
-                  <text
-                    v-if="mc.status === 'completed' && mc.is_success"
-                    class="ch-badge ok"
-                    >已达标</text
-                  >
-                  <text
-                    v-else-if="mc.status === 'completed' && !mc.is_success"
-                    class="ch-badge fail"
-                    >未达标</text
-                  >
-                  <text v-else class="ch-badge pending">进行中</text>
+                  <text class="ch-card-title">{{
+                    yc.ledger_id ? "绑定账本挑战" : yc.period_key + " 年度消费挑战"
+                  }}</text>
+                  <text v-if="yearTrack(yc)" class="ch-badge ok">进度正常</text>
+                  <text v-else class="ch-badge fail">超前消费</text>
                 </view>
                 <text class="ch-card-chevron">›</text>
               </view>
@@ -210,21 +227,21 @@
                   <text class="ch-num-label">已支出</text>
                   <text
                     class="ch-num-val"
-                    :class="mc.consumed_amount > mc.target_amount ? 'over' : ''"
-                    >{{ formatFen(mc.consumed_amount) }}</text
+                    :class="yc.consumed_amount > yc.target_amount ? 'over' : ''"
+                    >{{ formatFen(yc.consumed_amount) }}</text
                   >
                 </view>
                 <view class="ch-num-divider" />
                 <view class="ch-num-block">
                   <text class="ch-num-label">目标上限</text>
-                  <text class="ch-num-val sub">{{ formatFen(mc.target_amount) }}</text>
+                  <text class="ch-num-val sub">{{ formatFen(yc.target_amount) }}</text>
                 </view>
-                <template v-if="mc.status !== 'completed'">
+                <template v-if="yc.status !== 'completed'">
                   <view class="ch-num-divider" />
                   <view class="ch-num-block">
                     <text class="ch-num-label">剩余可用</text>
                     <text class="ch-num-val ok">{{
-                      formatFen(Math.max(0, mc.target_amount - mc.consumed_amount))
+                      formatFen(Math.max(0, yc.target_amount - yc.consumed_amount))
                     }}</text>
                   </view>
                 </template>
@@ -236,105 +253,160 @@
                   :style="{
                     width:
                       Math.min(
-                        (mc.consumed_amount / Math.max(1, mc.target_amount)) * 100,
+                        (yc.consumed_amount / Math.max(1, yc.target_amount)) * 100,
                         100
                       ) + '%',
                     background:
-                      mc.consumed_amount > mc.target_amount
+                      yc.consumed_amount > yc.target_amount
                         ? 'linear-gradient(90deg,var(--y5),var(--red-soft))'
                         : 'linear-gradient(90deg,var(--g4),var(--g5))',
                   }"
                 />
               </view>
               <view class="ch-card-foot">
-                <text class="ch-card-range">{{ mc.period_key }}-01 ~ {{ mc.period_key }}-31</text>
+                <text class="ch-card-range">{{ yearRangeText }}</text>
                 <text
                   class="ch-card-pct"
-                  :class="mc.consumed_amount > mc.target_amount ? 'over' : ''"
+                  :class="yc.consumed_amount > yc.target_amount ? 'over' : ''"
                   >{{
                     Math.round(
-                      Math.min(mc.consumed_amount / Math.max(1, mc.target_amount), 1) * 100
+                      Math.min(yc.consumed_amount / Math.max(1, yc.target_amount), 1) *
+                        100
                     )
                   }}%</text
                 >
               </view>
-            </view>
-          </view>
-        </view>
-      </view>
+              <view v-if="yc._derived" class="ch-card-hint"
+                ><text>此目标由首页限额自动同步，点「设目标」可单独设置</text></view
+              >
 
-      <!-- 年度挑战 -->
-      <view class="card-slide-3" style="margin: 0 32rpx 32rpx">
-        <view class="section-title-row" style="padding: 0 4rpx 4rpx">
-          <text class="section-title">🎯 年度挑战</text>
-          <text class="add-target" @click="openTargetSheet('yearly')">+ 设目标</text>
-        </view>
-        <view v-if="!yearlyChallenges.length" class="ch-empty ch-empty-dark"
-          ><text>今年还没有挑战目标，点「设目标」开启</text></view
-        >
-        <view
-          v-for="yc in yearlyChallenges"
-          :key="yc._id"
-          class="challenge-card-year"
-          style="margin-top: 24rpx"
-        >
-          <view class="ch-year-deco1 spin-slow" />
-          <view class="ch-year-deco2" />
-          <view class="ch-year-body">
-            <view class="ch-year-top">
-              <view class="ch-year-title-wrap">
-                <text class="ch-year-title">{{ yc.ledger_id ? "绑定账本挑战" : yc.period_key + " 年度挑战" }}</text>
-                <text
-                  v-if="yearTrack(yc)"
-                  class="ch-year-badge ok"
-                  >进度正常</text
-                >
-                <text v-else class="ch-year-badge warn">超前消费</text>
-              </view>
-            </view>
-            <view class="ch-year-nums">
-              <view class="ch-year-main">
-                <text class="ch-year-label">已支出</text>
-                <text class="ch-year-spent"
-                  >¥{{ (yc.consumed_amount / 10000).toFixed(1) }}<text class="ch-year-wan">万</text></text
-                >
-              </view>
-              <text class="ch-year-slash">/</text>
-              <text class="ch-year-target">¥{{ Math.round(yc.target_amount / 10000) }}万</text>
-            </view>
-            <!-- 双轨进度 -->
-            <view class="ch-year-bar-block">
-              <view class="ch-year-bar-head">
-                <text class="ch-year-bar-label">支出进度</text>
-                <text class="ch-year-bar-pct">{{
-                  Math.round(Math.min(yc.consumed_amount / Math.max(1, yc.target_amount), 1) * 100)
-                }}%</text>
-              </view>
-              <view class="ch-year-track">
-                <view
-                  class="ch-year-fill progress-fill"
-                  :style="{
-                    width:
-                      Math.min(
-                        (yc.consumed_amount / Math.max(1, yc.target_amount)) * 100,
-                        100
-                      ) + '%',
-                  }"
-                />
-              </view>
-            </view>
-            <view class="ch-year-bar-block">
-              <view class="ch-year-bar-head">
-                <text class="ch-year-bar-label">时间进度</text>
-                <text class="ch-year-bar-pct dim"
-                  >{{ yearMonthPct(yc) }}%（{{ yearMonthsGone(yc) }}/12月）</text
-                >
-              </view>
-              <view class="ch-year-track dim">
-                <view
-                  class="ch-year-fill-time"
-                  :style="{ width: yearMonthPct(yc) + '%' }"
-                />
+              <!-- 当月卡片（嵌套显示，其余月份点击年度卡片下钻查看） -->
+              <view v-if="currentMonth" class="ch-month-nested">
+                <view class="ch-month-nested-head">
+                  <text class="ch-month-nested-label">📆 本月</text>
+                  <text class="ch-month-nested-go">查看全年 12 个月 ›</text>
+                </view>
+                <view class="challenge-card ch-month-card" @click.stop="onYearTap(yc)">
+                  <view class="ch-card-inner">
+                    <view
+                      class="ch-card-stripe"
+                      :class="
+                        currentMonth.status === 'completed'
+                          ? currentMonth.is_success
+                            ? 'ok'
+                            : 'fail'
+                          : 'pending'
+                      "
+                    />
+                    <view class="ch-card-body">
+                      <view class="ch-card-top">
+                        <view class="ch-card-title-wrap">
+                          <text class="ch-card-title">{{
+                            currentMonth.ledger_id
+                              ? "绑定账本挑战"
+                              : currentMonth.period_key + " 月消费挑战"
+                          }}</text>
+                          <text
+                            v-if="
+                              currentMonth.status === 'completed' &&
+                              currentMonth.is_success
+                            "
+                            class="ch-badge ok"
+                            >已达标</text
+                          >
+                          <text
+                            v-else-if="
+                              currentMonth.status === 'completed' &&
+                              !currentMonth.is_success
+                            "
+                            class="ch-badge fail"
+                            >未达标</text
+                          >
+                          <text v-else class="ch-badge pending">进行中</text>
+                        </view>
+                      </view>
+                      <view class="ch-card-nums">
+                        <view class="ch-num-block">
+                          <text class="ch-num-label">已支出</text>
+                          <text
+                            class="ch-num-val"
+                            :class="
+                              currentMonth.consumed_amount > currentMonth.target_amount
+                                ? 'over'
+                                : ''
+                            "
+                            >{{ formatFen(currentMonth.consumed_amount) }}</text
+                          >
+                        </view>
+                        <view class="ch-num-divider" />
+                        <view class="ch-num-block">
+                          <text class="ch-num-label">目标上限</text>
+                          <text class="ch-num-val sub">{{
+                            formatFen(currentMonth.target_amount)
+                          }}</text>
+                        </view>
+                        <template v-if="currentMonth.status !== 'completed'">
+                          <view class="ch-num-divider" />
+                          <view class="ch-num-block">
+                            <text class="ch-num-label">剩余可用</text>
+                            <text class="ch-num-val ok">{{
+                              formatFen(
+                                Math.max(
+                                  0,
+                                  currentMonth.target_amount -
+                                    currentMonth.consumed_amount
+                                )
+                              )
+                            }}</text>
+                          </view>
+                        </template>
+                      </view>
+                      <view class="ch-card-track">
+                        <view
+                          class="ch-card-fill progress-fill"
+                          :style="{
+                            width:
+                              Math.min(
+                                (currentMonth.consumed_amount /
+                                  Math.max(1, currentMonth.target_amount)) *
+                                  100,
+                                100
+                              ) + '%',
+                            background:
+                              currentMonth.consumed_amount > currentMonth.target_amount
+                                ? 'linear-gradient(90deg,var(--y5),var(--red-soft))'
+                                : 'linear-gradient(90deg,var(--g4),var(--g5))',
+                          }"
+                        />
+                      </view>
+                      <view class="ch-card-foot">
+                        <text class="ch-card-range">{{ monthRangeText }}</text>
+                        <text
+                          class="ch-card-pct"
+                          :class="
+                            currentMonth.consumed_amount > currentMonth.target_amount
+                              ? 'over'
+                              : ''
+                          "
+                          >{{
+                            Math.round(
+                              Math.min(
+                                currentMonth.consumed_amount /
+                                  Math.max(1, currentMonth.target_amount),
+                                1
+                              ) * 100
+                            )
+                          }}%</text
+                        >
+                      </view>
+                      <view v-if="currentMonth._derived" class="ch-card-hint"
+                        ><text
+                          >此目标由首页限额自动同步，点「设目标」可单独设置</text
+                        ></view
+                      >
+                    </view>
+                  </view>
+                </view>
               </view>
             </view>
           </view>
@@ -500,7 +572,7 @@ const streakDays = computed(() => store.currentStreak.value);
 const dailyChallenge = computed(() => {
   // 与首页限额同源：直接读今日 daily_settlements（store.state.dashboard.settlement）
   const set = store.state.dashboard.settlement;
-  const consumed = set ? (set.consumed || 0) : 0;
+  const consumed = set ? set.consumed || 0 : 0;
   // 限额口径：含待滚入结余的总日限额（totalDailyLimitFen），与首页完全一致
   const limit = store.totalDailyLimitFen.value || store.dailyLimitFen.value || 0;
   const success = limit > 0 ? consumed <= limit : false;
@@ -539,7 +611,7 @@ const history7 = computed(() => {
   // 直接渲染后端返回的 history7（后端已按「本周一~周日」对齐生成，无需前端重建骨架）
   const raw = summary.value ? summary.value.history7 || [] : [];
   const out = raw.map((d) => ({
-    date: (d.date_key || '').slice(5),
+    date: (d.date_key || "").slice(5),
     dateKey: d.date_key,
     spent: d.consumed || 0,
     limit: d.base_limit || 0,
@@ -550,8 +622,26 @@ const history7 = computed(() => {
     success: !!d.is_success,
     status: calcStatus(d.consumed || 0, d.base_limit || 0, !!d.is_success),
   }));
-  console.log('[challenge] summary.value =>', JSON.stringify(summary.value && { keys: Object.keys(summary.value), history7Len: (summary.value.history7 || []).length }))
-  console.log('[challenge] history7 computed =>', JSON.stringify(out.map((h) => ({ dateKey: h.dateKey, limit: h.limit, spent: h.spent, status: h.status }))))
+  console.log(
+    "[challenge] summary.value =>",
+    JSON.stringify(
+      summary.value && {
+        keys: Object.keys(summary.value),
+        history7Len: (summary.value.history7 || []).length,
+      }
+    )
+  );
+  console.log(
+    "[challenge] history7 computed =>",
+    JSON.stringify(
+      out.map((h) => ({
+        dateKey: h.dateKey,
+        limit: h.limit,
+        spent: h.spent,
+        status: h.status,
+      }))
+    )
+  );
   return out;
 });
 
@@ -573,10 +663,10 @@ function onBarTap(d) {
   const isToday = d.dateKey === todayKey;
   // 所有天统一用后端返回的含滚入口径（daily_settlements.available_start）
   const limit = d.limit;
-  const statusMap = { ok: '未超额', warn: '超额', over: '严重超额', none: '未消费' };
+  const statusMap = { ok: "未超额", warn: "超额", over: "严重超额", none: "未消费" };
   dayTip.value = {
     label: d.dateKey,
-    statusText: statusMap[d.status] || '未消费',
+    statusText: statusMap[d.status] || "未消费",
     spent: d.spent || 0,
     limit,
     fixedLimit: d.fixedLimit || 0,
@@ -594,7 +684,9 @@ function closeDayTip() {
 const dayTipSpent = computed(() => (dayTip.value ? formatFen(dayTip.value.spent) : "0"));
 const dayTipLimit = computed(() => (dayTip.value ? formatFen(dayTip.value.limit) : "0"));
 const dayTipFixed = computed(() => formatFen(dayTip.value ? dayTip.value.fixedLimit : 0));
-const dayTipRoll = computed(() => formatFen(dayTip.value ? dayTip.value.rolloverLimit : 0));
+const dayTipRoll = computed(() =>
+  formatFen(dayTip.value ? dayTip.value.rolloverLimit : 0)
+);
 const dayTipSurplus = computed(() => formatFen(dayTip.value ? dayTip.value.surplus : 0));
 const dayTipOver = computed(() => formatFen(dayTip.value ? dayTip.value.overAmount : 0));
 
@@ -702,6 +794,31 @@ const monthlyChallenges = computed(() =>
 const yearlyChallenges = computed(() =>
   summary.value ? summary.value.yearly || [] : []
 );
+// 年度挑战区间文本：读接口返回的 limit_start/limit_end（如 2026-07 ~ 2026-08 → 07月 ~ 08月）
+const yearRangeText = computed(() => {
+  const yc = yearlyChallenges.value[0];
+  if (!yc) return "";
+  const fmt = (k) => (k && k.length >= 7 ? `${k.slice(5, 7)}月` : "");
+  const start = fmt(yc.limit_start);
+  const end = fmt(yc.limit_end);
+  if (start && end) return `${start} ~ ${end}`;
+  if (start) return start;
+  return "全年";
+});
+// 当年卡片内嵌套展示的「当前月」挑战（取最新一条月记录）
+const currentMonth = computed(() =>
+  monthlyChallenges.value && monthlyChallenges.value.length
+    ? monthlyChallenges.value[0]
+    : null
+);
+// 当月挑战区间文本：读接口返回的 limit_start/limit_end（如 2026-07-21 ~ 2026-07-31）
+const monthRangeText = computed(() => {
+  const m = currentMonth.value;
+  if (!m) return "";
+  if (m.limit_start && m.limit_end) return `${m.limit_start} ~ ${m.limit_end}`;
+  if (m.period_key) return `${m.period_key}-01 ~ ${m.period_key}-31`;
+  return "";
+});
 
 const badgeEmoji = (b) => {
   if (b.code === "streak_7" || b.code === "streak_30") return "🔥";
@@ -744,6 +861,11 @@ async function loadLedgers() {
   } catch (err) {
     ledgers.value = [];
   }
+}
+// 点击年度卡片：下钻查看全年 12 个月（Phase 3）
+function onYearTap(yc) {
+  const key = yc && yc.period_key ? yc.period_key : formatYearKey();
+  uni.navigateTo({ url: `/pages/challenge/drill?type=year&key=${key}` });
 }
 function openTargetSheet(type) {
   targetType.value = type;
@@ -819,6 +941,10 @@ function savePoster() {
 
 async function refresh() {
   try {
+    // 进入挑战页即同步当前年月/年挑战目标上限（保证月卡/年卡有真实数值，不阻塞主流程）
+    store
+      .syncPeriodTargetsAction()
+      .catch((e) => console.error("[challenge] syncPeriodTargets failed", e));
     await Promise.all([
       store.loadChallengeSummary(),
       store.loadStreak && store.loadStreak(),
@@ -1293,7 +1419,7 @@ onShow(refresh);
 }
 /* 玻璃质感：顶部一道白色高光，模拟玻璃反射 */
 .week-fill::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: 0;
@@ -1303,16 +1429,36 @@ onShow(refresh);
   pointer-events: none;
 }
 .week-fill.st-ok {
-  background: linear-gradient(180deg, rgba(138, 233, 155, 0.55) 0%, rgba(138, 233, 155, 0.8) 30%, var(--g5) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(138, 233, 155, 0.55) 0%,
+    rgba(138, 233, 155, 0.8) 30%,
+    var(--g5) 100%
+  );
 }
 .week-fill.st-warn {
-  background: linear-gradient(180deg, rgba(255, 207, 110, 0.55) 0%, rgba(255, 207, 110, 0.82) 30%, var(--y5) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 207, 110, 0.55) 0%,
+    rgba(255, 207, 110, 0.82) 30%,
+    var(--y5) 100%
+  );
 }
 .week-fill.st-over {
-  background: linear-gradient(180deg, rgba(255, 154, 138, 0.55) 0%, rgba(255, 154, 138, 0.82) 30%, var(--red-soft) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 154, 138, 0.55) 0%,
+    rgba(255, 154, 138, 0.82) 30%,
+    var(--red-soft) 100%
+  );
 }
 .week-fill.st-none {
-  background: linear-gradient(180deg, rgba(190, 198, 194, 0.18) 0%, rgba(170, 180, 175, 0.28) 30%, rgba(150, 160, 155, 0.32) 100%);
+  background: linear-gradient(
+    180deg,
+    rgba(190, 198, 194, 0.18) 0%,
+    rgba(170, 180, 175, 0.28) 30%,
+    rgba(150, 160, 155, 0.32) 100%
+  );
 }
 /* 当天柱子：仅文字高亮，柱体不加放大/边框 */
 .week-bar.is-today {
@@ -1382,9 +1528,15 @@ onShow(refresh);
   font-size: 22rpx;
   font-weight: 700;
 }
-.day-tip-status.st-ok { color: var(--g5); }
-.day-tip-status.st-over { color: var(--red-soft); }
-.day-tip-status.st-none { color: var(--ink4); }
+.day-tip-status.st-ok {
+  color: var(--g5);
+}
+.day-tip-status.st-over {
+  color: var(--red-soft);
+}
+.day-tip-status.st-none {
+  color: var(--ink4);
+}
 .day-tip-used {
   font-size: 22rpx;
   font-weight: 600;
@@ -1418,8 +1570,14 @@ onShow(refresh);
   margin: 4rpx 0;
 }
 @keyframes tip-pop-kf {
-  from { opacity: 0; transform: scale(0.92); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* 日历弹层 */
@@ -1482,9 +1640,15 @@ onShow(refresh);
   flex-shrink: 0;
   border-radius: 24rpx 0 0 24rpx;
 }
-.ch-card-stripe.ok { background: linear-gradient(180deg, var(--g4), var(--g5)); }
-.ch-card-stripe.fail { background: linear-gradient(180deg, var(--y5), var(--red-soft)); }
-.ch-card-stripe.pending { background: linear-gradient(180deg, var(--g3), var(--g4)); }
+.ch-card-stripe.ok {
+  background: linear-gradient(180deg, var(--g4), var(--g5));
+}
+.ch-card-stripe.fail {
+  background: linear-gradient(180deg, var(--y5), var(--red-soft));
+}
+.ch-card-stripe.pending {
+  background: linear-gradient(180deg, var(--g3), var(--g4));
+}
 .ch-card-body {
   flex: 1;
   padding: 22rpx 24rpx 20rpx 26rpx;
@@ -1517,9 +1681,18 @@ onShow(refresh);
   padding: 3rpx 14rpx;
   border-radius: 20rpx;
 }
-.ch-badge.ok { background: linear-gradient(135deg, var(--g4), var(--g5)); color: #fff; }
-.ch-badge.fail { background: rgba(245, 158, 11, 0.15); color: var(--y5); }
-.ch-badge.pending { background: var(--g1); color: var(--g5); }
+.ch-badge.ok {
+  background: linear-gradient(135deg, var(--g4), var(--g5));
+  color: #fff;
+}
+.ch-badge.fail {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--y5);
+}
+.ch-badge.pending {
+  background: var(--g1);
+  color: var(--g5);
+}
 .ch-count {
   font-size: 22rpx;
   color: var(--ink4);
@@ -1555,9 +1728,15 @@ onShow(refresh);
   color: var(--ink);
   letter-spacing: -0.5rpx;
 }
-.ch-num-val.sub { color: var(--ink2); }
-.ch-num-val.ok { color: var(--g5); }
-.ch-num-val.over { color: var(--red-soft); }
+.ch-num-val.sub {
+  color: var(--ink2);
+}
+.ch-num-val.ok {
+  color: var(--g5);
+}
+.ch-num-val.over {
+  color: var(--red-soft);
+}
 .ch-num-divider {
   width: 2rpx;
   height: 44rpx;
@@ -1589,131 +1768,46 @@ onShow(refresh);
   font-weight: 600;
   color: var(--ink3);
 }
-.ch-card-pct.over { color: var(--red-soft); }
+.ch-card-pct.over {
+  color: var(--red-soft);
+}
+.ch-card-hint {
+  margin-top: 12rpx;
+  padding: 8rpx 14rpx;
+  border-radius: 12rpx;
+  background: rgba(79, 217, 116, 0.1);
+  border: 1rpx dashed rgba(79, 217, 116, 0.35);
+  font-size: 18rpx;
+  color: var(--g5);
+  line-height: 1.4;
+}
 
-/* ── 年度挑战卡片（深色玻璃） ── */
-.challenge-card-year {
-  position: relative;
-  border-radius: 28rpx;
-  overflow: hidden;
-  background: rgba(15, 28, 20, 0.72);
-  border: 2rpx solid rgba(79, 217, 116, 0.2);
-  box-shadow: 0 8rpx 36rpx rgba(15, 28, 20, 0.22);
+/* 年卡内嵌「当月」卡片 */
+.ch-month-nested {
+  margin-top: 22rpx;
+  padding-top: 22rpx;
+  border-top: 2rpx dashed rgba(79, 217, 116, 0.25);
 }
-.ch-year-deco1 {
-  position: absolute;
-  top: -36rpx;
-  right: -36rpx;
-  width: 160rpx;
-  height: 160rpx;
-  border-radius: 50%;
-  border: 3rpx dashed rgba(79, 217, 116, 0.27);
-  pointer-events: none;
-}
-.ch-year-deco2 {
-  position: absolute;
-  bottom: -28rpx;
-  left: -28rpx;
-  width: 130rpx;
-  height: 130rpx;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(79, 217, 116, 0.13), transparent 70%);
-  pointer-events: none;
-}
-.ch-year-body {
-  position: relative;
-  padding: 26rpx 28rpx 24rpx;
-}
-.ch-year-top {
-  margin-bottom: 16rpx;
-}
-.ch-year-title-wrap {
-  display: flex;
-  align-items: center;
-  gap: 14rpx;
-}
-.ch-year-title {
-  font-size: 28rpx;
-  font-weight: 800;
-  color: #fff;
-}
-.ch-year-badge {
-  font-size: 18rpx;
-  font-weight: 700;
-  padding: 3rpx 14rpx;
-  border-radius: 20rpx;
-}
-.ch-year-badge.ok { background: rgba(79, 217, 116, 0.2); color: var(--g4); }
-.ch-year-badge.warn { background: rgba(245, 158, 11, 0.2); color: var(--y5); }
-.ch-year-nums {
-  display: flex;
-  align-items: flex-end;
-  gap: 14rpx;
-  margin-bottom: 20rpx;
-}
-.ch-year-main { display: flex; flex-direction: column; }
-.ch-year-label {
-  font-size: 18rpx;
-  color: rgba(155, 184, 168, 0.6);
-  margin-bottom: 4rpx;
-}
-.ch-year-spent {
-  font-size: 48rpx;
-  font-weight: 900;
-  color: #fff;
-  letter-spacing: -1rpx;
-  line-height: 1;
-}
-.ch-year-wan {
-  font-size: 24rpx;
-  font-weight: 600;
-  color: rgba(155, 184, 168, 0.8);
-}
-.ch-year-slash {
-  font-size: 32rpx;
-  color: rgba(155, 184, 168, 0.4);
-  padding-bottom: 6rpx;
-}
-.ch-year-target {
-  font-size: 26rpx;
-  font-weight: 700;
-  color: rgba(155, 184, 168, 0.8);
-  padding-bottom: 6rpx;
-}
-.ch-year-bar-block { margin-bottom: 14rpx; }
-.ch-year-bar-head {
+.ch-month-nested-head {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 6rpx;
+  align-items: center;
+  margin-bottom: 14rpx;
 }
-.ch-year-bar-label {
+.ch-month-nested-label {
+  font-size: 22rpx;
+  font-weight: 700;
+  color: var(--ink2);
+}
+.ch-month-nested-go {
   font-size: 18rpx;
-  color: rgba(155, 184, 168, 0.6);
+  color: var(--g5);
 }
-.ch-year-bar-pct {
-  font-size: 18rpx;
-  font-weight: 600;
-  color: #fff;
+.ch-month-card {
+  margin-top: 0;
 }
-.ch-year-bar-pct.dim { color: rgba(255, 255, 255, 0.65); }
-.ch-year-track {
-  height: 12rpx;
-  border-radius: 12rpx;
-  background: rgba(255, 255, 255, 0.12);
-  overflow: hidden;
-}
-.ch-year-track.dim { height: 8rpx; background: rgba(255, 255, 255, 0.12); }
-.ch-year-fill {
-  height: 100%;
-  border-radius: 12rpx;
-  background: linear-gradient(90deg, var(--g4), var(--g5));
-  box-shadow: 0 0 16rpx rgba(79, 217, 116, 0.53);
-}
-.ch-year-fill-time {
-  height: 100%;
-  border-radius: 8rpx;
-  background: rgba(255, 255, 255, 0.3);
-}
+
+/* ── 年度挑战卡片（采用月度卡片样式，见上方 .challenge-card 系列） ── */
 
 .badge-grid {
   display: flex;

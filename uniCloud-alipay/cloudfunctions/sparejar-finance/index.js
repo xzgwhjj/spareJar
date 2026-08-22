@@ -173,6 +173,10 @@ exports.main = async (event, context) => {
         }
         return ok(await dbApi.setChallengeTarget(userId, data.type, data.period_key, data.target_amount, data.ledger_id))
 
+      case 'syncPeriodTargets':
+        // 同步当前年（或指定年）月/年挑战目标上限到 challenge_records
+        return ok(await dbApi.syncPeriodTargets(userId, { year: data.year }))
+
       case 'getAchievements':
         return ok(await dbApi.getAchievements(userId))
 

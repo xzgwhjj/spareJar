@@ -30,6 +30,7 @@ export {
   getChallengeSummary,
   getLimitStatus,
   setChallengeTarget,
+  syncPeriodTargets,
   getAchievements,
   evaluateAchievements,
   updateOnboarding,

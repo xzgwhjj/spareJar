@@ -23,11 +23,13 @@
         </view>
       </view>
 
+      <!-- 顶部栏（吸顶固定，滑动时保持原位） -->
+      <view class="topbar-sticky">
+        <TopBar @refresh="handleRefresh" />
+      </view>
+
       <!-- 可滚动内容区 -->
       <scroll-view class="page-scroll" scroll-y enhanced :show-scrollbar="false">
-        <!-- 顶部栏 -->
-        <TopBar @refresh="handleRefresh" />
-
         <!-- 引导未完成提示条 -->
         <!-- 待：替换一个小狗拿着引导棒的图标 -->
         <view
@@ -48,59 +50,48 @@
           <view class="bento-jar">
             <BudgetGaugeCard :is-over="isOver" />
           </view>
-          <view class="bento-wish">
-            <WishMiniCard />
-          </view>
         </view>
 
         <!-- 盈余横幅 -->
         <SurplusBanner />
 
-        <!-- 拍照识别记账快速入口（阶段 9） -->
-        <view class="ocr-quick card-in-1" @click="goOcr">
-          <view class="ocr-quick-icon">📷</view>
-          <view class="ocr-quick-info">
-            <text class="ocr-quick-title">拍照识别记账</text>
-            <text class="ocr-quick-sub">小票 / 截图一键入账</text>
+        <view class="bento">
+          <view class="bento-wish">
+            <WishMiniCard />
           </view>
-          <text class="ocr-quick-arrow">›</text>
         </view>
 
-        <!-- 总余额卡片（阶段 10 资产账户） -->
-        <view
-          class="total-balance-placeholder card-in-1"
-          @click="onTotalBalancePlaceholder"
-        >
-          <view class="tb-left">
-            <text class="tb-icon">🏦</text>
-            <view class="tb-info">
-              <text class="tb-label">总余额（可支配）</text>
-              <text class="tb-amount">¥{{ formatFen(disposableFen) }}</text>
+        <!-- 拍照识别记账（CTA）+ 存款池（含总余额）横排（1:2） -->
+        <view class="quick-row">
+          <!-- 拍照识别记账快速入口（阶段 9） -->
+          <view class="quick-cell ocr-quick card-in-1" @click="goOcr">
+            <image
+              :src="cdn('/app_static/images/icon_recognize.png')"
+              class="ocr-quick-icon"
+              mode="aspectFit"
+            ></image>
+            <view class="ocr-quick-info">
+              <text class="ocr-quick-title">拍照识别记账</text>
+              <text class="ocr-quick-sub">小票 / 截图一键入账</text>
             </view>
           </view>
-          <text class="tb-arrow">›</text>
-        </view>
 
-        <!-- 存款池 -->
-        <view class="savings-pool-band card-in-1">
-          <view class="pool-inner"></view>
-          <view class="glass-mid pool-row">
-            <view class="pool-icon-box">
+          <!-- 存款池（合并总余额） -->
+          <view class="quick-cell savings-pool-band card-in-1">
+            <view class="pool-inner"></view>
+            <view class="glass-mid pool-row">
               <!-- 待：根据余钱罐和小狗的图，设计一个简版的图标 -->
-              <text style="font-size: 36rpx">🐷</text>
-            </view>
-            <view class="pool-info">
-              <text class="pool-label">存款池余额</text>
-              <text class="pool-amount">¥{{ savingsPoolText }}</text>
-            </view>
-            <view class="pool-trend-box">
-              <view class="pool-trend-item">
-                <text class="trend-icon">🔥</text>
-                <text class="trend-text">连续 {{ currentStreak }} 天</text>
-              </view>
-              <view class="pool-trend" @click="goSurplusHistory">
-                <text class="trend-text">查看明细</text>
-                <text class="trend-arrow">›</text>
+              <image
+                :src="cdn('/app_static/images/icon_spare_jar_simple.png')"
+                class="pool-icon"
+                mode="aspectFit"
+              ></image>
+              <view class="pool-info">
+                <text class="pool-label">存款池余额</text>
+                <text class="pool-amount">¥{{ savingsPoolText }}</text>
+                <view class="pool-trend-item" v-if="saveStreak > 0">
+                  <text class="trend-text">连续存款 {{ saveStreak }} 天</text>
+                </view>
               </view>
             </view>
           </view>
@@ -136,6 +127,7 @@ import WishMiniCard from "./components/WishMiniCard.vue";
 import { useUserStore } from "@/stores/user.js";
 import { formatFen } from "@/utils/money.js";
 import { todayDateKey } from "@/utils/date.js";
+import { cdn } from "@/utils/cdn.js";
 
 const {
   state,
@@ -144,8 +136,9 @@ const {
   spentTodayFen,
   leftTodayFen,
   isOverLimit,
-  currentStreak,
-  surplusPoolBalanceFen,
+  savingsPoolBalanceFen,
+  saveStreak,
+  loadSaveStreakAction,
   refreshTodayDashboard,
   loadCategories,
   loadWishes,
@@ -155,11 +148,14 @@ const {
 
 const isOver = computed(() => isOverLimit.value);
 
-// 阶段 10：总余额（可支配）来自资产账户汇总
-const disposableFen = computed(() =>
-  state.assetTotals ? state.assetTotals.disposable : 0
+// 阶段 10：总余额（全资产 = 可支配 + 投资 + 特殊资产）来自资产账户汇总
+const totalBalanceFen = computed(() =>
+  state.assetTotals ? state.assetTotals.full || 0 : 0
 );
-const savingsPoolText = computed(() => formatFen(surplusPoolBalanceFen.value));
+const savingsPoolText = computed(() => formatFen(savingsPoolBalanceFen.value || 0));
+
+// 悬浮框总余额显示：直接显示完整金额
+const balanceText = computed(() => formatFen(totalBalanceFen.value));
 
 const goOnboarding = () => {
   uni.navigateTo({ url: "/pages/onboarding/onboarding" });
@@ -185,11 +181,15 @@ onMounted(async () => {
   if (!isLoggedIn.value) return;
   try {
     // 首页所需数据在 bootstrap 中已预加载；若缓存仍新鲜，直接复用避免重复请求
-    const needDashboard = !state.dashboard.loadedAt || state.dashboard.dateKey !== todayDateKey();
+    const needDashboard =
+      !state.dashboard.loadedAt || state.dashboard.dateKey !== todayDateKey();
     await Promise.all([
-      needDashboard ? refreshTodayDashboard() : Promise.resolve(state.dashboard.settlement),
+      needDashboard
+        ? refreshTodayDashboard()
+        : Promise.resolve(state.dashboard.settlement),
       loadCategories(),
-      loadWishes()
+      loadWishes(),
+      loadSaveStreakAction(),
     ]);
   } catch (err) {
     console.error("[index] 初始化看板失败", err);
@@ -225,17 +225,37 @@ const onTotalBalancePlaceholder = () => {
     /* 渐变所需通道值（与主题 --g2/--g3 同源） */
     --g2-rgb: 194, 242, 200;
     --g3-rgb: 137, 229, 156;
+    /* 顶部吸顶栏高度，用于滚动区抵消，避免内容被遮挡 */
+    --topbar-h: 230rpx;
+    /* 底部自定义 TabBar 高度（含安全区），用于滚动区留出空间 */
+    --tabbar-h: calc(110rpx + env(safe-area-inset-bottom));
 
     max-width: 750rpx;
-    min-height: 1624rpx;
+    min-height: 100vh;
     margin: 0 auto;
     overflow: hidden;
     position: relative;
     background: var(--g0);
     font-family: var(--font-family);
 
+    .topbar-sticky {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      background: linear-gradient(
+        180deg,
+        rgba(244, 252, 247, 0.92) 0%,
+        rgba(244, 252, 247, 0.78) 100%
+      );
+      backdrop-filter: blur(20rpx) saturate(180%);
+      -webkit-backdrop-filter: blur(20rpx) saturate(180%);
+    }
+
     .page-scroll {
-      height: 1624rpx;
+      height: calc(100vh - var(--tabbar-h));
+      padding-top: var(--topbar-h);
     }
 
     /* 引导未完成提示条 */
@@ -243,7 +263,7 @@ const onTotalBalancePlaceholder = () => {
       display: flex;
       align-items: center;
       gap: 16rpx;
-      margin: 20rpx var(--page-margin) 20rpx;
+      margin: 40rpx var(--page-margin) 20rpx;
       padding: 20rpx 24rpx;
       border-radius: var(--radius-badge);
       background: linear-gradient(
@@ -251,7 +271,7 @@ const onTotalBalancePlaceholder = () => {
         rgba(37, 204, 93, 0.1),
         rgba(37, 204, 93, 0.06)
       );
-      border: 2rpx solid var(--g4);
+      border: 2rpx solid var(--g3);
 
       .ot-icon {
         font-size: 36rpx;
@@ -330,7 +350,7 @@ const onTotalBalancePlaceholder = () => {
       }
       .bento-wish {
         width: 100%;
-        display: flex;
+        display: block;
         :deep(.wish-mini) {
           margin: 0;
           width: 100%;
@@ -387,6 +407,52 @@ const onTotalBalancePlaceholder = () => {
       }
     }
 
+    /* 首页快捷入口横排（1:1:2 圆角矩形） */
+    .quick-row {
+      display: flex;
+      align-items: stretch;
+      gap: 16rpx;
+      margin: var(--band-gap) var(--page-margin) 0;
+    }
+    .quick-row > view {
+      margin: 0;
+    }
+    .quick-cell {
+      flex: 1.3;
+      min-width: 0;
+      border-radius: 24rpx;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+    .quick-cell.savings-pool-band {
+      flex: 1.7;
+      border-radius: 24rpx;
+    }
+    /* OCR 作为独立大按钮，保持横向 CTA 布局并整体居中 */
+    .quick-row .ocr-quick {
+      flex-direction: row;
+      align-items: center;
+      // justify-content: center;
+      gap: 18rpx;
+      background: var(--g1);
+      border: 2rpx solid var(--g1);
+      position: relative;
+    }
+    .quick-row .ocr-quick .ocr-quick-title {
+      color: var(--ink);
+    }
+    .quick-row .ocr-quick .ocr-quick-sub {
+      margin-top: 12rpx;
+      color: var(--ink2);
+    }
+    .quick-row .ocr-quick .ocr-quick-arrow {
+      color: var(--g5);
+    }
+    .quick-row .ocr-quick-icon {
+      width: 150rpx;
+      height: 110rpx;
+    }
+
     /* 拍照识别记账快速入口（阶段 9） */
     .ocr-quick {
       margin: var(--band-gap) var(--page-margin) 0;
@@ -397,24 +463,17 @@ const onTotalBalancePlaceholder = () => {
       cursor: pointer;
 
       .ocr-quick-icon {
-        font-size: 36rpx;
-        width: 72rpx;
-        height: 72rpx;
-        border-radius: 22rpx;
-        background: linear-gradient(
-          135deg,
-          rgba(194, 242, 200, 0.5),
-          rgba(137, 229, 156, 0.32)
-        );
-        border: 2rpx solid rgba(137, 229, 156, 0.35);
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        width: 150rpx;
+        height: 110rpx;
+        position: absolute;
+        bottom: 10rpx;
+        right: 10rpx;
+        z-index: 0;
       }
       .ocr-quick-info {
-        flex: 1;
         display: flex;
         flex-direction: column;
+        z-index: 5;
       }
       .ocr-quick-title {
         font-size: 26rpx;
@@ -438,23 +497,23 @@ const onTotalBalancePlaceholder = () => {
       background: rgba(255, 255, 255, 0.65);
       backdrop-filter: blur(32rpx) saturate(1.3);
       -webkit-backdrop-filter: blur(32rpx) saturate(1.3);
-      border: 1px solid rgba(255, 255, 255, 0.84);
+      border: 2rpx solid rgba(37, 204, 93, 0.55);
       border-radius: 36rpx;
       box-shadow: 0 4rpx 24rpx rgba(37, 204, 93, 0.06),
         inset 0 2rpx 0 rgba(255, 255, 255, 0.9);
       position: relative;
 
-      .pool-inner {
-        width: 40rpx;
-        height: 40rpx;
-        border-radius: 14rpx 0 0 0;
-        border-top: 5rpx solid var(--g5);
-        border-left: 5rpx solid var(--g5);
-        position: absolute;
-        top: 5rpx;
-        left: 5rpx;
-        z-index: 10;
-      }
+      // .pool-inner {
+      //   width: 40rpx;
+      //   height: 40rpx;
+      //   border-radius: 14rpx 0 0 0;
+      //   border-top: 5rpx solid var(--g5);
+      //   border-left: 5rpx solid var(--g5);
+      //   position: absolute;
+      //   top: 5rpx;
+      //   left: 5rpx;
+      //   z-index: 10;
+      // }
 
       .pool-row {
         padding: 28rpx 32rpx;
@@ -462,28 +521,22 @@ const onTotalBalancePlaceholder = () => {
         flex-direction: row;
         align-items: center;
         gap: 24rpx;
+        position: relative;
       }
     }
 
-    .pool-icon-box {
-      width: 80rpx;
-      height: 80rpx;
-      border-radius: var(--radius-icon);
-      background: linear-gradient(
-        135deg,
-        rgba(var(--g2-rgb), 0.5),
-        rgba(var(--g3-rgb), 0.4)
-      );
-      border: 2rpx solid rgba(var(--g3-rgb), 0.35);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
+    .pool-icon {
+      width: 150rpx;
+      height: 116rpx;
+      position: absolute;
+      bottom: 10rpx;
+      right: 10rpx;
+      z-index: 0;
     }
-
     .pool-info {
       flex: 1;
       min-width: 0;
+      z-index: 5;
     }
 
     .pool-label {
@@ -501,27 +554,70 @@ const onTotalBalancePlaceholder = () => {
       line-height: 1;
     }
 
+    /* 总余额悬浮框（参考 BudgetGaugeCard.panel-float 毛玻璃风格） */
+    .pool-balance-float {
+      position: absolute;
+      right: 10rpx;
+      bottom: 10rpx;
+      z-index: 10;
+      min-width: 0;
+      width: auto;
+      max-width: 300rpx;
+      padding: 16rpx 22rpx 14rpx;
+      border-radius: 32rpx;
+      background: linear-gradient(
+        160deg,
+        rgba(255, 255, 255, 0.2) 0%,
+        rgba(255, 255, 255, 0.8) 100%
+      );
+      backdrop-filter: blur(44px);
+      -webkit-backdrop-filter: blur(44px);
+      border: 2rpx solid rgba(255, 255, 255, 0.8);
+      cursor: pointer;
+
+      .pbf-inner {
+        position: relative;
+
+        .pbf-label {
+          font-size: 20rpx;
+          color: var(--ink4);
+          font-weight: 500;
+          margin-bottom: 2rpx;
+          display: block;
+        }
+        .pbf-amount {
+          font-size: 40rpx;
+          font-weight: 900;
+          color: var(--g5);
+          letter-spacing: -2rpx;
+          line-height: 1.18;
+          max-width: 100%;
+          overflow-wrap: anywhere;
+          word-break: break-word;
+        }
+      }
+    }
+    .pool-trend-item {
+      display: flex;
+      align-items: center;
+      gap: 6rpx;
+
+      .trend-icon {
+        font-size: 22rpx;
+      }
+
+      .trend-text {
+        font-size: 20rpx;
+        font-weight: 500;
+        color: var(--g5);
+      }
+    }
     .pool-trend-box {
       display: flex;
       flex-direction: column;
       align-items: flex-end;
       gap: 8rpx;
-
-      .pool-trend-item {
-        display: flex;
-        align-items: center;
-        gap: 6rpx;
-
-        .trend-icon {
-          font-size: 22rpx;
-        }
-
-        .trend-text {
-          font-size: 20rpx;
-          font-weight: 500;
-          color: var(--g4);
-        }
-      }
+      z-index: 5;
 
       .pool-trend {
         display: flex;
@@ -584,7 +680,7 @@ const onTotalBalancePlaceholder = () => {
     }
 
     .page-bottom-gap {
-      height: 48rpx;
+      height: 120rpx;
     }
   }
 }

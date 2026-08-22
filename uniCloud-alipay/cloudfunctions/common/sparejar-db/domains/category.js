@@ -141,6 +141,41 @@ const SETTINGS_WRITABLE = [
  * @param {Record<string, unknown>} patch
  */
 
+/**
+ * 按 user_settings 的限额口径派生月/年挑战目标（分）。与 transaction.js:derivePeriodTarget、challenge.js:resolvePeriodLimit 算法保持一致。
+ * dim='day' 时无月/年目标（返回 0）。
+ */
+function derivePeriodTarget(settings, type, periodKey) {
+  if (!settings) return 0
+  const dim = settings.limit_dim || 'day'
+  const limitAmount = settings.limit_amount_fen || 0
+  const overrides = settings.overrides || []
+  if (type === 'monthly') {
+    if (dim === 'month') {
+      const mo = overrides.find(o => o.type === 'month' && o.key === periodKey)
+      return mo ? mo.amount_fen : limitAmount
+    }
+    if (dim === 'year') {
+      const mo = overrides.find(o => o.type === 'month' && o.key === periodKey)
+      return mo ? mo.amount_fen : Math.floor(limitAmount / 12)
+    }
+    return 0
+  }
+  if (dim === 'year') return limitAmount
+  return 0
+}
+
+// 计算某周期之后的下一周期键（用于「下月/下年生效」回写）
+function nextPeriodKey(type, fromKey) {
+  if (type === 'monthly') {
+    const [y, m] = fromKey.split('-').map(Number)
+    const d = new Date(y, m, 1) // m 为 1-based，构造下月 1 号
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  }
+  // yearly
+  return String(Number(fromKey) + 1)
+}
+
 async function updateUserSettings(userId, patch = {}) {
   const db = getDb()
   const settings = await getDocByUser('user_settings', userId)
@@ -152,6 +187,21 @@ async function updateUserSettings(userId, patch = {}) {
     }
   }
   const res = await upsertByUnique('user_settings', { user_id: userId }, updateDoc)
+
+  // 方案 B（修订）：首页限额变更 → 同步「当前年」月/年挑战目标到 challenge_records。
+  // 逻辑集中在 challenge.syncPeriodTargets（按天 getEffectiveBaseLimit 求和），此处延迟 require 避免循环依赖。
+  // 仅当影响挑战目标的字段被修改时回写。
+  const affectsChallenge = ['limit_dim', 'limit_amount_fen', 'overrides', 'pending_base_limit', 'pending_amount_fen', 'pending_limit_dim', 'pending_year_strategy', 'pending_month_strategy', 'limit_effective_date'].some((k) => k in patch)
+  if (affectsChallenge) {
+    try {
+      const { syncPeriodTargets } = require('./challenge')
+      await syncPeriodTargets(userId, { year: new Date().getFullYear() })
+    } catch (err) {
+      // 挑战目标回写失败不应阻断限额保存主流程
+      console.error('[updateUserSettings] syncPeriodTargets 失败', err && (err.stack || err.message || err))
+    }
+  }
+
   return res.__created ? { created: true, ...updateDoc } : { updated: true, ...updateDoc }
 }
 

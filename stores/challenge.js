@@ -12,6 +12,7 @@ import {
   updateOnboarding,
   recordSubscribeAuth,
   sendSubscribeMessage,
+  syncPeriodTargets,
   isSparejarApiError
 } from './core/api.js'
 
@@ -80,6 +81,23 @@ export async function loadLimitStatus(dim, key) {
     return rows && rows[0] ? rows[0] : null
   } catch (err) {
     console.error('[store] loadLimitStatus 失败', err)
+    return null
+  }
+}
+
+/**
+ * 同步当前年（或指定年）月/年挑战目标上限到 challenge_records。
+ * 进入挑战页 / 改限额时调用，保证月卡、年卡的「目标上限 / 剩余可用」有真实数值。
+ * @param {number|string} [year] 指定年份；默认当前年
+ */
+export async function syncPeriodTargetsAction(year) {
+  if (!state.uid) return null
+  try {
+    const res = await syncPeriodTargets(year)
+    const rows = pickDbRows(res)
+    return rows && rows[0] ? rows[0] : null
+  } catch (err) {
+    console.error('[store] syncPeriodTargets 失败', err)
     return null
   }
 }

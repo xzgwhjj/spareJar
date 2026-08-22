@@ -3,7 +3,10 @@
     <view class="topbar-left">
       <view class="topbar-greeting">
         <!-- 待：替换成小狗版天气图，根据天气情况显示不同图标 -->
-        <image :src="cdn('/app_static/images/icon_sunny.png')" class="greeting-icon"></image>
+        <image
+          :src="cdn('/app_static/images/icon_sunny.png')"
+          class="greeting-icon"
+        ></image>
         <text class="greeting-text">第{{ currentStreak }}天</text>
       </view>
       <view class="topbar-date">
@@ -13,29 +16,31 @@
       </view>
     </view>
 
-
     <view class="topbar-right">
       <view class="avatar-btn" :class="{ guest: isGuest }" @tap="onAvatarClick">
         <!-- 待：替换成小狗版头像图标，根据是否登录显示不同图标 -->
-        <image :src="cdn('/app_static/images/icon_avatar.png')" class="avatar-icon" mode="aspectFit">
+        <image
+          :src="cdn('/app_static/images/icon_avatar.png')"
+          class="avatar-icon"
+          mode="aspectFit"
+        >
         </image>
       </view>
     </view>
-      
-</view>
+  </view>
 </template>
 
 <script setup>
-import { useUserStore } from '@/stores/user.js';
-import { cdn } from '@/utils/cdn.js';
-import { onMounted, ref, computed } from 'vue';
-import { todayDateKey, parseDateKey } from '@/utils/date.js';
+import { useUserStore } from "@/stores/user.js";
+import { cdn } from "@/utils/cdn.js";
+import { onMounted, ref, computed } from "vue";
+import { todayDateKey, parseDateKey } from "@/utils/date.js";
 
-defineEmits(['refresh']);
+defineEmits(["refresh"]);
 
 const { isLoggedIn, isGuest, currentStreak } = useUserStore();
 
-const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+const WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 const dateText = computed(() => {
   const d = parseDateKey(todayDateKey());
   return `${d.getMonth() + 1}月${d.getDate()}日`;
@@ -52,7 +57,7 @@ function resolveTopPadding() {
       const gap = uni.upx2px(16);
       return `${menuButton.bottom + gap}px`;
     }
-  } catch (_) { }
+  } catch (_) {}
 
   const { statusBarHeight = 0 } = uni.getSystemInfoSync();
   return `${statusBarHeight + uni.upx2px(88)}px`;
@@ -66,9 +71,9 @@ onMounted(() => {
 
 function onAvatarClick() {
   if (isLoggedIn.value) {
-    uni.navigateTo({ url: '/pages/profile/profile' });
+    uni.navigateTo({ url: "/pages/profile/profile" });
   } else {
-    uni.navigateTo({ url: '/pages/login/login' });
+    uni.navigateTo({ url: "/pages/login/login" });
   }
 }
 </script>
@@ -80,7 +85,7 @@ function onAvatarClick() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 36rpx 0;
+  padding: 0 36rpx 20rpx;
 }
 
 .topbar-left {

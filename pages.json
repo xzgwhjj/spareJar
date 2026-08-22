@@ -29,9 +29,23 @@
       }
     },
     {
+      "path": "pages/challenge/drill",
+      "style": {
+        "navigationBarTitleText": "挑战下钻",
+        "navigationStyle": "custom"
+      }
+    },
+    {
       "path": "pages/wish/wish",
       "style": {
         "navigationBarTitleText": "心愿",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/wish/detail",
+      "style": {
+        "navigationBarTitleText": "心愿详情",
         "navigationStyle": "custom"
       }
     },

@@ -61,12 +61,22 @@ async function recalculateDailySettlement(userId, dateKey) {
     consumed,
     consumed_from_base: consumedFromBase,
     consumed_from_surplus: consumedFromSurplus,
+    // 挑战口径当日消费（与限额口径独立，退款始终冲减），持久化以便月/年挑战增量累加（替代原 challenge_records.daily）
+    challenge_consumed: challengeConsumed,
     surplus,
     over_amount: overAmount,
     available_start: availableStart,
     available_end: availableEnd,
     is_over_limit: isOverLimit
   }
+
+  // 读旧文档，获取本次重算前的挑战口径消费，作为月/年挑战增量累加的基准（delta = 新 - 旧）
+  const oldRes = await db.collection('daily_settlements').where({
+    user_id: userId, date_key: dateKey
+  }).limit(1).get()
+  const prevChallengeConsumed = (oldRes.data && oldRes.data[0])
+    ? (oldRes.data[0].challenge_consumed || 0)
+    : 0
 
   const doc = await upsertByUnique(
     'daily_settlements',
@@ -80,69 +90,85 @@ async function recalculateDailySettlement(userId, dateKey) {
       created_at: nowTs()
     }
   )
-  return { ...doc, challenge_consumed: challengeConsumed }
+  return { ...doc, challenge_consumed: challengeConsumed, prev_challenge_consumed: prevChallengeConsumed }
 }
 
 
-async function updateChallengeForDate(userId, dateKey, challengeConsumed, baseLimit) {
+/**
+ * 按 user_settings 的限额口径派生月/年挑战目标（分）。与 challenge.js:resolvePeriodLimit 算法保持一致，
+ * 实现「首页限额 → 挑战目标」的写入派生。dim='day' 时无月/年目标（返回 0）。
+ * @param {object} settings  user_settings 文档
+ * @param {'monthly'|'yearly'} type
+ * @param {string} periodKey  monthly → 'YYYY-MM'；yearly → 'YYYY'
+ */
+function derivePeriodTarget(settings, type, periodKey) {
+  if (!settings) return 0
+  const dim = settings.limit_dim || 'day'
+  const limitAmount = settings.limit_amount_fen || 0
+  const overrides = settings.overrides || []
+  if (type === 'monthly') {
+    if (dim === 'month') {
+      const mo = overrides.find(o => o.type === 'month' && o.key === periodKey)
+      return mo ? mo.amount_fen : limitAmount
+    }
+    if (dim === 'year') {
+      const mo = overrides.find(o => o.type === 'month' && o.key === periodKey)
+      return mo ? mo.amount_fen : Math.floor(limitAmount / 12)
+    }
+    return 0 // dim==='day' 无月目标
+  }
+  if (dim === 'year') return limitAmount
+  return 0
+}
+
+async function updateChallengeForDate(userId, dateKey, challengeConsumed, baseLimit, prevChallengeConsumed = 0) {
   const db = getDb()
   const monthKey = dateKey.slice(0, 7)
   const yearKey = dateKey.slice(0, 4)
   // 挑战口径消费：退款已冲减（「退款不计入挑战」），按 include_in_challenge 统计
   const isSuccess = challengeConsumed <= baseLimit
 
-  const dailyRes = await db.collection('challenge_records').where({
-    user_id: userId,
-    challenge_type: 'daily',
-    period_key: dateKey
-  }).limit(1).get()
-
-  // 当日挑战消费变化量（delta）：用于月/年挑战增量累加，避免每次交易变更重复累加当日消费
-  const prevDailyConsumed = (dailyRes.data && dailyRes.data[0]) ? (dailyRes.data[0].consumed_amount || 0) : 0
-  const delta = challengeConsumed - prevDailyConsumed
-
-  const dailyPayload = {
-    consumed_amount: challengeConsumed,
-    base_limit_snapshot: baseLimit,
-    is_success: isSuccess,
-    status: 'completed',
-    completed_at: nowTs(),
-    updated_at: nowTs()
-  }
-  await upsertByUnique(
-    'challenge_records',
-    { user_id: userId, challenge_type: 'daily', period_key: dateKey },
-    dailyPayload,
-    { created_at: nowTs() }
-  )
+  // 当日挑战消费变化量（delta）：用于月/年挑战增量累加，避免每次交易变更重复累加当日消费。
+  // prevChallengeConsumed 由 recalculateDailySettlement 在重算前捕获并传入（挑战口径当日消费），
+  // 不再写 challenge_records.daily（日维度统一由 daily_settlements 承载）。
+  const delta = challengeConsumed - prevChallengeConsumed
 
   // 月/年挑战：累加当日挑战消费变化量（delta），退款冲减会使 delta 为负、自然冲减挑战消费
+  // 目标上限按当前生效的 user_settings 派生写入（方案 B：首页限额 → 挑战目标落库），
+  // 修复历史「target_amount=0 不统计」问题；已有记录若 target 仍为 0 则回填。
+  const chSettings = await getDocByUser('user_settings', userId)
   for (const [type, key] of [['monthly', monthKey], ['yearly', yearKey]]) {
+    const derivedTarget = derivePeriodTarget(chSettings, type, key)
     const res = await db.collection('challenge_records').where({
       user_id: userId,
       challenge_type: type,
       period_key: key
     }).limit(1).get()
     if (res.data && res.data[0]) {
-      const newConsumed = Math.max(0, (res.data[0].consumed_amount || 0) + delta)
-      const target = res.data[0].target_amount || 0
+      const rec = res.data[0]
+      const newConsumed = Math.max(0, (rec.consumed_amount || 0) + delta)
+      // 目标：已有真实目标（>0）优先；否则用派生值（含 0 回填为派生值）
+      const target = rec.target_amount > 0 ? rec.target_amount : derivedTarget
       const isMsuccess = target > 0 ? newConsumed <= target : false
-      await db.collection('challenge_records').doc(res.data[0]._id).update({
+      const patch = {
         consumed_amount: db.command.inc(delta),
         is_success: isMsuccess,
         status: isMsuccess ? 'completed' : 'active',
         updated_at: nowTs()
-      })
+      }
+      // 回填：原本 target=0（未设目标）的记录，按首页限额派生写入真实目标
+      if (rec.target_amount === 0 && derivedTarget > 0) patch.target_amount = derivedTarget
+      await db.collection('challenge_records').doc(rec._id).update(patch)
     } else {
-      // 记录不存在则创建（首次触发该周期交易时），consumed_amount 初始化为当日挑战消费变化量
+      // 记录不存在则创建（首次触发该周期交易时），target 直接写入派生值（不再写死 0）
       try {
         await db.collection('challenge_records').add({
           user_id: userId,
           challenge_type: type,
           period_key: key,
-          target_amount: 0,
+          target_amount: derivedTarget,
           consumed_amount: Math.max(0, delta),
-          is_success: false,
+          is_success: derivedTarget > 0 ? Math.max(0, delta) <= derivedTarget : false,
           status: 'active',
           created_at: nowTs(),
           updated_at: nowTs()
@@ -209,7 +235,7 @@ async function runDailySettlement(userId, dateKey, options = {}) {
   }
 
   const settlement = await recalculateDailySettlement(userId, dateKey)
-  await updateChallengeForDate(userId, dateKey, settlement.challenge_consumed != null ? settlement.challenge_consumed : settlement.consumed, settlement.base_limit)
+  await updateChallengeForDate(userId, dateKey, settlement.challenge_consumed != null ? settlement.challenge_consumed : settlement.consumed, settlement.base_limit, settlement.prev_challenge_consumed || 0)
 
   const settings = await getDocByUser('user_settings', userId)
   let allocationResult = null
@@ -639,7 +665,7 @@ async function createTransaction(userId, data) {
   }
 
   // 新增交易（含退款）需同步更新挑战进度；挑战口径消费退款始终冲减
-  await updateChallengeForDate(userId, dateKey, settlement.challenge_consumed != null ? settlement.challenge_consumed : settlement.consumed, settlement.base_limit)
+  await updateChallengeForDate(userId, dateKey, settlement.challenge_consumed != null ? settlement.challenge_consumed : settlement.consumed, settlement.base_limit, settlement.prev_challenge_consumed || 0)
 
   // 超额提醒订阅消息（频控在 sendSubscribeMessage 内；配置缺失时静默跳过）
   if (settlement && settlement.consumed > settlement.base_limit) {
@@ -692,7 +718,7 @@ async function softDeleteTransaction(userId, transactionId) {
   }
 
   const settlement = await recalculateDailySettlement(userId, tx.date_key)
-  await updateChallengeForDate(userId, tx.date_key, settlement.challenge_consumed != null ? settlement.challenge_consumed : settlement.consumed, settlement.base_limit)
+  await updateChallengeForDate(userId, tx.date_key, settlement.challenge_consumed != null ? settlement.challenge_consumed : settlement.consumed, settlement.base_limit, settlement.prev_challenge_consumed || 0)
 
   return { deleted: true, transaction_id: transactionId }
 }
@@ -734,7 +760,7 @@ async function updateTransaction(userId, transactionId, data) {
     })
   }
   const oldSettlement = await recalculateDailySettlement(userId, oldTx.date_key)
-  await updateChallengeForDate(userId, oldTx.date_key, oldSettlement.challenge_consumed != null ? oldSettlement.challenge_consumed : oldSettlement.consumed, oldSettlement.base_limit)
+  await updateChallengeForDate(userId, oldTx.date_key, oldSettlement.challenge_consumed != null ? oldSettlement.challenge_consumed : oldSettlement.consumed, oldSettlement.base_limit, oldSettlement.prev_challenge_consumed || 0)
 
   // 2) 计算新值（未传字段沿用旧值）
   const newType = data.type || oldTx.type
@@ -793,11 +819,11 @@ async function updateTransaction(userId, transactionId, data) {
 
   // 重算结算 + 挑战（新日期）
   const finalSettlement = await recalculateDailySettlement(userId, dateKey)
-  await updateChallengeForDate(userId, dateKey, finalSettlement.challenge_consumed != null ? finalSettlement.challenge_consumed : finalSettlement.consumed, finalSettlement.base_limit)
+  await updateChallengeForDate(userId, dateKey, finalSettlement.challenge_consumed != null ? finalSettlement.challenge_consumed : finalSettlement.consumed, finalSettlement.base_limit, finalSettlement.prev_challenge_consumed || 0)
   // 跨日编辑：旧日期也需重算挑战
   if (oldTx.date_key !== dateKey) {
     const oldReSettlement = await recalculateDailySettlement(userId, oldTx.date_key)
-    await updateChallengeForDate(userId, oldTx.date_key, oldReSettlement.challenge_consumed != null ? oldReSettlement.challenge_consumed : oldReSettlement.consumed, oldReSettlement.base_limit)
+    await updateChallengeForDate(userId, oldTx.date_key, oldReSettlement.challenge_consumed != null ? oldReSettlement.challenge_consumed : oldReSettlement.consumed, oldReSettlement.base_limit, oldReSettlement.prev_challenge_consumed || 0)
   }
 
   return { transaction_id: transactionId, ...oldTx, ...updateDoc }

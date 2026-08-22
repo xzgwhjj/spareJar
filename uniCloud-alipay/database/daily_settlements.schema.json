@@ -45,6 +45,12 @@
       "minimum": 0,
       "defaultValue": 0
     },
+    "challenge_consumed": {
+      "bsonType": "int",
+      "description": "挑战口径当日消费(分，退款始终冲减)",
+      "minimum": 0,
+      "defaultValue": 0
+    },
     "consumed_from_base": {
       "bsonType": "int",
       "description": "从基准扣(分)",

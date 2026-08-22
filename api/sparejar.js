@@ -178,7 +178,8 @@ export const ACTIONS = Object.freeze({
   UNLINK_MEMBER: 'unlinkMember',
   GET_MEMBERS: 'getMembers',
   GET_LEDGER_MEMBERS: 'getLedgerMembers',
-  GET_SURPLUS_POOL_LOGS: 'getSurplusPoolLogs'
+  GET_SURPLUS_POOL_LOGS: 'getSurplusPoolLogs',
+  SYNC_PERIOD_TARGETS: 'syncPeriodTargets'
 })
 
 export class SparejarApiError extends Error {
@@ -627,6 +628,15 @@ export function getLimitStatus(dim, key) {
  */
 export function setChallengeTarget(type, periodKey, targetAmount, ledgerId) {
   return callSparejar(ACTIONS.SET_CHALLENGE_TARGET, { type, period_key: periodKey, target_amount: targetAmount, ledger_id: ledgerId })
+}
+
+/**
+ * 同步「当前年」月/年挑战目标上限到 challenge_records（按天生效日限额求和）。
+ * 也可传 year 做一次性回填历史年。
+ * @param {number|string} [year] 指定年份；默认当前年
+ */
+export function syncPeriodTargets(year) {
+  return callSparejar(ACTIONS.SYNC_PERIOD_TARGETS, year != null ? { year: Number(year) } : {})
 }
 
 /** 读取成就定义并合并用户解锁状态。 */

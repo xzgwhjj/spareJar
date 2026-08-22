@@ -52,6 +52,28 @@
       "bsonType": "int",
       "description": "日限额快照(分)"
     },
+    "limit_start": {
+      "bsonType": "string",
+      "description": "当月日限额生效起始日(YYYY-MM-DD)，无限额则为空",
+      "maxLength": 10
+    },
+    "limit_end": {
+      "bsonType": "string",
+      "description": "当月日限额生效结束日(YYYY-MM-DD)，无限额则为空",
+      "maxLength": 10
+    },
+    "limit_days": {
+      "bsonType": "int",
+      "description": "当月处于日限额生效的天数",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "limit_months": {
+      "bsonType": "int",
+      "description": "当年处于日限额生效的月数（仅 yearly 记录）",
+      "minimum": 0,
+      "defaultValue": 0
+    },
     "ledger_id": {
       "bsonType": "string",
       "description": "FK→ledgers._id",

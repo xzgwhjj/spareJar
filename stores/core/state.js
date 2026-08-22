@@ -48,6 +48,7 @@ function createInitialState() {
     streak: null,
     surplusPool: null,
     savingsPool: null,
+    savingsPoolLogs: [],
     challenges: null,
     achievements: [],
     defaultLedgerId: '',
