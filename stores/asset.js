@@ -31,8 +31,11 @@ export async function loadAssetAccounts() {
   }
   try {
     const res = await getAssetAccounts()
-    const rows = pickDbRows(res)
-    state.assets = Array.isArray(rows) ? rows : []
+    // getAssetAccounts 返回 { accounts, totals }；兼容 pickDbRows 解包失败的情况
+    const accounts = res && Array.isArray(res.accounts)
+      ? res.accounts
+      : (Array.isArray(res) ? res : [])
+    state.assets = accounts
     state.assetTotals = (res && res.totals) || null
   } catch (err) {
     console.error('[store] 加载资产账户失败', err)
@@ -106,3 +109,6 @@ export async function investmentTransactionAction(holdingId, transType, amountYu
 }
 
 export const assetTotals = computed(() => state.assetTotals)
+export const assetLiabilities = computed(() => (state.assetTotals && state.assetTotals.liabilities) || 0)
+export const assetInvestGain = computed(() => (state.assetTotals && state.assetTotals.investGain) || 0)
+export const assetNet = computed(() => (state.assetTotals && state.assetTotals.net) || 0)

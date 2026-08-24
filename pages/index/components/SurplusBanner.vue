@@ -5,17 +5,32 @@
       <view class="surplus-content-glow" />
 
       <!-- 左上：a 图片 + b 标签 -->
-      <image class="surplus-avatar" :src="cdn('/app_static/images/icon_surplus.png')" mode="aspectFit" />
+      <image
+        class="surplus-avatar"
+        :src="cdn('/app_static/images/icon_surplus.png')"
+        mode="aspectFit"
+      />
 
       <!-- c / d / f + e：小圆角矩形 + 大圆角矩形 -->
       <view class="surplus-folder">
         <view class="alloc-tab-row">
-          <view class="alloc-tab-spacer">
-          </view>
+          <view class="alloc-tab-spacer"> </view>
           <view class="alloc-tabs">
-            <view v-for="(c, i) in QUICK_ALLOC" :key="c.id" class="alloc-tab" :class="{ chosen: applied === c.id, loading: applying }"
+            <view
+              v-for="(c, i) in QUICK_ALLOC"
+              :key="c.id"
+              class="alloc-tab"
+              :class="{ chosen: applied === c.id, loading: applying }"
               @tap="handleChip(c.id)"
-              :style="{ borderRadius: i === 0 ? '20rpx 8rpx 0 20rpx' : i === QUICK_ALLOC.length - 1 ? '8rpx 20rpx 0 8rpx' : '8rpx 8rpx 0 8rpx' }">
+              :style="{
+                borderRadius:
+                  i === 0
+                    ? '20rpx 8rpx 0 20rpx'
+                    : i === QUICK_ALLOC.length - 1
+                    ? '8rpx 20rpx 0 8rpx'
+                    : '8rpx 8rpx 0 8rpx',
+              }"
+            >
               <text class="alloc-tab-label">{{ c.label }}</text>
               <view class="surplus-tab-indicator"></view>
             </view>
@@ -28,7 +43,11 @@
             <view class="surplus-main">
               <view class="surplus-title-row">
                 <view class="surplus-dot" />
-                <text class="surplus-title-text">{{ yesterdaySurplusFen > 0 ? '昨日结余待确认（24h内选择）' : '昨日结余已分配' }}</text>
+                <text class="surplus-title-text">{{
+                  yesterdaySurplusFen > 0
+                    ? "昨日结余待确认（24h内选择）"
+                    : "昨日结余已分配"
+                }}</text>
               </view>
               <view class="surplus-amount-row">
                 <text class="surplus-plus">待滚入次日限额 ＋¥</text>
@@ -43,22 +62,28 @@
               </view>
             </view>
           </view>
-          <view v-if="appliedChip" class="surplus-applied"
-            :style="{ background: appliedChip.color + '18', borderColor: appliedChip.color + '40', color: appliedChip.color }">
+          <view
+            v-if="appliedChip"
+            class="surplus-applied"
+            :style="{
+              background: appliedChip.color + '18',
+              borderColor: appliedChip.color + '40',
+              color: appliedChip.color,
+            }"
+          >
             {{ appliedChip.emoji }} 已设为{{ appliedChip.label }} ✓
           </view>
         </view>
       </view>
     </view>
-      
-</view>
+  </view>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
-import { cdn } from '@/utils/cdn.js';
-import { useUserStore } from '@/stores/user.js';
-import { formatFen } from '@/utils/money.js';
+import { useUserStore } from "@/stores/user.js";
+import { cdn } from "@/utils/cdn.js";
+import { formatFen } from "@/utils/money.js";
+import { computed, ref } from "vue";
 
 const { yesterdaySurplusFen, state, confirmSurplusRolloverAction } = useUserStore();
 const yesterdaySurplusText = computed(() => formatFen(yesterdaySurplusFen.value));
@@ -68,13 +93,34 @@ const TAB_CYCLE_S = 12;
 const TAB_SLOT_S = TAB_CYCLE_S / 3;
 // 待：emoji需要重新设计
 const QUICK_ALLOC = [
-  { id: 'pool', emoji: '💧', label: '存款池', hint: '长期', color: '#93c5fd', glow: 'rgba(147, 197, 253, 0.35)' },
-  { id: 'carry', emoji: '🔄', label: '次日', hint: '滚入', color: '#89e59c', glow: 'rgba(137, 229, 155, 0.35)' },
-  { id: 'wish', emoji: '⭐', label: '心愿', hint: '攒', color: '#fcd34d', glow: 'rgba(252, 211, 77, 0.35)' },
+  {
+    id: "pool",
+    emoji: "💧",
+    label: "存款池",
+    hint: "长期",
+    color: "#93c5fd",
+    glow: "rgba(147, 197, 253, 0.35)",
+  },
+  {
+    id: "carry",
+    emoji: "🔄",
+    label: "次日",
+    hint: "滚入",
+    color: "#89e59c",
+    glow: "rgba(137, 229, 155, 0.35)",
+  },
+  {
+    id: "wish",
+    emoji: "⭐",
+    label: "心愿",
+    hint: "攒",
+    color: "#fcd34d",
+    glow: "rgba(252, 211, 77, 0.35)",
+  },
 ];
 
-const applied = ref('');
-const appliedChip = computed(() => QUICK_ALLOC.find(c => c.id === applied.value));
+const applied = ref("");
+const appliedChip = computed(() => QUICK_ALLOC.find((c) => c.id === applied.value));
 const applying = ref(false);
 
 // 三个快捷 tab 直接确认/转走次日待滚入结余
@@ -87,14 +133,14 @@ const handleChip = async (id) => {
   }
   applying.value = true;
   try {
-    if (id === 'carry') {
-      await confirmSurplusRolloverAction('confirm');
-    } else if (id === 'pool') {
-      await confirmSurplusRolloverAction('other', { target_type: 'savings_pool' });
-    } else if (id === 'wish') {
+    if (id === "carry") {
+      await confirmSurplusRolloverAction("confirm");
+    } else if (id === "pool") {
+      await confirmSurplusRolloverAction("other", { target_type: "savings_pool" });
+    } else if (id === "wish") {
       const w = (state.wishes || [])[0];
-      await confirmSurplusRolloverAction('other', {
-        target_type: 'wish',
+      await confirmSurplusRolloverAction("other", {
+        target_type: "wish",
         wish_id: w ? w._id : undefined,
       });
     }
@@ -105,16 +151,15 @@ const handleChip = async (id) => {
 };
 
 const allocTabStyle = (c, index) => ({
-  '--tab-color': c.color,
-  '--tab-glow': c.glow,
+  "--tab-color": c.color,
+  "--tab-glow": c.glow,
   animationDelay: `${index * TAB_SLOT_S}s`,
 });
 
-const goAlloc = () => uni.navigateTo({ url: '/pages/surplus-alloc/surplus-alloc' });
+const goAlloc = () => uni.navigateTo({ url: "/pages/surplus-alloc/surplus-alloc" });
 </script>
 
 <style scoped lang="scss">
-
 /* ===== SCSS 变量 ===== */
 $radius-card: 48rpx;
 
@@ -125,13 +170,17 @@ $radius-card: 48rpx;
 
 .surplus-card {
   border-radius: $radius-card;
-  background: linear-gradient(160deg, rgba(37, 204, 93, 0.09) 0%, rgba(79, 217, 116, 0.05) 35%, rgba(255, 255, 255, 0.95) 75%, #ffffff 100%);
+  background: linear-gradient(
+    160deg,
+    rgba(37, 204, 93, 0.09) 0%,
+    rgba(79, 217, 116, 0.05) 35%,
+    rgba(255, 255, 255, 0.95) 75%,
+    #ffffff 100%
+  );
   border: 1.5px solid rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(32px) saturate(1.5);
   -webkit-backdrop-filter: blur(32px) saturate(1.5);
-  box-shadow:
-    0 10rpx 40rpx rgba(var(--g5), 0.1),
-    0 2rpx 10rpx rgba(0, 0, 0, 0.04),
+  box-shadow: 0 10rpx 40rpx rgba(var(--g5), 0.1), 0 2rpx 10rpx rgba(0, 0, 0, 0.04),
     inset 0 1.5rpx 0 rgba(255, 255, 255, 0.96);
   overflow: visible;
   position: relative;
@@ -156,7 +205,8 @@ $radius-card: 48rpx;
   height: 81rpx;
   position: absolute;
   top: 30rpx;
-  left: 20rpx;
+  left: 50rpx;
+  z-index: 20;
 }
 
 /* ── c / d / f + e ── */
@@ -190,10 +240,16 @@ $radius-card: 48rpx;
   width: 144rpx;
   height: 72rpx;
   border-radius: 20rpx;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 2rpx;
   padding: 8rpx 12rpx;
-  background: rgba(255, 255, 255, 0.72); backdrop-filter: blur(32rpx); -webkit-backdrop-filter: blur(32rpx); border: 2rpx solid rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(32rpx);
+  -webkit-backdrop-filter: blur(32rpx);
+  border: 2rpx solid rgba(255, 255, 255, 0.7);
   border: 3rpx solid rgba(37, 204, 93, 0.15);
   border-bottom: none;
   box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.04), inset 0 2rpx 0 rgba(255, 255, 255, 0.88);
@@ -205,7 +261,7 @@ $radius-card: 48rpx;
   &.chosen {
     // background: rgba(255, 255, 255, 0.88);
     background: rgba(255, 255, 255, 0.92);
-    border-color: rgba(37, 204, 93, 0.30);
+    border-color: rgba(37, 204, 93, 0.3);
     border-bottom: 3rpx solid rgba(255, 255, 255, 0.92);
     z-index: 3;
 
@@ -231,7 +287,6 @@ $radius-card: 48rpx;
  * 在各自 4s 窗口内：上升(0-10%) → 停住(10-18%) → 下降(18-28%) → 静止(28-33.33%)
  */
 @keyframes alloc-tab-pulse {
-
   0%,
   33.33%,
   100% {
@@ -250,7 +305,8 @@ $radius-card: 48rpx;
   16% {
     transform: translateY(-16rpx);
     border-color: var(--tab-color);
-    box-shadow: 0 0 32rpx var(--tab-glow), 0 8rpx 24rpx rgba(0, 0, 0, 0.06), inset 0 2rpx 0 rgba(255, 255, 255, 0.95);
+    box-shadow: 0 0 32rpx var(--tab-glow), 0 8rpx 24rpx rgba(0, 0, 0, 0.06),
+      inset 0 2rpx 0 rgba(255, 255, 255, 0.95);
   }
 
   24% {
@@ -275,11 +331,12 @@ $radius-card: 48rpx;
   flex-wrap: wrap;
   align-items: center;
   gap: 16rpx 20rpx;
-  background: rgba(255, 255, 255, 0.46); backdrop-filter: blur(44rpx); -webkit-backdrop-filter: blur(44rpx); border: 2rpx solid rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.46);
+  backdrop-filter: blur(44rpx);
+  -webkit-backdrop-filter: blur(44rpx);
+  border: 2rpx solid rgba(255, 255, 255, 0.7);
   border: 2rpx solid rgba(255, 255, 255, 0.68);
-  box-shadow:
-    0 8rpx 48rpx rgba(var(--g5), 0.1),
-    inset 0 3rpx 0 rgba(255, 255, 255, 0.88),
+  box-shadow: 0 8rpx 48rpx rgba(var(--g5), 0.1), inset 0 3rpx 0 rgba(255, 255, 255, 0.88),
     inset 0 -2rpx 0 rgba(var(--g5), 0.06);
 
   .surplus-body-content {
@@ -289,7 +346,7 @@ $radius-card: 48rpx;
     padding: 32rpx 20rpx 24rpx 20rpx;
     gap: 20rpx;
     position: relative;
-    background: rgba(255, 255, 255, 0.30);
+    background: rgba(255, 255, 255, 0.3);
 
     /* 左侧主体：占据最大宽度，且允许收缩以便右侧按钮不被挤压 */
     .surplus-main {
@@ -382,7 +439,8 @@ $radius-card: 48rpx;
     outline: none;
     cursor: pointer;
     background: linear-gradient(135deg, var(--g5), var(--g4));
-    box-shadow: 0 10rpx 36rpx rgba(37, 204, 93, 0.35), inset 0 2rpx 0 rgba(255, 255, 255, 0.22);
+    box-shadow: 0 10rpx 36rpx rgba(37, 204, 93, 0.35),
+      inset 0 2rpx 0 rgba(255, 255, 255, 0.22);
     transition: transform 0.15s, box-shadow 0.15s;
 
     &:active {

@@ -144,6 +144,8 @@ const ACCOUNT_CLASS_DEFAULTS = {
   special: { include_in_disposable: false, include_in_daily_limit: false, include_in_total_asset: true },
   // 投资账户：不可支配、不计日限额、计入总资产
   investment: { include_in_disposable: false, include_in_daily_limit: false, include_in_total_asset: true },
+  // 负债账户（花呗/信用卡/借款等）：不可支配、不计日限额、不计入总资产（单独汇总为负债）
+  liability: { include_in_disposable: false, include_in_daily_limit: false, include_in_total_asset: false },
 }
 
 // TDEE 活动系数（与前端 pages/health-settings 保持一致）

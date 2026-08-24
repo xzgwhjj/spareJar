@@ -6,7 +6,6 @@
     <!-- 标题行 -->
     <view class="gauge-header">
       <!-- 待：符合风格的余钱罐图标 -->
-      <text class="gauge-header-icon">💰</text>
       <text class="gauge-header-title">今日余钱罐</text>
       <view
         class="limit-btn"
@@ -15,7 +14,6 @@
         hover-class="limit-btn--hover"
       >
         <!-- 待：符合风格的限额图标 -->
-        <text class="limit-btn-icon">🎯</text>
         <text class="limit-btn-text">限额 ¥{{ totalDailyLimitText }}</text>
         <text class="limit-btn-arrow">›</text>
       </view>
@@ -85,9 +83,13 @@
           <!-- 限额说明气泡（点击“已用·限额”一行弹出，展示固定限额+结余限额=总限额） -->
           <view v-if="showLimitTip && limitTipTappable" class="limit-tip" @tap.stop>
             <text class="limit-tip-row">固定限额 ¥{{ dailyLimitText }}</text>
-            <text class="limit-tip-row" v-if="pendingRolloverFen > 0">+ 结余限额 ¥{{ pendingRolloverText }}</text>
+            <text class="limit-tip-row" v-if="pendingRolloverFen > 0"
+              >+ 结余限额 ¥{{ pendingRolloverText }}</text
+            >
             <view class="limit-tip-divider" v-if="pendingRolloverFen > 0" />
-            <text class="limit-tip-row limit-tip-total">= 总限额 ¥{{ totalDailyLimitText }}</text>
+            <text class="limit-tip-row limit-tip-total"
+              >= 总限额 ¥{{ totalDailyLimitText }}</text
+            >
           </view>
           <view class="hud-bar" :class="{ 'over-bar': isOver, 'loop-bar': !hasLimit }">
             <!-- 循环模式下的粒子拖尾光点（已设限额时隐藏） -->

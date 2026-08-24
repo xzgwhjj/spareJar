@@ -32,8 +32,19 @@
           <text class="topbar-title">我的账本</text>
         </view>
         <view class="topbar-actions">
-          <view class="action-btn" @click="openMemberMgr"><text>👥</text></view>
-          <view class="action-btn" @click="goAssetMgr"><text>💳</text></view>
+          <view class="action-btn" @click="openMemberMgr"
+            ><image
+              class="action-img"
+              :src="cdn('/app_static/images/icon_member.png')"
+              mode="aspectFit"
+          /></view>
+          <view class="action-btn" @click="goAddAsset">
+            <image
+              class="add-img"
+              :src="cdn('/app_static/images/icon_add_asset.png')"
+              mode="aspectFit"
+            />
+          </view>
           <!-- <view class="action-btn" @click="goStickerLib"><text>⭐</text></view> -->
         </view>
       </view>
@@ -370,51 +381,180 @@
 
       <!-- TAB: 资产 -->
       <view v-show="pageTab === 'asset'">
-        <view class="asset-mode-bar" style="margin: 32rpx">
-          <view
-            v-for="m in assetModes"
-            :key="m.id"
-            class="asset-mode-btn"
-            :class="{ active: assetMode === m.id }"
-            @click="assetMode = m.id"
-          >
-            {{ m.label }}
+        <!-- 资产模式切换 -->
+        <view style="margin: 32rpx 32rpx 0">
+          <view class="glass-thin" style="padding: 8rpx; display: flex; gap: 8rpx">
+            <view
+              v-for="m in assetModes"
+              :key="m.id"
+              :style="
+                assetMode === m.id
+                  ? 'flex:1;height:64rpx;border-radius:28rpx;font-size:22rpx;font-weight:700;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg, var(--g4), var(--g5));color:#fff;transition:all .2s'
+                  : 'flex:1;height:64rpx;border-radius:28rpx;font-size:22rpx;font-weight:700;display:flex;align-items:center;justify-content:center;background:transparent;color:var(--ink3);transition:all .2s'
+              "
+              @click="assetMode = m.id"
+              >{{ m.label }}</view
+            >
           </view>
         </view>
-        <view class="glass-mid" style="margin: 0 32rpx; padding: 32rpx">
-          <text class="asset-total-label">{{
-            assetMode === "disposable"
-              ? "可支配资产"
-              : assetMode === "withInvest"
-              ? "含投资"
-              : "总资产净值"
-          }}</text>
-          <text
-            class="asset-total-num"
-            :style="{ color: assetDisplay >= 0 ? 'var(--g5)' : 'var(--red-soft)' }"
-            >¥{{ fmt(Math.abs(assetDisplay)) }}</text
-          >
-        </view>
-        <view
-          v-for="a in ACCOUNTS"
-          :key="a._id"
-          class="asset-card glass-thin"
-          style="margin: 16rpx 32rpx 0; padding: 28rpx 32rpx"
-          @click="goAssetDetail(a)"
-        >
-          <view class="asset-row">
-            <view class="asset-icon-box" :style="{ background: a.colorBg }">
-              <text>{{ a.icon }}</text>
+
+        <!-- 大数字 + 三列（总资产 / 总负债 / 投资收益） -->
+        <view style="margin: 28rpx 32rpx 0">
+          <view class="glass-thin" style="padding: 44rpx 36rpx">
+            <view style="text-align: center; margin-bottom: 32rpx">
+              <text style="font-size: 22rpx; color: var(--ink4)">
+                {{
+                  assetMode === "disposable"
+                    ? "可支配资产"
+                    : assetMode === "withInvest"
+                    ? "含投资资产"
+                    : "净资产"
+                }}
+              </text>
+              <text
+                style="
+                  display: block;
+                  font-size: 76rpx;
+                  font-weight: 900;
+                  letter-spacing: -3rpx;
+                  margin-top: 8rpx;
+                "
+                :style="{ color: assetDisplay >= 0 ? 'var(--ink)' : 'var(--red-soft)' }"
+                >{{ assetDisplay < 0 ? "-" : "" }}¥{{ fmt(Math.abs(assetDisplay)) }}</text
+              >
             </view>
-            <view class="asset-info">
-              <text class="asset-name">{{ a.name }}</text>
-              <text class="asset-type">{{ a.type }}</text>
-            </view>
-            <text
-              class="asset-balance"
-              :style="{ color: a.balance >= 0 ? 'var(--ink)' : 'var(--red-soft)' }"
-              >¥{{ fmt(a.balance) }}</text
+            <view
+              style="
+                display: flex;
+                padding-top: 24rpx;
+                border-top: 1rpx solid rgba(15, 28, 20, 0.06);
+              "
             >
+              <view style="flex: 1; text-align: center">
+                <text
+                  style="
+                    display: block;
+                    font-size: 20rpx;
+                    color: var(--ink4);
+                    margin-bottom: 6rpx;
+                  "
+                  >总资产</text
+                >
+                <text style="font-size: 28rpx; font-weight: 700; color: var(--g5)"
+                  >¥{{ fmt(cash + invest) }}</text
+                >
+              </view>
+              <view
+                style="width: 1rpx; background: rgba(15, 28, 20, 0.07); margin: 0 8rpx"
+              />
+              <view style="flex: 1; text-align: center">
+                <text
+                  style="
+                    display: block;
+                    font-size: 20rpx;
+                    color: var(--ink4);
+                    margin-bottom: 6rpx;
+                  "
+                  >总负债</text
+                >
+                <text style="font-size: 28rpx; font-weight: 700; color: var(--red-soft)"
+                  >¥{{ fmt(liab) }}</text
+                >
+              </view>
+              <view
+                style="width: 1rpx; background: rgba(15, 28, 20, 0.07); margin: 0 8rpx"
+              />
+              <view style="flex: 1; text-align: center">
+                <text
+                  style="
+                    display: block;
+                    font-size: 20rpx;
+                    color: var(--ink4);
+                    margin-bottom: 6rpx;
+                  "
+                  >投资收益</text
+                >
+                <text style="font-size: 28rpx; font-weight: 700; color: var(--amber2)"
+                  >+¥{{ fmt(investGain) }}</text
+                >
+              </view>
+            </view>
+          </view>
+        </view>
+
+        <!-- 账户列表标题 + 管理入口 -->
+        <view
+          style="
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 32rpx 36rpx 16rpx;
+          "
+        >
+          <text style="font-size: 26rpx; font-weight: 700; color: var(--ink)"
+            >账户列表</text
+          >
+          <view style="display: flex; align-items: center; gap: 4rpx" @click="goAssetMgr">
+            <text style="font-size: 24rpx; color: var(--ink3)">管理</text>
+            <text style="color: var(--ink4); font-size: 28rpx">›</text>
+          </view>
+        </view>
+
+        <!-- 账户列表 -->
+        <view style="margin: 0 32rpx">
+          <view class="glass-thin" style="padding: 8rpx 32rpx">
+            <view
+              v-for="(a, i) in ACCOUNTS"
+              :key="a._id"
+              style="
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 24rpx 0;
+              "
+              :style="
+                i < ACCOUNTS.length - 1
+                  ? { borderBottom: '1rpx solid rgba(15,28,20,0.05)' }
+                  : {}
+              "
+              @click="goAssetDetail(a)"
+            >
+              <view style="display: flex; align-items: center; gap: 20rpx">
+                <view
+                  style="
+                    width: 80rpx;
+                    height: 80rpx;
+                    border-radius: 26rpx;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 40rpx;
+                    flex-shrink: 0;
+                  "
+                  :style="{ background: a.colorBg }"
+                  >{{ a.icon }}</view
+                >
+                <view>
+                  <text
+                    style="
+                      display: block;
+                      font-size: 26rpx;
+                      font-weight: 600;
+                      color: var(--ink);
+                    "
+                    >{{ a.name }}</text
+                  >
+                  <text style="display: block; font-size: 20rpx; color: var(--ink4)">{{
+                    a.type
+                  }}</text>
+                </view>
+              </view>
+              <text
+                style="font-size: 28rpx; font-weight: 800"
+                :style="{ color: a.balance >= 0 ? 'var(--ink)' : 'var(--red-soft)' }"
+                >{{ a.balance < 0 ? "-" : "" }}¥{{ fmt(Math.abs(a.balance)) }}</text
+              >
+            </view>
           </view>
         </view>
       </view>
@@ -711,7 +851,11 @@
             @click="enterCrop(0.75)"
           >
             <view class="ratio-thumb ratio-34">
-              <image class="ratio-thumb-img" :src="crop34 && crop34.temp ? crop34.temp : pendingCropSrc" mode="aspectFill" />
+              <image
+                class="ratio-thumb-img"
+                :src="crop34 && crop34.temp ? crop34.temp : pendingCropSrc"
+                mode="aspectFill"
+              />
               <view v-if="cropDone('34')" class="ratio-done">✓</view>
             </view>
             <text class="ratio-label">3 : 4</text>
@@ -722,7 +866,11 @@
             @click="enterCrop(4 / 3)"
           >
             <view class="ratio-thumb ratio-43">
-              <image class="ratio-thumb-img" :src="crop43 && crop43.temp ? crop43.temp : pendingCropSrc" mode="aspectFill" />
+              <image
+                class="ratio-thumb-img"
+                :src="crop43 && crop43.temp ? crop43.temp : pendingCropSrc"
+                mode="aspectFill"
+              />
               <view v-if="cropDone('43')" class="ratio-done">✓</view>
             </view>
             <text class="ratio-label">4 : 3</text>
@@ -904,11 +1052,151 @@
       :ledger-id="memberMgrLedgerId"
       :ledger-name="memberMgrLedgerName"
       @close="showMemberMgr = false"
-  />
-      
+    />
+
+    <!-- 添加资产账户弹窗（本页直接弹出，与 asset-mgr 一致） -->
+    <view v-if="showAssetSheet" class="mask" @tap="showAssetSheet = false">
+      <view class="sheet" @tap.stop>
+        <header class="sheet-header">
+          <text class="sheet-title">添加资产账户</text>
+          <view class="sheet-close" @tap="showAssetSheet = false">✕</view>
+        </header>
+
+        <!-- 截图建账入口（FR-2.2） -->
+        <view class="cam-row" @tap="pickAndRecognizeAsset">
+          <image
+            class="cam-icon"
+            :src="cdn('/app_static/images/icon_recognize.png')"
+            mode="aspectFit"
+          />
+          <text class="cam-text">拍照 / 截图自动识别建资产账户</text>
+        </view>
+
+        <view class="form-grid">
+          <view class="form-row">
+            <text class="form-label">账户名称</text>
+            <input
+              v-model="assetForm.name"
+              class="form-input"
+              type="text"
+              placeholder="如：招商银行卡"
+              placeholder-class="form-ph"
+              maxlength="20"
+            />
+          </view>
+
+          <view class="form-row">
+            <text class="form-label">账户类型</text>
+            <view class="seg">
+              <view
+                v-for="opt in ASSET_CLASS_OPTIONS"
+                :key="opt.value"
+                class="seg-item"
+                :class="{ active: assetForm.account_class === opt.value }"
+                @tap="
+                  assetForm.account_class = opt.value;
+                  onAssetClassChange();
+                "
+                >{{ opt.label }}</view
+              >
+            </view>
+          </view>
+
+          <view class="form-row">
+            <text class="form-label">子类型</text>
+            <view class="seg">
+              <view
+                v-for="opt in assetSubtypes"
+                :key="opt.v"
+                class="seg-item"
+                :class="{ active: assetForm.account_subtype === opt.v }"
+                @tap="assetForm.account_subtype = opt.v"
+                >{{ opt.label }}</view
+              >
+            </view>
+          </view>
+
+          <view v-if="assetForm.account_subtype === 'other'" class="form-row">
+            <text class="form-label">子类名称</text>
+            <input
+              v-model="assetForm.subtype_name"
+              class="form-input"
+              type="text"
+              placeholder="请输入自定义子类名称"
+              placeholder-class="form-ph"
+              maxlength="20"
+            />
+          </view>
+
+          <view class="form-row">
+            <text class="form-label">初始余额</text>
+            <number-field
+              v-model="assetForm.balance"
+              class="form-amount"
+              placeholder="0.00 元"
+              title="初始余额"
+            />
+          </view>
+
+          <view class="form-row">
+            <text class="form-label">计入可支配</text>
+            <switch
+              :checked="assetForm.include_in_disposable"
+              color="#25cc5d"
+              @change="assetForm.include_in_disposable = $event.detail.value"
+            />
+          </view>
+
+          <view class="form-row">
+            <text class="form-label">计入日限额</text>
+            <switch
+              :checked="assetForm.include_in_daily_limit"
+              color="#25cc5d"
+              @change="assetForm.include_in_daily_limit = $event.detail.value"
+            />
+          </view>
+
+          <view class="form-row">
+            <text class="form-label">日限额</text>
+            <number-field
+              v-model="assetForm.daily_limit"
+              class="form-amount"
+              placeholder="不填则不限制"
+              title="日限额"
+            />
+          </view>
+
+          <view class="form-row">
+            <text class="form-label">备注</text>
+            <input
+              v-model="assetForm.note"
+              class="form-input"
+              type="text"
+              placeholder="选填"
+              placeholder-class="form-ph"
+              maxlength="50"
+            />
+          </view>
+
+          <view class="form-row">
+            <text class="form-label">计入总资产</text>
+            <switch
+              :checked="assetForm.include_in_total_asset"
+              color="#25cc5d"
+              @change="assetForm.include_in_total_asset = $event.detail.value"
+            />
+          </view>
+        </view>
+
+        <button class="sheet-confirm" :disabled="savingAsset" @tap="saveAssetAccount">
+          保存账户
+        </button>
+      </view>
+    </view>
+
     <!-- 全局数字键盘（单例）：由 main.js 全局注册 -->
     <amount-keyboard />
-</view>
+  </view>
 </template>
 
 <script setup>
@@ -924,8 +1212,11 @@ import {
 import TabBar from "@/components/tabbar/tabbar.vue";
 import MemberManager from "@/components/MemberManager.vue";
 import { checkLoggedIn, useUserStore } from "@/stores/user.js";
+import { createAssetAccountAction } from "@/stores/asset.js";
 import { cdn, resolveCover, getCloudTempUrl, getCloudTempUrls } from "@/utils/cdn.js";
 import { deleteLedgerCover, uploadLedgerCover } from "@/utils/cloudFile.js";
+import { safeYuanToFen, fenToYuanString } from "@/utils/money.js";
+import { recognizeAsset as apiRecognizeAsset } from "@/api/sparejar.js";
 import {
   hexToHsv,
   hsvToHex,
@@ -946,7 +1237,7 @@ const PAGE_TABS = [
 const assetModes = [
   { id: "disposable", label: "可支配" },
   { id: "withInvest", label: "含投资" },
-  { id: "total", label: "总净值" },
+  { id: "total", label: "净资产" },
 ];
 
 const userStore = useUserStore();
@@ -2044,12 +2335,15 @@ const maxBar = Math.max(...MONTHLY.map((s) => s.income));
 const cash = computed(() => (state.assetTotals ? state.assetTotals.disposable : 0));
 const invest = computed(() => (state.assetTotals ? state.assetTotals.investment : 0));
 const total = computed(() => (state.assetTotals ? state.assetTotals.full : 0));
+const net = computed(() => (state.assetTotals ? state.assetTotals.net : 0));
+const liab = computed(() => (state.assetTotals ? state.assetTotals.liabilities : 0));
+const investGain = computed(() => (state.assetTotals ? state.assetTotals.investGain : 0));
 const assetDisplay = computed(() =>
   assetMode.value === "disposable"
     ? cash.value
     : assetMode.value === "withInvest"
     ? cash.value + invest.value
-    : total.value
+    : net.value
 );
 
 async function loadData() {
@@ -2182,32 +2476,246 @@ const openLedgerSheet = (l) => {
   uni.navigateTo({ url: `/pages/ledger-detail/ledger-detail?id=${l._id}` });
 };
 const goAssetMgr = () => uni.navigateTo({ url: "/pages/asset-mgr/asset-mgr" });
+const goAddAsset = openAddAssetSheet;
+
+// ===== 添加资产账户（本页直接弹窗，逻辑与 asset-mgr 一致） =====
+// 账户类型选项（含子类型 + 默认计入规则）
+const ASSET_CLASS_OPTIONS = [
+  { value: "daily", label: "日常账户" },
+  { value: "liability", label: "负债账户" },
+  { value: "investment", label: "投资账户" },
+  { value: "special", label: "专用账户" },
+];
+const SUBTYPES = {
+  daily: [
+    { v: "cash", label: "现金" },
+    { v: "bank_card", label: "银行卡" },
+    { v: "alipay", label: "支付宝" },
+    { v: "wechat", label: "微信" },
+    { v: "wallet", label: "钱包" },
+    { v: "other", label: "其他" },
+  ],
+  liability: [
+    { v: "credit_card", label: "信用卡" },
+    { v: "loan", label: "贷款" },
+    { v: "borrow", label: "借款" },
+    { v: "other", label: "其他" },
+  ],
+  investment: [
+    { v: "stock", label: "股票" },
+    { v: "fund", label: "基金" },
+    { v: "deposit", label: "存款" },
+    { v: "other", label: "其他" },
+  ],
+  special: [
+    { v: "reserve", label: "备用金" },
+    { v: "insurance", label: "保险" },
+    { v: "other", label: "其他" },
+  ],
+};
+const ASSET_CLASS_DEFAULTS = {
+  daily: { d: true, l: true, t: true },
+  special: { d: false, l: false, t: false },
+  investment: { d: false, l: false, t: false },
+  liability: { d: false, l: false, t: false },
+};
+const showAssetSheet = ref(false);
+const assetForm = reactive({
+  name: "",
+  account_class: "daily",
+  account_subtype: "cash",
+  subtype_name: "",
+  balance: "",
+  include_in_disposable: true,
+  include_in_daily_limit: true,
+  daily_limit: "",
+  note: "",
+  include_in_total_asset: true,
+});
+const assetSubtypes = computed(() => SUBTYPES[assetForm.account_class] || []);
+function classDefaults(c) {
+  return ASSET_CLASS_DEFAULTS[c] || { d: true, l: true, t: true };
+}
+function resetAssetForm() {
+  assetForm.name = "";
+  assetForm.account_class = "daily";
+  assetForm.account_subtype = "cash";
+  assetForm.subtype_name = "";
+  assetForm.balance = "";
+  assetForm.include_in_disposable = true;
+  assetForm.include_in_daily_limit = true;
+  assetForm.daily_limit = "";
+  assetForm.note = "";
+  assetForm.include_in_total_asset = true;
+}
+function openAddAssetSheet() {
+  resetAssetForm();
+  showAssetSheet.value = true;
+}
+function onAssetClassChange() {
+  const subs = SUBTYPES[assetForm.account_class] || [];
+  assetForm.account_subtype = subs.length ? subs[0].v : "";
+  assetForm.subtype_name = "";
+  const def = classDefaults(assetForm.account_class);
+  assetForm.include_in_disposable = def.d;
+  assetForm.include_in_daily_limit = def.l;
+  assetForm.include_in_total_asset = def.t;
+}
+const savingAsset = ref(false);
+async function saveAssetAccount() {
+  const name = (assetForm.name || "").trim();
+  if (!name) return uni.showToast({ title: "请输入账户名称", icon: "none" });
+  if (!assetForm.account_subtype)
+    return uni.showToast({ title: "请选择子类", icon: "none" });
+  savingAsset.value = true;
+  try {
+    const payload = {
+      name,
+      account_class: assetForm.account_class,
+      account_subtype: assetForm.account_subtype,
+      subtype_name: assetForm.subtype_name || undefined,
+      initial_balance_fen: safeYuanToFen(assetForm.balance || "0").value,
+      include_in_disposable: !!assetForm.include_in_disposable,
+      daily_limit_fen: assetForm.daily_limit
+        ? safeYuanToFen(assetForm.daily_limit).value
+        : undefined,
+      note: assetForm.note || undefined,
+      include_in_total_asset: !!assetForm.include_in_total_asset,
+    };
+    await createAssetAccountAction(payload);
+    uni.showToast({ title: "创建成功", icon: "success" });
+    showAssetSheet.value = false;
+  } catch (e) {
+    console.error("创建资产账户失败", e);
+    uni.showToast({ title: e?.message || "创建失败", icon: "none" });
+  } finally {
+    savingAsset.value = false;
+  }
+}
+
+// ===== 截图建账（FR-2.2 / FR-2.3，与 asset-mgr 一致） =====
+const recognizing = ref(false);
+async function pickAndRecognizeAsset() {
+  if (recognizing.value) return;
+  let imgPath = "";
+  try {
+    const res = await uni.chooseImage({
+      count: 1,
+      sizeType: ["compressed"],
+      sourceType: ["album", "camera"],
+    });
+    imgPath = res.tempFilePaths && res.tempFilePaths[0];
+  } catch (_e) {
+    return;
+  }
+  if (!imgPath) return;
+  recognizing.value = true;
+  uni.showLoading({ title: "识别中...", mask: true });
+  try {
+    const up = await uniCloud.uploadFile({
+      filePath: imgPath,
+      cloudPath: `asset-ocr/${Date.now()}-${Math.floor(Math.random() * 1e6)}.jpg`,
+    });
+    const r = await apiRecognizeAsset(up.fileID);
+    if (!r || r.success !== true) {
+      uni.showToast({ title: "识别失败，请手动添加", icon: "none" });
+      recognizing.value = false;
+      uni.hideLoading();
+      return;
+    }
+    const ic = r.suggested_class || "daily";
+    const sub = (SUBTYPES[ic] || SUBTYPES.daily).some((s) => s.v === r.suggested_subtype)
+      ? r.suggested_subtype
+      : (SUBTYPES[ic] || SUBTYPES.daily)[0].v;
+    const classDefaults = {
+      daily: { d: true, l: true, t: true },
+      special: { d: true, l: false, t: true },
+      investment: { d: false, l: false, t: true },
+      liability: { d: false, l: false, t: false },
+    }[ic] || { d: true, l: true, t: true };
+
+    // FR-2.3：若已存在同名账户，直接并入（入金到已有账户），不新建
+    const existing = (userStore.state.assets || []).find(
+      (a) => a.name === r.account_name && a.account_class === ic
+    );
+    if (existing && r.balance_fen > 0) {
+      const addYuan = fenToYuanString(r.balance_fen);
+      uni.showModal({
+        title: "并入已有账户",
+        content: `已存在「${existing.name}」，是否将识别出的 ¥${addYuan} 直接加到该账户（不新建）？`,
+        confirmText: "并入",
+        cancelText: "仍新建",
+        success: async (m) => {
+          if (m.confirm) {
+            try {
+              const target = (existing.current_balance || 0) + r.balance_fen;
+              await userStore.adjustAccountBalanceAction(existing._id, target);
+              uni.showToast({ title: "已并入该账户", icon: "success" });
+              showAssetSheet.value = false;
+            } catch (e) {
+              uni.showToast({ title: (e && e.message) || "并入失败", icon: "none" });
+            }
+          } else {
+            openRecognizedSheet(r, ic, sub, classDefaults);
+          }
+        },
+      });
+      recognizing.value = false;
+      uni.hideLoading();
+      return;
+    }
+
+    openRecognizedSheet(r, ic, sub, classDefaults);
+  } catch (e) {
+    uni.showToast({ title: "识别失败，请手动添加", icon: "none" });
+  } finally {
+    recognizing.value = false;
+    uni.hideLoading();
+  }
+}
+// 将 OCR 识别结果预填到新建账户表单
+function openRecognizedSheet(r, ic, sub, classDefaults) {
+  Object.assign(assetForm, {
+    name: r.account_name || "",
+    account_class: ic,
+    account_subtype: sub,
+    subtype_name: "",
+    balance: r.balance_fen ? fenToYuanString(r.balance_fen) : "",
+    include_in_disposable: classDefaults.d,
+    include_in_daily_limit: classDefaults.l,
+    include_in_total_asset: classDefaults.t,
+    daily_limit: "",
+    note: "",
+  });
+  showAssetSheet.value = true;
+  uni.showToast({ title: "已识别，请确认", icon: "none" });
+}
 
 // ===== 成员管理（用户级全局成员 + 账本关联） =====
 // 从账本列表页进入，管理成员与「主账本」的关联。
-const showMemberMgr = ref(false)
-const memberMgrLedgerId = ref('')
-const memberMgrLedgerName = ref('')
+const showMemberMgr = ref(false);
+const memberMgrLedgerId = ref("");
+const memberMgrLedgerName = ref("");
 
 function getMasterLedger() {
-  const id = userStore.state.defaultLedgerId
+  const id = userStore.state.defaultLedgerId;
   if (id) {
-    const l = ledgers.value.find((x) => x._id === id)
-    if (l) return l
+    const l = ledgers.value.find((x) => x._id === id);
+    if (l) return l;
   }
-  return ledgers.value[0] || null
+  return ledgers.value[0] || null;
 }
 
 async function loadMemberMgrMembers() {
-  const l = getMasterLedger()
-  if (!l) return
-  memberMgrLedgerId.value = l._id
-  memberMgrLedgerName.value = l.name || '账本'
+  const l = getMasterLedger();
+  if (!l) return;
+  memberMgrLedgerId.value = l._id;
+  memberMgrLedgerName.value = l.name || "账本";
 }
 
 async function openMemberMgr() {
-  await loadMemberMgrMembers()
-  showMemberMgr.value = true
+  await loadMemberMgrMembers();
+  showMemberMgr.value = true;
 }
 const goAssetDetail = (a) =>
   uni.navigateTo({ url: `/pages/asset-detail/asset-detail?id=${a._id}` });
@@ -2321,10 +2829,18 @@ async function openEdit(l) {
   }
   // 还原已裁剪比例，避免保存时 syncCoverPreview 误将 cover34 清空
   crop43.value = l.cover
-    ? { temp: editLedgerCover.value, fileID: String(l.cover).startsWith("cloud://") ? l.cover : null, rel: l.cover }
+    ? {
+        temp: editLedgerCover.value,
+        fileID: String(l.cover).startsWith("cloud://") ? l.cover : null,
+        rel: l.cover,
+      }
     : null;
   crop34.value = cover34
-    ? { temp: editLedgerCover34.value, fileID: String(cover34).startsWith("cloud://") ? cover34 : null, rel: cover34 }
+    ? {
+        temp: editLedgerCover34.value,
+        fileID: String(cover34).startsWith("cloud://") ? cover34 : null,
+        rel: cover34,
+      }
     : null;
   // 记录编辑前的用户封面 fileID，替换成功后删旧文件，避免云存储冗余
   editOldCoverFileID.value =
@@ -2594,6 +3110,159 @@ onUnmounted(() => {
   cursor: pointer;
   font-size: 32rpx;
   box-shadow: 0 8rpx 64rpx rgba(0, 0, 0, 0.08);
+}
+
+.action-img {
+  width: 72rpx;
+  height: 72rpx;
+  cursor: pointer;
+}
+
+/* 添加资产账户弹窗 */
+.mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: flex-end;
+  z-index: 1000;
+}
+.sheet {
+  width: 100%;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 28rpx 28rpx 0 0;
+  padding: 32rpx 32rpx calc(48rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+.sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24rpx;
+  flex-shrink: 0;
+}
+.sheet-title {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: $sj-g5;
+}
+.sheet-close {
+  width: 56rpx;
+  height: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.sheet-close-img {
+  width: 36rpx;
+  height: 36rpx;
+  opacity: 0.55;
+}
+.sheet-close {
+  font-size: 36rpx;
+  color: $sj-g4;
+  line-height: 1;
+}
+.form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+  overflow-y: auto;
+  flex: 1;
+  -webkit-overflow-scrolling: touch;
+}
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+.form-label {
+  font-size: 26rpx;
+  color: $sj-g4;
+}
+.form-input {
+  height: 80rpx;
+  background: $sj-g1;
+  border-radius: 16rpx;
+  padding: 0 24rpx;
+  font-size: 30rpx;
+  color: $sj-g5;
+}
+.form-ph {
+  color: $sj-g2-0;
+}
+.seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+.seg-item {
+  padding: 12rpx 24rpx;
+  background: $sj-g1;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+  color: $sj-g4;
+  cursor: pointer;
+}
+.seg-item.active {
+  background: $sj-g5;
+  color: #fff;
+}
+.form-amount {
+  height: 80rpx;
+  background: $sj-g1;
+  border-radius: 16rpx;
+  padding: 0 24rpx;
+  font-size: 30rpx;
+  color: $sj-g5;
+}
+.sheet-confirm {
+  margin-top: 32rpx;
+  height: 88rpx;
+  line-height: 88rpx;
+  text-align: center;
+  background: $sj-g5;
+  color: #fff;
+  font-size: 32rpx;
+  font-weight: 600;
+  border-radius: 999rpx;
+  border: none;
+  flex-shrink: 0;
+}
+.sheet-confirm[disabled] {
+  opacity: 0.6;
+}
+
+.add-img {
+  width: 50rpx;
+  height: 50rpx;
+  cursor: pointer;
+}
+
+/* 截图建账入口（弹窗内） */
+.cam-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 20rpx 24rpx;
+  margin-bottom: 24rpx;
+  background: $sj-g1;
+  border: 1rpx dashed $sj-g3;
+  border-radius: 16rpx;
+  cursor: pointer;
+}
+.cam-icon {
+  width: 44rpx;
+  height: 44rpx;
+}
+.cam-text {
+  font-size: 28rpx;
+  color: $sj-g5;
+  font-weight: 600;
 }
 
 /* 标签栏：Uiverse 风格分段开关（轨道 + 滑动旋钮） */

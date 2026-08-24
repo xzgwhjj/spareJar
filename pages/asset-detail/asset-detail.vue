@@ -17,15 +17,15 @@
               <text class="hero-sub">{{ classLabel(account) }} · {{ subtypeLabel(account) }}</text>
             </view>
           </view>
-          <text class="hero-balance" :style="{ color: account.balance >= 0 ? 'var(--ink)' : 'var(--red-soft)' }">¥{{ fmt(account.balance) }}</text>
+          <text class="hero-balance" :style="{ color: account.account_class === 'liability' ? 'var(--red-soft)' : (account.balance >= 0 ? 'var(--ink)' : 'var(--red-soft)') }">{{ account.account_class === 'liability' ? '欠款 ¥' : '¥' }}{{ fmt(account.balance) }}</text>
           <text v-if="account.account_class === 'investment'" class="hero-pl">
             持仓市值 ¥{{ fmt(account.market_value) }} · 盈亏
             <text :style="{ color: account.profit_loss >= 0 ? 'var(--g5)' : 'var(--red-soft)' }">{{ account.profit_loss >= 0 ? '+' : '' }}¥{{ fmt(account.profit_loss) }}</text>
           </text>
         </view>
 
-        <!-- 计入规则（日常/专项） -->
-        <view v-if="account.account_class !== 'investment'" class="glass-mid card-in-1 rule-card">
+        <!-- 计入规则（日常/专项；负债账户不计入资产，无开关） -->
+        <view v-if="account.account_class === 'daily' || account.account_class === 'special'" class="glass-mid card-in-1 rule-card">
           <view class="toggle-row">
             <text class="toggle-lbl">计入可支配</text>
             <switch :checked="!!account.include_in_disposable" @change="e => toggleFlag('include_in_disposable', e.detail.value)" color="#25cc5d" />
@@ -221,7 +221,7 @@ const CHANGE_TYPES = {
 
 function fmt(fen) { return formatFen(fen || 0) }
 function subtypeLabel(a) { const s = subtypeMap[a.account_subtype]; return s ? s.label : a.account_subtype }
-function classLabel(a) { return { daily: '日常账户', special: '专项账户', investment: '投资理财' }[a.account_class] || a.account_class }
+function classLabel(a) { return { daily: '日常账户', special: '专项账户', investment: '投资理财', liability: '负债账户' }[a.account_class] || a.account_class }
 function iconFor(a) { const s = subtypeMap[a.account_subtype]; return s ? s.icon : '💳' }
 function colorBgFor(a) { return SUBTYPE_BG[a.account_subtype] || '#e1fae3' }
 function assetTypeLabel(t) { const x = ASSET_TYPES.find((i) => i.v === t); return x ? x.label : t }

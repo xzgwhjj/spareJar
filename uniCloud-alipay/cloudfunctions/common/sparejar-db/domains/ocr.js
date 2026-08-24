@@ -177,6 +177,87 @@ async function recognizeReceipt(userId, data) {
 }
 
 
+/** 平台/账户名关键字 → 账户类别与子类型 */
+const ASSET_ACCOUNT_KEYWORDS = [
+  { kw: ['花呗', '借呗', '白条'], account_class: 'liability', account_subtype: 'huabei' },
+  { kw: ['信用卡', 'visa', 'master', '银联'], account_class: 'liability', account_subtype: 'credit_card' },
+  { kw: ['京东'], account_class: 'liability', account_subtype: 'jdbt' },
+  { kw: ['借款', '网贷', '分期'], account_class: 'liability', account_subtype: 'loan' },
+  { kw: ['微信', '零钱', 'wechat'], account_class: 'daily', account_subtype: 'wechat' },
+  { kw: ['支付宝', '余额', 'alipay'], account_class: 'daily', account_subtype: 'alipay' },
+  { kw: ['银行', '储蓄', '借记', '卡'], account_class: 'daily', account_subtype: 'bankcard' },
+  { kw: ['现金', '钱包'], account_class: 'daily', account_subtype: 'cash' },
+  { kw: ['基金', '理财', '余额宝', '零钱通'], account_class: 'investment', account_subtype: 'fund' },
+  { kw: ['股票', '证券', '股份', 'a股', '港股'], account_class: 'investment', account_subtype: 'stock' },
+  { kw: ['黄金', '金'], account_class: 'investment', account_subtype: 'gold' },
+  { kw: ['债券', '国债'], account_class: 'investment', account_subtype: 'bond' },
+  { kw: ['公积金', '社保'], account_class: 'special', account_subtype: 'provident' },
+  { kw: ['押金', '保证金'], account_class: 'special', account_subtype: 'deposit' }
+]
+
+/** 从 OCR 文本推断账户名（平台名） */
+function parseAccountName(text) {
+  if (!text) return ''
+  const lines = String(text).split('\n').map((l) => l.trim()).filter(Boolean)
+  // 优先匹配关键字行作为平台名
+  for (const rule of ASSET_ACCOUNT_KEYWORDS) {
+    for (const l of lines) {
+      if (rule.kw.some((k) => l.includes(k))) {
+        return l.slice(0, 30)
+      }
+    }
+  }
+  return lines[0] ? lines[0].slice(0, 30) : ''
+}
+
+/** 根据文本推断账户类别与子类型 */
+function suggestAccountClass(text) {
+  const hay = String(text || '')
+  for (const rule of ASSET_ACCOUNT_KEYWORDS) {
+    if (rule.kw.some((k) => hay.includes(k))) {
+      return { account_class: rule.account_class, account_subtype: rule.account_subtype }
+    }
+  }
+  return { account_class: '', account_subtype: '' }
+}
+
+/**
+ * 截图建账 OCR：识别账户名与余额，推荐账户类别
+ * @param {string} userId
+ * @param {{ image_url: string }} data
+ */
+async function recognizeAsset(userId, data) {
+  const imageUrl = data && data.image_url
+  if (!imageUrl) return { success: false, reason: 'missing_image' }
+  let text = ''
+  try {
+    const base64 = await readImageAsBase64(imageUrl)
+    if (!base64) return { success: false, reason: 'read_image_failed' }
+    text = OCR_PROVIDER === 'tencent'
+      ? await fetchOcrTextByTencent(base64)
+      : await fetchOcrTextByBaidu(base64)
+  } catch (e) {
+    return { success: false, reason: 'ocr_request_failed', message: (e && e.message) || '' }
+  }
+  if (!text || !text.trim()) {
+    return { success: false, reason: 'empty_text' }
+  }
+  const balance = parseAmountFen(text)
+  const accountName = parseAccountName(text)
+  const suggest = suggestAccountClass(text)
+  return {
+    success: true,
+    provider: OCR_PROVIDER,
+    raw_text: text,
+    account_name: accountName,
+    balance_fen: balance,
+    suggested_class: suggest.account_class,
+    suggested_subtype: suggest.account_subtype,
+    confidence: balance > 0 ? 0.9 : 0.5,
+    image_url: imageUrl
+  }
+}
+
 module.exports = {
   getBaiduAccessToken,
   fetchOcrTextByBaidu,
@@ -186,4 +267,7 @@ module.exports = {
   extractDateKeyFromText,
   recommendCategoryId,
   recognizeReceipt,
+  parseAccountName,
+  suggestAccountClass,
+  recognizeAsset,
 }

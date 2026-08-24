@@ -392,6 +392,10 @@ exports.main = async (event, context) => {
         if (!data.image_url) return fail('image_url is required')
         return ok(await dbApi.recognizeReceipt(userId, data))
 
+      case 'recognizeAsset':
+        if (!data.image_url) return fail('image_url is required')
+        return ok(await dbApi.recognizeAsset(userId, data))
+
       case 'getLimitHistory':
         return ok(await dbApi.getLimitHistory(userId, {
           start_key: data.start_key,

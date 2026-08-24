@@ -115,6 +115,8 @@ async function getAssetAccounts(userId) {
   let disposable = 0
   let investment = 0
   let specialExtra = 0
+  let liabilities = 0
+  let investGain = 0
   const list = accounts.map((a) => {
     const balance = a.current_balance || 0
     let marketValue = 0
@@ -130,16 +132,23 @@ async function getAssetAccounts(userId) {
         return Object.assign({}, h, { market_value: mv, profit_loss: pl })
       })
     }
-    if (a.include_in_disposable) disposable += balance
-    if (a.include_in_total_asset && !a.include_in_disposable) specialExtra += balance
+    if (a.account_class === 'liability') {
+      // 负债：余额表示"欠多少"，单独汇总，不计入资产
+      liabilities += balance
+    } else {
+      if (a.include_in_disposable) disposable += balance
+      if (a.include_in_total_asset && !a.include_in_disposable) specialExtra += balance
+    }
+    if (a.account_class === 'investment') investGain += profitLoss
     return Object.assign({}, a, { balance, holdings, market_value: marketValue, profit_loss: profitLoss })
   })
   investment = list.reduce((s, a) => s + (a.account_class === 'investment' ? a.market_value : 0), 0)
   const withInvest = disposable + investment
   const full = withInvest + specialExtra
+  const net = full - liabilities
   return {
     accounts: list,
-    totals: { disposable, investment, withInvest, full, specialExtra }
+    totals: { disposable, investment, withInvest, full, specialExtra, liabilities, investGain, net }
   }
 }
 

@@ -35,20 +35,22 @@
             src="/static/images/card-bg.svg"
             mode="scaleToFill"
           ></image>
-          <view class="cloud" @click="toggleGreet">
-            <image
-              class="cloud-icon"
-              :src="cdn('/app_static/images/icon_morning.png')"
-              mode="aspectFit"
-            ></image>
+          <view class="cloud" :class="'cloud-' + cloudPeriod" @click="toggleGreet">
+            <image class="cloud-icon" :src="greetIcon" mode="aspectFit"></image>
           </view>
-          <view class="greet-bubble" :class="{ open: greetOpen }" @click="toggleGreet">
+          <view
+            class="greet-bubble"
+            :class="['greet-' + cloudPeriod, { open: greetOpen }]"
+            @click="toggleGreet"
+          >
+            <view class="greet-arrow-border"></view>
+            <view class="greet-arrow"></view>
             <text class="greet-text">{{ greetText }}</text>
           </view>
           <view class="card-user">
             <view class="avatar-ring">
               <view class="avatar-inner">
-                <text class="avatar-emoji">{{ isGuest ? "👤" : "🐶" }}</text>
+                <image class="avatar-img" :src="avatarUrl" mode="aspectFit"></image>
               </view>
             </view>
             <view class="card-user-info">
@@ -76,137 +78,161 @@
         </view>
 
         <!-- 设置菜单 -->
-        <view class="menu-group">
-          <text class="menu-title">账户与数据</text>
+        <!-- 设置总标题 -->
+        <text class="menu-top-title">设置</text>
+
+        <!-- 横向大分类（无背景无框文字） -->
+        <view class="cat-tabs">
           <view
-            v-for="m in menuItems"
-            :key="m.label"
-            class="menu-item glass-thin"
-            style="margin: 0 32rpx 0; border-radius: 0"
-            @click="m.action"
+            v-for="c in catList"
+            :key="c.key"
+            class="cat-tab"
+            :class="{ active: activeCat === c.key }"
+            @click="activeCat = c.key"
           >
-            <view class="menu-left">
-              <text class="menu-icon">{{ m.icon }}</text>
-              <text class="menu-label">{{ m.label }}</text>
-            </view>
-            <text class="menu-arrow">›</text>
-          </view>
-          <view
-            class="menu-item glass-thin menu-item-logout"
-            style="margin: 0 32rpx 0; border-radius: 0"
-            @click="handleLogout"
-          >
-            <view class="menu-left">
-              <text class="menu-icon">🚪</text>
-              <text class="menu-label logout-label">退出登录</text>
-            </view>
-            <text class="menu-arrow">›</text>
+            <text class="cat-tab-text">{{ c.title }}</text>
           </view>
         </view>
 
-        <view class="menu-group" style="margin-top: 32rpx">
-          <text class="menu-title">健康与预算</text>
-          <view
-            class="menu-item glass-thin"
-            style="margin: 0 32rpx 0; border-radius: 0"
-            @click="openRules"
-          >
-            <view class="menu-left"
-              ><text class="menu-icon">📋</text
-              ><text class="menu-label">预算规则</text></view
+        <!-- 账户与数据 -->
+        <view v-if="activeCat === 'account'" class="cat-panel">
+          <view class="cat-list">
+            <view
+              v-for="m in menuItems"
+              :key="m.label"
+              class="menu-item glass-thin"
+              style="margin: 0 32rpx 0; border-radius: 0"
+              @click="m.action"
             >
-            <text class="menu-arrow">›</text>
-          </view>
-          <view
-            class="menu-item glass-thin"
-            style="margin: 0 32rpx 0; border-radius: 0"
-            @click="goLimitSetting"
-          >
-            <view class="menu-left"
-              ><text class="menu-icon">🎯</text
-              ><text class="menu-label">限额设置</text></view
+              <view class="menu-left">
+                <text class="menu-icon">{{ m.icon }}</text>
+                <text class="menu-label">{{ m.label }}</text>
+              </view>
+              <text class="menu-arrow">›</text>
+            </view>
+            <view
+              class="menu-item glass-thin menu-item-logout"
+              style="margin: 0 32rpx 0; border-radius: 0"
+              @click="handleLogout"
             >
-            <text class="menu-arrow">›</text>
-          </view>
-          <view
-            class="menu-item glass-thin"
-            style="margin: 0 32rpx 0; border-radius: 0"
-            @click="goCategoryMgr"
-          >
-            <view class="menu-left"
-              ><text class="menu-icon">🗂️</text
-              ><text class="menu-label">分类管理</text></view
-            >
-            <text class="menu-arrow">›</text>
+              <view class="menu-left">
+                <text class="menu-icon">🚪</text>
+                <text class="menu-label logout-label">退出登录</text>
+              </view>
+              <text class="menu-arrow">›</text>
+            </view>
           </view>
         </view>
 
-        <view class="menu-group" style="margin-top: 32rpx">
-          <text class="menu-title">功能设置</text>
-          <view class="menu-item glass-thin" style="margin: 0 16px 0; border-radius: 0">
-            <view class="menu-left">
-              <text class="menu-icon">🍽️</text>
-              <view class="menu-label-col">
-                <text class="menu-label">餐饮轻记录</text>
-                <text class="menu-sub">开启后餐饮账目可记录餐次与热量</text>
+        <!-- 健康与预算 -->
+        <view v-if="activeCat === 'health'" class="cat-panel">
+          <view class="cat-list">
+            <view
+              class="menu-item glass-thin"
+              style="margin: 0 32rpx 0; border-radius: 0"
+              @click="openRules"
+            >
+              <view class="menu-left"
+                ><text class="menu-icon">📋</text
+                ><text class="menu-label">预算规则</text></view
+              >
+              <text class="menu-arrow">›</text>
+            </view>
+            <view
+              class="menu-item glass-thin"
+              style="margin: 0 32rpx 0; border-radius: 0"
+              @click="goLimitSetting"
+            >
+              <view class="menu-left"
+                ><text class="menu-icon">🎯</text
+                ><text class="menu-label">限额设置</text></view
+              >
+              <text class="menu-arrow">›</text>
+            </view>
+            <view
+              class="menu-item glass-thin"
+              style="margin: 0 32rpx 0; border-radius: 0"
+              @click="goCategoryMgr"
+            >
+              <view class="menu-left"
+                ><text class="menu-icon">🗂️</text
+                ><text class="menu-label">分类管理</text></view
+              >
+              <text class="menu-arrow">›</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 功能设置 -->
+        <view v-if="activeCat === 'feature'" class="cat-panel">
+          <view class="cat-list">
+            <view class="menu-item glass-thin" style="margin: 0 16px 0; border-radius: 0">
+              <view class="menu-left">
+                <text class="menu-icon">🍽️</text>
+                <view class="menu-label-col">
+                  <text class="menu-label">餐饮轻记录</text>
+                  <text class="menu-sub">开启后餐饮账目可记录餐次与热量</text>
+                </view>
+              </view>
+              <view class="sw-switch" :class="{ on: mealEnabled }" @click="toggleMeal">
+                <view class="sw-knob" :class="{ on: mealEnabled }" />
               </view>
             </view>
-            <view class="sw-switch" :class="{ on: mealEnabled }" @click="toggleMeal">
-              <view class="sw-knob" :class="{ on: mealEnabled }" />
-            </view>
-          </view>
-          <view class="menu-item glass-thin" style="margin: 0 16px 0; border-radius: 0">
-            <view class="menu-left">
-              <text class="menu-icon">🔥</text>
-              <view class="menu-label-col">
-                <text class="menu-label">减脂模式</text>
-                <text class="menu-sub">展示热量缺口（消耗−摄入）</text>
+            <view class="menu-item glass-thin" style="margin: 0 16px 0; border-radius: 0">
+              <view class="menu-left">
+                <text class="menu-icon">🔥</text>
+                <view class="menu-label-col">
+                  <text class="menu-label">减脂模式</text>
+                  <text class="menu-sub">展示热量缺口（消耗−摄入）</text>
+                </view>
+              </view>
+              <view
+                class="sw-switch"
+                :class="{ on: fatLossEnabled }"
+                @click="toggleFatLoss"
+              >
+                <view class="sw-knob" :class="{ on: fatLossEnabled }" />
               </view>
             </view>
             <view
-              class="sw-switch"
-              :class="{ on: fatLossEnabled }"
-              @click="toggleFatLoss"
+              class="menu-item glass-thin"
+              style="margin: 0 32rpx 0; border-radius: 0"
+              @click="goHealthSettings"
             >
-              <view class="sw-knob" :class="{ on: fatLossEnabled }" />
+              <view class="menu-left">
+                <text class="menu-icon">⚖️</text>
+                <text class="menu-label">身体数据设置</text>
+              </view>
+              <text class="menu-arrow">›</text>
             </view>
-          </view>
-          <view
-            class="menu-item glass-thin"
-            style="margin: 0 32rpx 0; border-radius: 0"
-            @click="goHealthSettings"
-          >
-            <view class="menu-left">
-              <text class="menu-icon">⚖️</text>
-              <text class="menu-label">身体数据设置</text>
-            </view>
-            <text class="menu-arrow">›</text>
           </view>
         </view>
 
-        <view class="menu-group" style="margin-top: 32rpx">
-          <text class="menu-title">更多</text>
-          <view
-            class="menu-item glass-thin"
-            style="margin: 0 32rpx 0; border-radius: 0"
-            @click="activeSheet = 'about'"
-          >
-            <view class="menu-left"
-              ><text class="menu-icon">ℹ️</text
-              ><text class="menu-label">关于余钱罐</text></view
+        <!-- 更多 -->
+        <view v-if="activeCat === 'more'" class="cat-panel">
+          <view class="cat-list">
+            <view
+              class="menu-item glass-thin"
+              style="margin: 0 32rpx 0; border-radius: 0"
+              @click="activeSheet = 'about'"
             >
-            <text class="menu-arrow">›</text>
-          </view>
-          <view
-            class="menu-item glass-thin"
-            style="margin: 0 32rpx 0; border-radius: 0"
-            @click="activeSheet = 'feedback'"
-          >
-            <view class="menu-left"
-              ><text class="menu-icon">💬</text
-              ><text class="menu-label">意见反馈</text></view
+              <view class="menu-left"
+                ><text class="menu-icon">ℹ️</text
+                ><text class="menu-label">关于余钱罐</text></view
+              >
+              <text class="menu-arrow">›</text>
+            </view>
+            <view
+              class="menu-item glass-thin"
+              style="margin: 0 32rpx 0; border-radius: 0"
+              @click="activeSheet = 'feedback'"
             >
-            <text class="menu-arrow">›</text>
+              <view class="menu-left"
+                ><text class="menu-icon">💬</text
+                ><text class="menu-label">意见反馈</text></view
+              >
+              <text class="menu-arrow">›</text>
+            </view>
           </view>
         </view>
 
@@ -336,18 +362,21 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { listTransactions, updateSettings } from "@/api/sparejar.js";
 import { useUserStore } from "@/stores/user.js";
-import { updateSettings } from "@/api/sparejar.js";
-import { todayDateKey, addDaysToDateKey } from "@/utils/date.js";
 import { cdn } from "@/utils/cdn.js";
+import { addDaysToDateKey, todayDateKey } from "@/utils/date.js";
 import { formatFen } from "@/utils/money.js";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 
 const {
   isGuest,
   state,
   currentStreak,
   savingsPoolBalanceFen,
+  surplusPoolBalanceFen,
+  wishes,
+  loadWishes,
   logout,
   loadSettings,
   refreshTodayDashboard,
@@ -363,6 +392,12 @@ const displayName = computed(() => {
   const user = state.user;
   if (user && user.nickname) return user.nickname;
   return "余钱罐用户";
+});
+
+// 用户头像：接口返回优先，缺失或游客使用默认头像
+const avatarUrl = computed(() => {
+  const url = state.user && state.user.avatar;
+  return url ? url : cdn("/app_static/images/icon_avatar.png");
 });
 
 function resolveTop() {
@@ -385,6 +420,17 @@ onMounted(() => {
     nowHour.value = new Date().getHours();
     if (greetOpen.value) greetRotate.value += 1; // 展开时定时轮换
   }, 60000);
+  // 加载全量交易与心愿，用于汇总总收入/总支出/存款
+  if (!isGuest.value) {
+    listTransactions({ limit: 10000 })
+      .then((res) => {
+        allTransactions.value = Array.isArray(res) ? res : [];
+      })
+      .catch(() => {
+        allTransactions.value = [];
+      });
+    loadWishes().catch(() => {});
+  }
 });
 onUnmounted(() => {
   if (greetTimer) clearInterval(greetTimer);
@@ -401,11 +447,59 @@ const savedTotalFen = computed(() =>
 );
 const savedTotalText = computed(() => formatFen(savedTotalFen.value));
 
-const userStats = [
-  { label: "总记账", value: "1,248", color: "#25cc5d" },
-  { label: "存款池", value: "¥3,240", color: "#3b82f6" },
-  { label: "连续天数", value: "23", color: "#f59e0b" },
-];
+// 全量交易（用于本地汇总总收入/总支出）
+const allTransactions = ref([]);
+
+const totalIncomeFen = computed(() =>
+  allTransactions.value.reduce(
+    (sum, t) =>
+      t.type === "income" || t.type === "refund" ? sum + (Number(t.amount) || 0) : sum,
+    0
+  )
+);
+const totalExpenseFen = computed(() =>
+  allTransactions.value.reduce(
+    (sum, t) => (t.type === "expense" ? sum + (Number(t.amount) || 0) : sum),
+    0
+  )
+);
+// 存款 = 存款池余额 + 所有心愿已存金额
+const wishSavedFen = computed(() =>
+  (Array.isArray(wishes.value) ? wishes.value : []).reduce(
+    (sum, w) => sum + (Number(w.saved_amount) || 0),
+    0
+  )
+);
+const depositFen = computed(
+  () => (savingsPoolBalanceFen.value || 0) + wishSavedFen.value
+);
+// 总资产 = 存款（存款池 + 心愿已存）+ 结余池余额（流动资金）
+const totalAssetFen = computed(
+  () => depositFen.value + (surplusPoolBalanceFen.value || 0)
+);
+
+const userStats = computed(() => [
+  {
+    label: "总资产",
+    value: formatFen(isGuest.value ? 0 : totalAssetFen.value),
+    color: "var(--g5)",
+  },
+  {
+    label: "总收入",
+    value: formatFen(isGuest.value ? 0 : totalIncomeFen.value),
+    color: "var(--b3)",
+  },
+  {
+    label: "总支出",
+    value: formatFen(isGuest.value ? 0 : totalExpenseFen.value),
+    color: "var(--r6)",
+  },
+  {
+    label: "存款",
+    value: formatFen(isGuest.value ? 0 : depositFen.value),
+    color: "var(--y5)",
+  },
+]);
 
 const menuItems = [
   { icon: "📊", label: "数据导出", action: () => {} },
@@ -413,6 +507,15 @@ const menuItems = [
   { icon: "🔒", label: "隐私与安全", action: () => {} },
   { icon: "🗑️", label: "清理数据", action: () => {} },
 ];
+
+// 横向大分类（无背景无框文字） + 当前选中分类
+const catList = [
+  { key: "account", title: "账户数据" },
+  { key: "health", title: "健康预算" },
+  { key: "feature", title: "功能设置" },
+  { key: "more", title: "更多" },
+];
+const activeCat = ref("account");
 
 const goLimitSetting = () => {
   if (isGuest.value) {
@@ -447,27 +550,47 @@ const goBack = () => {
 
 // ===== 时段问候气泡（左侧展开动画 + 24h 动态话语） =====
 const greetOpen = ref(true);
-const nowHour = ref(new Date().getHours());
+const nowHour = ref(new Date().getHours()); // 当前时段（按真实时间）
 const greetRotate = ref(0); // 轮换索引，每次打开/定时 +1
 let greetTimer = null;
 
 // 各时段多条话语（记账 app 语境）
 const greetPhrases = {
   morning: [
-    "早安！今天也要好好记账呀 ☀️",
-    "新的一天，从记一笔开始 🌿",
+    "早安！今天也要好好记账呀",
+    "新的一天，从记一笔开始",
     "早安，今天的小金库由你守护~",
+    "记得吃顿热乎的早餐，胃暖一天都舒坦",
+    "清晨喝杯温水，给身体充个电吧",
+    "今天也要记得多喝水哦，小口慢饮更舒服",
+    "出门前看眼天气，冷热自己加减件衣服",
   ],
-  noon: ["午间小憩一下，别忘了记午餐 🍱", "午后记得复盘上午的花费哦"],
+  noon: [
+    "午间小憩一下，别忘了记录午餐",
+    "再忙也不要忘记吃午饭",
+    "饭后站起来走两步，松松筋骨精神更好",
+  ],
   afternoon: [
-    "下午茶时间，理性消费更安心 🍵",
+    "下午茶时间，理性消费更安心",
     "坚持记账的你超棒的，继续加油！",
+    "工作间隙起身活动下，远眺一会儿护护眼",
+    "累了就喝口水、伸个懒腰，别硬扛",
+    "保持好心情，今天的小确幸也值得记一笔",
   ],
   evening: [
-    "晚上好，今天的花销都记下了吗 🌙",
+    "晚上好，今天的花销都记下了吗",
     "睡前看看今日结余，安心入眠",
+    "晚饭别吃太撑，留点空间给好睡眠",
+    "和家人聊聊天，或做点喜欢的事放松下",
+    "今天辛苦啦，给自己一个小小的肯定",
   ],
-  late: ["夜深了，早点休息，明天再记 💤", "已经很晚了，放下手机睡吧"],
+  late: [
+    "夜深了，早点休息，明天再记",
+    "已经很晚了，放下手机睡吧",
+    "明天还要早起的话，现在就关灯躺平吧",
+    "睡前喝口温水、调暗灯光，更好入眠",
+    "今天的事翻篇啦，安心睡个好觉",
+  ],
 };
 
 const getPeriodKey = (h) => {
@@ -482,6 +605,20 @@ const greetText = computed(() => {
   const list = greetPhrases[getPeriodKey(nowHour.value)];
   return list[greetRotate.value % list.length];
 });
+
+// 时段对应图标（FR：morning/noon/afternoon/evening/late）
+const periodIconMap = {
+  morning: "icon_morning.png",
+  noon: "icon_noon.png",
+  afternoon: "icon_afternoon.png",
+  evening: "icon_evening.png",
+  late: "icon_night.png",
+};
+const greetIcon = computed(() =>
+  cdn(`/app_static/images/${periodIconMap[getPeriodKey(nowHour.value)]}`)
+);
+// 当前时段 key，用于 .cloud 动态样式
+const cloudPeriod = computed(() => getPeriodKey(nowHour.value));
 
 const toggleGreet = () => {
   greetOpen.value = !greetOpen.value;
@@ -611,13 +748,13 @@ function handleLogout() {
   overflow: hidden;
   position: relative;
   margin: 0 auto;
-  background: var(--g1);
+  background: #ffffff;
 }
 .profile-hero {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 60rpx 0 40rpx;
+  padding: 50rpx 0 40rpx;
   z-index: 20;
 }
 .topbar {
@@ -625,7 +762,7 @@ function handleLogout() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 32rpx 20rpx;
+  padding: 0 32rpx;
   z-index: 10;
 }
 .back-btn {
@@ -650,8 +787,8 @@ function handleLogout() {
   color: var(--ink);
 }
 .avatar-ring {
-  width: 160rpx;
-  height: 160rpx;
+  width: 120rpx;
+  height: 120rpx;
   border-radius: 50%;
   padding: 6rpx;
   background: linear-gradient(135deg, var(--g3), var(--g5), var(--g4));
@@ -665,11 +802,13 @@ function handleLogout() {
   align-items: center;
   justify-content: center;
 }
-.avatar-emoji {
-  font-size: 72rpx;
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
 }
 .profile-name {
-  font-size: 36rpx;
+  font-size: 34rpx;
   font-weight: 800;
   color: var(--ink);
 }
@@ -677,7 +816,7 @@ function handleLogout() {
 /* 用户卡片（Uiverse.io by sahilxkhadka 改造·绿色系） */
 .card {
   width: 684rpx;
-  height: 368rpx;
+  height: 260rpx;
   position: relative;
   padding: 40rpx;
   display: flex;
@@ -696,9 +835,34 @@ function handleLogout() {
 .cloud {
   position: absolute;
   right: 12rpx;
-  top: 12rpx;
+  top: -59rpx;
   z-index: 100;
   cursor: pointer;
+  transition: all 0.4s ease;
+}
+/* 不同时间段：云朵位置/缩放/旋转差异化 */
+.cloud.cloud-morning {
+  right: 12rpx;
+  top: -85rpx;
+}
+.cloud.cloud-noon {
+  top: -70rpx;
+  z-index: -1;
+  .cloud-icon {
+    height: 170rpx;
+    width: 170rpx;
+    z-index: 20;
+  }
+}
+.cloud.cloud-afternoon {
+  top: -62rpx;
+  z-index: -1;
+}
+.cloud.cloud-evening {
+  top: -72rpx;
+}
+.cloud.cloud-late {
+  top: -72rpx;
 }
 .cloud-icon {
   height: 180rpx;
@@ -708,12 +872,11 @@ function handleLogout() {
 /* 左侧展开问候气泡（指向右上角图标，像图标在说话） */
 .greet-bubble {
   position: absolute;
-  right: 20rpx;
-  top: 120rpx;
+  right: 200rpx;
+  top: -45rpx;
   z-index: 30;
   max-width: 0;
   padding: 0;
-  overflow: hidden;
   white-space: nowrap;
   background: rgba(255, 255, 255, 0.92);
   border: 2rpx solid rgba(138, 233, 155, 0.6);
@@ -721,32 +884,81 @@ function handleLogout() {
   box-shadow: 0 6rpx 18rpx rgba(46, 92, 64, 0.15);
   opacity: 0;
   transform: translateX(-24rpx);
-  transition: max-width 0.38s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.3s ease, transform 0.38s cubic-bezier(0.22, 1, 0.36, 1),
+  transition: max-width 0.38s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease,
+    transform 0.38s cubic-bezier(0.22, 1, 0.36, 1),
     padding 0.38s cubic-bezier(0.22, 1, 0.36, 1);
   cursor: pointer;
 }
+/* 收起态仍需裁切文字，展开态放开以显示尖角 */
+.greet-bubble:not(.open) {
+  overflow: hidden;
+}
 .greet-bubble.open {
-  max-width: 460rpx;
+  max-width: 440rpx;
   padding: 18rpx 24rpx;
   opacity: 1;
   transform: translateX(0);
   white-space: normal;
 }
-/* 尖角：指向右上方的图标 */
-.greet-bubble.open::before {
-  content: "";
+
+/* 不同时段：气泡主题色与位置差异化 */
+.greet-bubble.greet-morning {
+  top: -45rpx;
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(138, 233, 155, 0.6);
+  box-shadow: 0 6rpx 18rpx rgba(46, 92, 64, 0.15);
+}
+.greet-bubble.greet-noon {
+  top: -35rpx;
+  background: rgba(255, 250, 232, 0.95);
+  border-color: rgba(255, 198, 92, 0.65);
+  box-shadow: 0 6rpx 18rpx rgba(180, 130, 30, 0.18);
+}
+.greet-bubble.greet-afternoon {
+  top: -40rpx;
+  background: rgba(255, 247, 240, 0.95);
+  border-color: rgba(255, 170, 120, 0.6);
+  box-shadow: 0 6rpx 18rpx rgba(190, 120, 70, 0.16);
+}
+.greet-bubble.greet-evening {
+  top: -25rpx;
+  background: rgba(245, 240, 255, 0.95);
+  border-color: rgba(170, 142, 235, 0.6);
+  box-shadow: 0 6rpx 18rpx rgba(110, 80, 180, 0.18);
+}
+.greet-bubble.greet-late {
+  top: -24rpx;
+  background: rgba(228, 233, 245, 0.95);
+  border-color: rgba(120, 140, 180, 0.6);
+  box-shadow: 0 6rpx 18rpx rgba(60, 75, 110, 0.2);
+}
+/* 尖角：真实 view 元素，旋转方块形成指向右侧图标的小三角 */
+.greet-arrow,
+.greet-arrow-border {
   position: absolute;
-  right: 40rpx;
-  top: -14rpx;
-  border: 8rpx solid transparent;
-  border-bottom-color: rgba(255, 255, 255, 0.92);
+  right: -10rpx;
+  top: 26rpx;
+  width: 20rpx;
+  height: 20rpx;
+  border-radius: 4rpx;
+  transform: rotate(45deg);
+  z-index: 1;
+}
+.greet-arrow-border {
+  background: rgba(138, 233, 155, 0.6);
+}
+.greet-arrow {
+  right: -7rpx;
+  background: rgba(255, 255, 255, 0.92);
 }
 .greet-text {
+  display: block;
   font-size: 26rpx;
   font-weight: 600;
   color: var(--ink);
   line-height: 1.4;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 .card-user {
   position: relative;
@@ -754,6 +966,7 @@ function handleLogout() {
   display: flex;
   align-items: center;
   gap: 28rpx;
+  margin-top: 80rpx;
 }
 .card-user-info {
   display: flex;
@@ -762,7 +975,7 @@ function handleLogout() {
   min-width: 0;
 }
 .saved-amount {
-  font-size: 30rpx;
+  font-size: 24rpx;
   font-weight: 800;
   color: var(--g7);
   margin-top: 16rpx;
@@ -801,15 +1014,98 @@ function handleLogout() {
   display: block;
 }
 
-.menu-group {
-  margin-top: 32rpx;
-}
-.menu-title {
-  font-size: 22rpx;
-  color: var(--ink4);
-  font-weight: 600;
-  padding: 0 36rpx 16rpx;
+/* 设置总标题 */
+.menu-top-title {
   display: block;
+  font-size: 40rpx;
+  font-weight: 800;
+  color: var(--ink);
+  padding: 8rpx 36rpx 0;
+}
+/* 横向大分类（无背景无框文字，tab 过多可横向滚动） */
+.cat-tabs {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 24rpx 36rpx 8rpx;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.cat-tabs::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+.cat-tab {
+  flex-shrink: 0;
+  cursor: pointer;
+  padding: 12rpx 28rpx;
+  border-radius: 999rpx;
+  position: relative;
+  transition: background 0.22s ease, transform 0.18s ease;
+}
+.cat-tab:active {
+  transform: scale(0.94);
+}
+.cat-tab-text {
+  font-size: 28rpx;
+  color: var(--ink3);
+  font-weight: 600;
+  white-space: nowrap;
+  transition: color 0.2s ease;
+}
+.cat-tab.active {
+  background: var(--g2-0);
+}
+.cat-tab.active .cat-tab-text {
+  color: var(--g6);
+  font-weight: 800;
+}
+/* 大分类下的细分：统一圆角矩形 + g0~g2 渐变边框 */
+.cat-panel {
+  margin: 12rpx 32rpx 0;
+  border-radius: 28rpx;
+  padding: 2rpx;
+  background: linear-gradient(135deg, var(--g0), var(--g2));
+  animation: catFadeIn 0.3s ease;
+}
+.cat-list {
+  background: #fff;
+  border-radius: 26rpx;
+  overflow: hidden;
+  border: 4rpx solid var(--g3);
+}
+.cat-list .menu-item {
+  margin: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  // border-bottom: 1rpx solid rgba(14, 146, 63, 0.1);
+  /* glass-thin 的毛玻璃模糊会糊化 cat-list 左右边框线，形成内阴影错觉，需一并清除 */
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+.cat-list .menu-item:first-child,
+.cat-list .menu-item:last-child {
+  border-radius: 0 !important;
+}
+.cat-list .menu-item:last-child {
+  border-bottom: none !important;
+}
+.cat-list .menu-item-logout {
+  margin-top: 0 !important;
+}
+@keyframes catFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(14rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 .menu-item {
   padding: 28rpx 36rpx;

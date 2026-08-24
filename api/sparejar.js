@@ -150,6 +150,7 @@ export const ACTIONS = Object.freeze({
   DELETE_STICKER: 'deleteSticker',
   CONSUME_STICKER: 'consumeSticker',
   RECOGNIZE_RECEIPT: 'recognizeReceipt',
+  RECOGNIZE_ASSET: 'recognizeAsset',
   CREATE_ASSET_ACCOUNT: 'createAssetAccount',
   GET_ASSET_ACCOUNTS: 'getAssetAccounts',
   UPDATE_ASSET_ACCOUNT: 'updateAssetAccount',
@@ -710,6 +711,15 @@ export function recognizeReceipt(imageUrl) {
   return callSparejar(ACTIONS.RECOGNIZE_RECEIPT, { image_url: imageUrl })
 }
 
+/**
+ * 截图建账 OCR 识别：返回账户名、余额与推荐类别。
+ * @param {string} imageUrl 已上传到云存储的图片 URL
+ * @returns {Promise<{ success: boolean, reason?: string, account_name?: string, balance_fen?: number, suggested_class?: string, suggested_subtype?: string, raw_text?: string, image_url?: string }>}
+ */
+export function recognizeAsset(imageUrl) {
+  return callSparejar(ACTIONS.RECOGNIZE_ASSET, { image_url: imageUrl })
+}
+
 // ===== 阶段 10：资产账户体系 =====
 
 /** 新建资产账户。data 见后端 createAssetAccount（金额「分」）。 */
@@ -924,6 +934,7 @@ export default {
   deleteSticker,
   consumeSticker,
   recognizeReceipt,
+  recognizeAsset,
   createAssetAccount,
   getAssetAccounts,
   updateAssetAccount,

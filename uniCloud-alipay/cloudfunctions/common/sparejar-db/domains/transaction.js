@@ -612,30 +612,46 @@ async function createTransaction(userId, data) {
   const transactionId = addRes.id
 
   // 阶段 10：账户联动——专项/投资账户的消费不计入日限额与日挑战（§3.11.5）
+  // 同时按账户类别决定余额变动符号：负债账户余额表示"欠款"，语义与资产账户相反。
+  /** @type {Object|null} */
+  let fromAcc = null
   if (data.account_id) {
     try {
       const accRes = await db.collection('asset_accounts').doc(data.account_id).get()
       const acc = accRes.data && accRes.data[0]
       if (acc && acc.user_id === userId) {
+        fromAcc = acc
         if (acc.include_in_daily_limit === false) txDoc.include_in_daily_limit = false
         if (acc.include_in_challenge === false) txDoc.include_in_challenge = false
       }
     } catch (_e) { /* 账户不存在则按默认计限 */ }
   }
+  /** @type {Object|null} */
+  let toAcc = null
+  if (data.type === 'transfer' && data.to_account_id) {
+    try {
+      const accRes = await db.collection('asset_accounts').doc(data.to_account_id).get()
+      const acc = accRes.data && accRes.data[0]
+      if (acc && acc.user_id === userId) toAcc = acc
+    } catch (_e) { /* 忽略 */ }
+  }
 
-  if (data.account_id) {
+  if (data.account_id && fromAcc) {
+    // 负债账户（付款方）：expense 表示刷卡消费，欠款增加（+amount）；income/refund/transfer 表示还款，欠款减少（-amount）
+    const isLiability = fromAcc.account_class === 'liability'
     let delta = 0
-    if (data.type === 'expense') delta = -data.amount
-    else if (data.type === 'income' || data.type === 'refund') delta = data.amount
-    else if (data.type === 'transfer') delta = -data.amount
+    if (data.type === 'expense') delta = isLiability ? data.amount : -data.amount
+    else if (data.type === 'income' || data.type === 'refund' || data.type === 'transfer') delta = isLiability ? -data.amount : data.amount
     if (delta !== 0) {
       await pool.applyAccountBalanceChange(userId, data.account_id, delta, 'transaction', {
         transaction_id: transactionId
       })
     }
   }
-  if (data.type === 'transfer' && data.to_account_id) {
-    await pool.applyAccountBalanceChange(userId, data.to_account_id, data.amount, 'transfer_in', {
+  if (data.type === 'transfer' && data.to_account_id && toAcc) {
+    // 转入方：普通账户余额增加；负债账户表示收到还款，欠款减少（-amount）
+    const delta = toAcc.account_class === 'liability' ? -data.amount : data.amount
+    await pool.applyAccountBalanceChange(userId, data.to_account_id, delta, 'transfer_in', {
       transaction_id: transactionId,
       counter_account_id: data.account_id
     })
@@ -698,10 +714,13 @@ async function softDeleteTransaction(userId, transactionId) {
   await db.collection('transactions').doc(transactionId).update({ deleted_at: ts, updated_at: ts })
 
   if (tx.account_id) {
+    const accRes = await db.collection('asset_accounts').doc(tx.account_id).get()
+    const acc = accRes.data && accRes.data[0]
+    const isLiability = acc && acc.user_id === userId && acc.account_class === 'liability'
     let delta = 0
-    if (tx.type === 'expense') delta = tx.amount
-    else if (tx.type === 'income' || tx.type === 'refund') delta = -tx.amount
-    else if (tx.type === 'transfer') delta = tx.amount
+    if (tx.type === 'expense') delta = isLiability ? -tx.amount : tx.amount
+    else if (tx.type === 'income' || tx.type === 'refund') delta = isLiability ? tx.amount : -tx.amount
+    else if (tx.type === 'transfer') delta = isLiability ? -tx.amount : tx.amount
     if (delta !== 0) {
       await pool.applyAccountBalanceChange(userId, tx.account_id, delta, 'refund', {
         transaction_id: transactionId,
@@ -710,7 +729,11 @@ async function softDeleteTransaction(userId, transactionId) {
     }
   }
   if (tx.type === 'transfer' && tx.to_account_id) {
-    await pool.applyAccountBalanceChange(userId, tx.to_account_id, -tx.amount, 'refund', {
+    const accRes = await db.collection('asset_accounts').doc(tx.to_account_id).get()
+    const acc = accRes.data && accRes.data[0]
+    const isLiability = acc && acc.user_id === userId && acc.account_class === 'liability'
+    const delta = isLiability ? tx.amount : -tx.amount
+    await pool.applyAccountBalanceChange(userId, tx.to_account_id, delta, 'refund', {
       transaction_id: transactionId,
       counter_account_id: tx.account_id,
       note: 'transfer rollback'
@@ -741,10 +764,13 @@ async function updateTransaction(userId, transactionId, data) {
 
   // 1) 回滚旧值影响
   if (oldTx.account_id) {
+    const accRes = await db.collection('asset_accounts').doc(oldTx.account_id).get()
+    const acc = accRes.data && accRes.data[0]
+    const isLiability = acc && acc.user_id === userId && acc.account_class === 'liability'
     let delta = 0
-    if (oldTx.type === 'expense') delta = oldTx.amount
-    else if (oldTx.type === 'income' || oldTx.type === 'refund') delta = -oldTx.amount
-    else if (oldTx.type === 'transfer') delta = oldTx.amount
+    if (oldTx.type === 'expense') delta = isLiability ? -oldTx.amount : oldTx.amount
+    else if (oldTx.type === 'income' || oldTx.type === 'refund') delta = isLiability ? oldTx.amount : -oldTx.amount
+    else if (oldTx.type === 'transfer') delta = isLiability ? -oldTx.amount : oldTx.amount
     if (delta !== 0) {
       await pool.applyAccountBalanceChange(userId, oldTx.account_id, delta, 'refund', {
         transaction_id: transactionId,
@@ -753,7 +779,11 @@ async function updateTransaction(userId, transactionId, data) {
     }
   }
   if (oldTx.type === 'transfer' && oldTx.to_account_id) {
-    await pool.applyAccountBalanceChange(userId, oldTx.to_account_id, -oldTx.amount, 'refund', {
+    const accRes = await db.collection('asset_accounts').doc(oldTx.to_account_id).get()
+    const acc = accRes.data && accRes.data[0]
+    const isLiability = acc && acc.user_id === userId && acc.account_class === 'liability'
+    const delta = isLiability ? oldTx.amount : -oldTx.amount
+    await pool.applyAccountBalanceChange(userId, oldTx.to_account_id, delta, 'refund', {
       transaction_id: transactionId,
       counter_account_id: oldTx.account_id,
       note: 'transfer update rollback'
@@ -800,10 +830,13 @@ async function updateTransaction(userId, transactionId, data) {
 
   // 4) 应用新值影响
   if (newAccountId) {
+    const accRes = await db.collection('asset_accounts').doc(newAccountId).get()
+    const acc = accRes.data && accRes.data[0]
+    const isLiability = acc && acc.user_id === userId && acc.account_class === 'liability'
     let delta = 0
-    if (newType === 'expense') delta = -newAmount
-    else if (newType === 'income' || newType === 'refund') delta = newAmount
-    else if (newType === 'transfer') delta = -newAmount
+    if (newType === 'expense') delta = isLiability ? newAmount : -newAmount
+    else if (newType === 'income' || newType === 'refund') delta = isLiability ? -newAmount : newAmount
+    else if (newType === 'transfer') delta = isLiability ? newAmount : -newAmount
     if (delta !== 0) {
       await pool.applyAccountBalanceChange(userId, newAccountId, delta, 'transaction', {
         transaction_id: transactionId
@@ -811,7 +844,11 @@ async function updateTransaction(userId, transactionId, data) {
     }
   }
   if (newType === 'transfer' && newToAccountId) {
-    await pool.applyAccountBalanceChange(userId, newToAccountId, newAmount, 'transfer_in', {
+    const accRes = await db.collection('asset_accounts').doc(newToAccountId).get()
+    const acc = accRes.data && accRes.data[0]
+    const isLiability = acc && acc.user_id === userId && acc.account_class === 'liability'
+    const delta = isLiability ? -newAmount : newAmount
+    await pool.applyAccountBalanceChange(userId, newToAccountId, delta, 'transfer_in', {
       transaction_id: transactionId,
       counter_account_id: newAccountId
     })

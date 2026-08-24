@@ -158,7 +158,7 @@
         class="q-entry"
         v-for="(e, i) in quickEntries"
         :key="i"
-        @click="openQuickEntry(['category', 'account', 'stock', 'meal'][i])"
+        @click="openQuickEntry(e.key)"
       >
         <!-- 待：占位大图（超出矩形上方），后续替换为真实图片 -->
         <view class="q-thumb" :style="{ background: e.thumbBg }"></view>
@@ -292,6 +292,7 @@
             <text class="sheet-item-name">不关联</text>
             <text v-if="!draft.accountId" class="sheet-item-check">✓</text>
           </view>
+          <view class="section-label">日常账户</view>
           <view
             v-for="acc in dailyAccounts"
             :key="acc._id"
@@ -306,7 +307,66 @@
             <text class="sheet-item-name">{{ acc.name }}</text>
             <text v-if="draft.accountId === acc._id" class="sheet-item-check">✓</text>
           </view>
+          <template v-if="liabilityAccounts.length">
+            <view class="section-label">负债账户（刷卡消费·欠款增加）</view>
+            <view
+              v-for="acc in liabilityAccounts"
+              :key="acc._id"
+              class="sheet-item liability"
+              :class="{ active: draft.accountId === acc._id }"
+              @click="
+                draft.accountId = acc._id;
+                closeQuickPopup();
+              "
+            >
+              <text class="sheet-item-icon">{{ acc.icon }}</text>
+              <text class="sheet-item-name">{{ acc.name }}</text>
+              <text class="sheet-item-sub">欠 {{ fenToYuanString(acc.balance) }}</text>
+              <text v-if="draft.accountId === acc._id" class="sheet-item-check">✓</text>
+            </view>
+          </template>
         </scroll-view>
+        <view class="sheet-cancel" @click="closeQuickPopup">取消</view>
+      </view>
+    </view>
+
+    <!-- 快捷入口弹框：还款（日常账户 -> 负债账户，转账减欠款） -->
+    <view v-if="quickPopup === 'repay'" class="sheet-mask" @click="closeQuickPopup">
+      <view class="sheet" @click.stop>
+        <view class="sheet-title">还款（日常账户 → 负债账户）</view>
+        <scroll-view scroll-y enhanced :show-scrollbar="false" class="sheet-scroll">
+          <view class="section-label">从（付款日常账户）</view>
+          <view
+            v-for="acc in dailyAccounts"
+            :key="acc._id"
+            class="sheet-item"
+            :class="{ active: repayFromId === acc._id }"
+            @click="repayFromId = acc._id"
+          >
+            <text class="sheet-item-icon">{{ acc.icon }}</text>
+            <text class="sheet-item-name">{{ acc.name }}</text>
+            <text v-if="repayFromId === acc._id" class="sheet-item-check">✓</text>
+          </view>
+          <view class="section-label">还到（负债账户）</view>
+          <view
+            v-for="acc in liabilityAccounts"
+            :key="acc._id"
+            class="sheet-item liability"
+            :class="{ active: repayToId === acc._id }"
+            @click="repayToId = acc._id"
+          >
+            <text class="sheet-item-icon">{{ acc.icon }}</text>
+            <text class="sheet-item-name">{{ acc.name }}</text>
+            <text class="sheet-item-sub">欠 {{ fenToYuanString(acc.balance) }}</text>
+            <text v-if="repayToId === acc._id" class="sheet-item-check">✓</text>
+          </view>
+        </scroll-view>
+        <view
+          class="sheet-confirm"
+          :class="{ disabled: !repayFromId || !repayToId || !draft.amount }"
+          @click="submitRepay"
+          >确认还款 ¥{{ draft.amount || '0.00' }}</view
+        >
         <view class="sheet-cancel" @click="closeQuickPopup">取消</view>
       </view>
     </view>
@@ -600,6 +660,7 @@ const draft = reactive({
   stickerId: "", // 绑定的普通素材贴纸（stickers._id）
   stickerImageUrl: "", // 一次性拍照贴纸图（不入库 stickers）
   ocrMeta: null, // OCR 识别元数据（来自拍照识别记账，失败兜底手动时带入）
+  toAccountId: "", // 还款场景：收款负债账户
   // 阶段 11：餐次与热量（仅餐饮分类 + 已开启轻记录时生效）
   mealType: "lunch",
   calorieMode: "itemized", // whole / itemized / partial
@@ -614,33 +675,55 @@ const members = ref([]); // 当前账本成员列表
 // 快捷入口（占位大图，后续替换为真实图片）
 const quickEntries = ref([
   {
+    key: "category",
     title: "选择账本分类",
     thumbBg: "linear-gradient(135deg,#4fd974,#25cc5d)",
     tagBg: "rgba(37,204,93,0.18)",
   },
   {
+    key: "account",
     title: "付款账户",
     thumbBg: "linear-gradient(135deg,#6aa9ff,#3d7bf0)",
     tagBg: "rgba(61,123,240,0.18)",
   },
   {
+    key: "stock",
     title: "消耗囤货",
     thumbBg: "linear-gradient(135deg,#ffb86a,#ff8a3d)",
     tagBg: "rgba(255,138,61,0.18)",
   },
   {
+    key: "meal",
     title: "餐次与热量",
     thumbBg: "linear-gradient(135deg,#ff8fae,#ff5d8f)",
     tagBg: "rgba(255,93,143,0.18)",
   },
+  {
+    key: "repay",
+    title: "还款",
+    thumbBg: "linear-gradient(135deg,#ff7a8a,#f0455f)",
+    tagBg: "rgba(240,69,95,0.18)",
+  },
 ]);
 
-// 快捷入口点击 -> 弹出对应选择框（分类/付款账户/消耗囤货/餐次与热量）
-const quickPopup = ref(""); // '' | 'category' | 'account' | 'stock' | 'meal'
+// 快捷入口点击 -> 弹出对应选择框（分类/付款账户/消耗囤货/餐次与热量/还款）
+const quickPopup = ref(""); // '' | 'category' | 'account' | 'stock' | 'meal' | 'repay'
 function openQuickEntry(type) {
   if (type === "category" && !groupedCats.value.length) {
     uni.showToast({ title: "暂无分类", icon: "none" });
     return;
+  }
+  if (type === "repay") {
+    if (!dailyAccounts.value.length) {
+      uni.showToast({ title: "请先添加日常账户", icon: "none" });
+      return;
+    }
+    if (!liabilityAccounts.value.length) {
+      uni.showToast({ title: "暂无负债账户", icon: "none" });
+      return;
+    }
+    repayFromId.value = "";
+    repayToId.value = "";
   }
   quickPopup.value = type;
 }
@@ -829,6 +912,20 @@ const dailyAccounts = computed(() =>
       icon: ASSET_SUBTYPE_ICON[a.account_subtype] || "💳",
     }))
 );
+// 负债账户列表（还款/刷卡消费联动用）
+const liabilityAccounts = computed(() =>
+  (userStore.state.assets || [])
+    .filter((a) => a.account_class === "liability")
+    .map((a) => ({
+      _id: a._id,
+      name: a.name,
+      icon: ASSET_SUBTYPE_ICON[a.account_subtype] || "💳",
+      balance: a.current_balance || 0,
+    }))
+);
+// 还款弹框：付款日常账户 + 收款负债账户
+const repayFromId = ref("");
+const repayToId = ref("");
 const stickerPreview = computed(() => {
   if (draft.stickerImageUrl) return draft.stickerImageUrl;
   const s = materialStickers.value.find((x) => x._id === draft.stickerId);
@@ -1473,6 +1570,66 @@ async function saveRecord() {
   }
 }
 
+// 还款：用日常账户向负债账户转账，负债账户余额（欠款）减少
+async function submitRepay() {
+  if (saving.value) return;
+  if (!repayFromId.value || !repayToId.value) {
+    uni.showToast({ title: "请选择付款与收款账户", icon: "none" });
+    return;
+  }
+  if (!draft.amount || draft.amount === "." || Number(draft.amount || 0) <= 0) {
+    uni.showToast({ title: "请输入还款金额", icon: "none" });
+    return;
+  }
+  let fen;
+  try {
+    fen = yuanToFen(draft.amount);
+  } catch (err) {
+    uni.showToast({ title: "金额格式有误", icon: "none" });
+    return;
+  }
+  if (!draft.ledgerId) {
+    uni.showToast({ title: "请选择账本", icon: "none" });
+    return;
+  }
+  saving.value = true;
+  try {
+    const [y, m, d] = draft.dateKey.split("-").map(Number);
+    const now = new Date();
+    const txAt = new Date(
+      y,
+      m - 1,
+      d,
+      now.getHours(),
+      now.getMinutes(),
+      now.getSeconds()
+    ).getTime();
+    await createTransaction({
+      ledger_id: draft.ledgerId,
+      type: "transfer",
+      amount: fen,
+      category_id: "",
+      note: draft.note.trim() || "还款",
+      date_key: draft.dateKey,
+      transaction_at: txAt,
+      account_id: repayFromId.value, // 付款：日常账户（余额减少）
+      to_account_id: repayToId.value, // 收款：负债账户（欠款减少）
+      member_ids: draft.memberIds,
+      tags: draft.tags,
+    });
+    uni.showToast({ title: "还款已记录", icon: "success" });
+    try {
+      await userStore.refreshTodayDashboard({ force: true });
+    } catch (_e) {}
+    setTimeout(() => uni.switchTab({ url: "/pages/index/index" }), 500);
+  } catch (err) {
+    const msg = err && err.message ? err.message : "还款失败";
+    uni.showToast({ title: msg, icon: "none" });
+  } finally {
+    saving.value = false;
+  }
+}
+
 function goBack() {
   uni.navigateBack();
 }
@@ -1908,6 +2065,36 @@ function goBack() {
     font-size: 30rpx;
     color: var(--g5);
     font-weight: 700;
+  }
+
+  .sheet-item-sub {
+    font-size: 22rpx;
+    color: var(--red, #ff6b6b);
+    font-weight: 600;
+  }
+
+  .sheet-item {
+    &.liability {
+      background: rgba(255, 107, 107, 0.06);
+      border-radius: 16rpx;
+      margin-bottom: 8rpx;
+      border-bottom: none;
+    }
+  }
+
+  .sheet-confirm {
+    margin-top: 20rpx;
+    text-align: center;
+    font-size: 30rpx;
+    font-weight: 700;
+    color: #fff;
+    padding: 24rpx 0;
+    border-radius: 20rpx;
+    background: linear-gradient(135deg, #f0455f, #ff7a8a);
+
+    &.disabled {
+      opacity: 0.45;
+    }
   }
 
   .sheet-cancel {
