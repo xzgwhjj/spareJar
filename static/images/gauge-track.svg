@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 110">
+  <defs>
+    <linearGradient id="trackGrad" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0%" stop-color="#eef0f1"/>
+      <stop offset="50%" stop-color="#e6e9ea"/>
+      <stop offset="100%" stop-color="#eef0f1"/>
+    </linearGradient>
+  </defs>
+  <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#trackGrad)" stroke-width="16" stroke-linecap="round"/>
+  <circle cx="20" cy="100" r="6" fill="#e6e9ea"/>
+  <circle cx="180" cy="100" r="6" fill="#e6e9ea"/>
+</svg>

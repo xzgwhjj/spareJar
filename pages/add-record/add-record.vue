@@ -303,7 +303,7 @@
               closeQuickPopup();
             "
           >
-            <text class="sheet-item-icon">{{ acc.icon }}</text>
+            <image class="sheet-item-icon" :src="acc.icon" mode="aspectFit" />
             <text class="sheet-item-name">{{ acc.name }}</text>
             <text v-if="draft.accountId === acc._id" class="sheet-item-check">✓</text>
           </view>
@@ -319,7 +319,7 @@
                 closeQuickPopup();
               "
             >
-              <text class="sheet-item-icon">{{ acc.icon }}</text>
+              <image class="sheet-item-icon" :src="acc.icon" mode="aspectFit" />
               <text class="sheet-item-name">{{ acc.name }}</text>
               <text class="sheet-item-sub">欠 {{ fenToYuanString(acc.balance) }}</text>
               <text v-if="draft.accountId === acc._id" class="sheet-item-check">✓</text>
@@ -343,7 +343,7 @@
             :class="{ active: repayFromId === acc._id }"
             @click="repayFromId = acc._id"
           >
-            <text class="sheet-item-icon">{{ acc.icon }}</text>
+            <image class="sheet-item-icon" :src="acc.icon" mode="aspectFit" />
             <text class="sheet-item-name">{{ acc.name }}</text>
             <text v-if="repayFromId === acc._id" class="sheet-item-check">✓</text>
           </view>
@@ -355,7 +355,7 @@
             :class="{ active: repayToId === acc._id }"
             @click="repayToId = acc._id"
           >
-            <text class="sheet-item-icon">{{ acc.icon }}</text>
+            <image class="sheet-item-icon" :src="acc.icon" mode="aspectFit" />
             <text class="sheet-item-name">{{ acc.name }}</text>
             <text class="sheet-item-sub">欠 {{ fenToYuanString(acc.balance) }}</text>
             <text v-if="repayToId === acc._id" class="sheet-item-check">✓</text>
@@ -833,18 +833,22 @@ const materialStickers = computed(() =>
 );
 // 阶段 10：可选付款账户（仅日常账户可作为消费来源）
 const ASSET_SUBTYPE_ICON = {
-  wechat: "💚",
-  alipay: "💙",
-  bank: "🏦",
-  cash: "💵",
-  provident_fund: "🏠",
-  insurance: "🛡️",
-  fund: "📈",
-  stock: "📊",
-  bond: "📜",
-  gold: "🪙",
-  wealth: "💼",
-  other: "📦",
+  wechat: cdn("/app_static/images/icon_wechat.png"),
+  alipay: cdn("/app_static/images/icon_alipay.png"),
+  bank_card: cdn("/app_static/images/icon_bank_card.png"),
+  bank: cdn("/app_static/images/icon_bank_card.png"),
+  cash: cdn("/app_static/images/icon_cash.png"),
+  huabei: cdn("/app_static/images/icon_huabei.png"),
+  credit_card: cdn("/app_static/images/icon_credit_card.png"),
+  jdbt: cdn("/app_static/images/icon_jdbt.png"),
+  loan: cdn("/app_static/images/icon_loan.png"),
+  provident_fund: cdn("/app_static/images/icon_provident_fund.png"),
+  insurance: cdn("/app_static/images/icon_insurance.png"),
+  fund: cdn("/app_static/images/icon_fund.png"),
+  stock: cdn("/app_static/images/icon_stock.png"),
+  bond: cdn("/app_static/images/icon_bond.png"),
+  gold: cdn("/app_static/images/icon_gold.png"),
+  other: cdn("/app_static/images/icon_other.png"),
 };
 // 阶段 11：餐次与热量
 const mealEnabled = computed(
@@ -909,7 +913,7 @@ const dailyAccounts = computed(() =>
     .map((a) => ({
       _id: a._id,
       name: a.name,
-      icon: ASSET_SUBTYPE_ICON[a.account_subtype] || "💳",
+      icon: ASSET_SUBTYPE_ICON[a.account_subtype] || cdn("/app_static/images/icon_other.png"),
     }))
 );
 // 负债账户列表（还款/刷卡消费联动用）
@@ -919,7 +923,7 @@ const liabilityAccounts = computed(() =>
     .map((a) => ({
       _id: a._id,
       name: a.name,
-      icon: ASSET_SUBTYPE_ICON[a.account_subtype] || "💳",
+      icon: ASSET_SUBTYPE_ICON[a.account_subtype] || cdn("/app_static/images/icon_other.png"),
       balance: a.current_balance || 0,
     }))
 );
@@ -2052,7 +2056,9 @@ function goBack() {
   }
 
   .sheet-item-icon {
-    font-size: 32rpx;
+    width: 44rpx;
+    height: 44rpx;
+    flex-shrink: 0;
   }
 
   .sheet-item-name {

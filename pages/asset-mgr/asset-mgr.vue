@@ -1,14 +1,14 @@
 <template>
   <view class="asset-page">
     <view class="topbar" :style="{ paddingTop: pagePaddingTop }">
-      <view class="back-btn" @click="goBack"><text>←</text></view>
+      <image
+        :src="cdn('/app_static/images/icon_left.png')"
+        class="back-icon"
+        mode="aspectFit"
+        @click="goBack"
+      ></image>
       <text class="topbar-title">资产账户</text>
-      <view class="topbar-actions">
-        <view class="cam-btn" @click="pickAndRecognizeAsset" title="截图建账"
-          ><text>📷</text></view
-        >
-        <view class="add-btn" @click="openAdd"><text>+</text></view>
-      </view>
+      <view style="width: 72rpx" />
     </view>
 
     <scroll-view
@@ -37,6 +37,13 @@
             <text class="ov-sub-lbl">投资市值</text>
           </view>
         </view>
+      </view>
+
+      <view class="action-row">
+        <view class="cam-btn" @click="pickAndRecognizeAsset" title="拍照/截图建账"
+          ><text>拍照/截图建账</text></view
+        >
+        <view class="add-btn" @click="openAdd"><text>添加账户</text></view>
       </view>
 
       <!-- 我的钱包分配入口（FR-1.1） -->
@@ -73,9 +80,15 @@
         @click="openDetail(a)"
       >
         <view class="acc-row">
-          <view class="acc-icon" :style="{ background: colorBgFor(a) }"
-            ><text>{{ iconFor(a) }}</text></view
-          >
+          <view class="acc-icon" :style="{ background: colorBgFor(a) }">
+            <image
+              v-if="a.icon && accIconUrls[a.icon]"
+              :src="accIconUrls[a.icon]"
+              mode="aspectFill"
+              class="acc-icon-img"
+            />
+            <image v-else :src="iconFor(a)" mode="aspectFit" class="acc-icon-img" />
+          </view>
           <view class="acc-info">
             <view class="acc-name-row">
               <text class="acc-name">{{ a.name }}</text>
@@ -106,8 +119,8 @@
               }}{{ fmt(a.balance) }}</text
             >
             <view class="acc-actions">
-              <text class="acc-edit" @click.stop="openEdit(a)">✏️</text>
-              <text class="acc-del" @click.stop="onDelete(a)">🗑️</text>
+              <text class="acc-edit" @click.stop="openEdit(a)">编辑</text>
+              <text class="acc-del" @click.stop="onDelete(a)">删除</text>
             </view>
           </view>
         </view>
@@ -125,6 +138,25 @@
       <view class="sheet-panel" @click.stop>
         <view class="sheet-handle"><view class="handle-bar" /></view>
         <text class="sheet-title">{{ editingAccount ? "编辑账户" : "新增账户" }}</text>
+
+        <view class="icon-row">
+          <text class="form-label">账户图标</text>
+          <view class="icon-picker" @click="pickAssetIcon">
+            <image
+              v-if="form.iconFileID"
+              class="icon-picker-img"
+              :src="assetIconUrl"
+              mode="aspectFill"
+            />
+            <text v-else class="icon-picker-add">＋</text>
+            <view
+              v-if="form.iconFileID"
+              class="icon-picker-clear"
+              @click.stop="clearAssetIcon"
+              >✕</view
+            >
+          </view>
+        </view>
 
         <text class="form-label">账户名称</text>
         <input class="sheet-input" v-model="form.name" placeholder="如：招商储蓄卡" />
@@ -149,7 +181,8 @@
             class="type-chip"
             :class="{ active: form.account_subtype === s.v }"
             @click="form.account_subtype = s.v"
-            >{{ s.icon }} {{ s.label }}</view
+            ><image :src="s.icon" mode="aspectFit" class="subtype-chip-icon" />
+            {{ s.label }}</view
           >
         </view>
 
@@ -216,7 +249,13 @@
             :class="{ active: allocTarget === t._id }"
             @click="allocTarget = t._id"
           >
-            <text class="sheet-item-icon">{{ t.icon }}</text>
+            <image
+              v-if="t.iconFileID && accIconUrls[t.iconFileID]"
+              :src="accIconUrls[t.iconFileID]"
+              mode="aspectFill"
+              class="sheet-item-icon-img"
+            />
+            <image v-else :src="t.icon" mode="aspectFit" class="sheet-item-icon-img" />
             <text class="sheet-item-name">{{ t.name }}</text>
             <text class="sheet-item-sub">余 {{ fmt(t.balance) }}</text>
             <text v-if="allocTarget === t._id" class="sheet-item-check">✓</text>
@@ -252,11 +291,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from "vue";
+import { ref, reactive, computed, onMounted, watch } from "vue";
 import { useUserStore } from "@/stores/user.js";
 import { formatFen, safeYuanToFen, fenToYuanString } from "@/utils/money.js";
 import { useNumberKeyboard } from "@/stores/numberKeyboard.js";
 import { recognizeAsset as apiRecognizeAsset } from "@/api/sparejar.js";
+import { cdn, getCloudTempUrl, getCloudTempUrls } from "@/utils/cdn.js";
+import { uploadAssetIcon } from "@/utils/cloudFile.js";
 import { onLoad } from "@dcloudio/uni-app";
 
 const userStore = useUserStore();
@@ -275,29 +316,40 @@ const classLabel = computed(
 
 const SUBTYPES = {
   daily: [
-    { v: "wechat", label: "微信", icon: "💚" },
-    { v: "alipay", label: "支付宝", icon: "💙" },
-    { v: "bank", label: "银行卡", icon: "🏦" },
-    { v: "cash", label: "现金", icon: "💵" },
+    { v: "wechat", label: "微信", icon: cdn("/app_static/images/icon_wechat.png") },
+    { v: "alipay", label: "支付宝", icon: cdn("/app_static/images/icon_alipay.png") },
+    {
+      v: "bank_card",
+      label: "银行卡",
+      icon: cdn("/app_static/images/icon_bank_card.png"),
+    },
+    { v: "cash", label: "现金", icon: cdn("/app_static/images/icon_cash.png") },
   ],
   special: [
-    { v: "provident_fund", label: "公积金", icon: "🏠" },
-    { v: "insurance", label: "医保", icon: "🛡️" },
+    {
+      v: "provident_fund",
+      label: "公积金",
+      icon: cdn("/app_static/images/icon_provident_fund.png"),
+    },
+    { v: "insurance", label: "医保", icon: cdn("/app_static/images/icon_insurance.png") },
   ],
   investment: [
-    { v: "fund", label: "基金", icon: "📈" },
-    { v: "stock", label: "股票", icon: "📊" },
-    { v: "bond", label: "债券", icon: "📜" },
-    { v: "gold", label: "黄金", icon: "🪙" },
-    { v: "wealth", label: "理财", icon: "💼" },
-    { v: "other", label: "其他", icon: "📦" },
+    { v: "fund", label: "基金", icon: cdn("/app_static/images/icon_fund.png") },
+    { v: "stock", label: "股票", icon: cdn("/app_static/images/icon_stock.png") },
+    { v: "bond", label: "债券", icon: cdn("/app_static/images/icon_bond.png") },
+    { v: "gold", label: "黄金", icon: cdn("/app_static/images/icon_gold.png") },
+    { v: "other", label: "其他", icon: cdn("/app_static/images/icon_other.png") },
   ],
   liability: [
-    { v: "huabei", label: "花呗", icon: "🌸" },
-    { v: "credit_card", label: "信用卡", icon: "💳" },
-    { v: "jdbt", label: "京东白条", icon: "🛒" },
-    { v: "loan", label: "借款", icon: "🤝" },
-    { v: "other", label: "其他", icon: "📦" },
+    { v: "huabei", label: "花呗", icon: cdn("/app_static/images/icon_huabei.png") },
+    {
+      v: "credit_card",
+      label: "信用卡",
+      icon: cdn("/app_static/images/icon_credit_card.png"),
+    },
+    { v: "jdbt", label: "京东白条", icon: cdn("/app_static/images/icon_jdbt.png") },
+    { v: "loan", label: "借款", icon: cdn("/app_static/images/icon_loan.png") },
+    { v: "other", label: "其他", icon: cdn("/app_static/images/icon_other.png") },
   ],
 };
 const subtypeMap = {};
@@ -332,7 +384,22 @@ const allocTargets = computed(() =>
       name: a.name,
       balance: a.current_balance || 0,
       icon: iconFor(a),
+      iconFileID: a.icon || "",
     }))
+);
+// 资产账户自定义图标：批量解析云存储 fileID → 临时可访问 URL
+const accIconUrls = ref({});
+watch(
+  () =>
+    (state.assets || [])
+      .map((a) => a.icon)
+      .filter(Boolean)
+      .join("|"),
+  async () => {
+    const ids = (state.assets || []).map((a) => a.icon).filter(Boolean);
+    accIconUrls.value = ids.length ? await getCloudTempUrls(ids) : {};
+  },
+  { immediate: true }
 );
 const showAlloc = ref(false);
 const allocTarget = ref("");
@@ -393,13 +460,14 @@ function subtypeLabel(a) {
 }
 function iconFor(a) {
   const s = subtypeMap[a.account_subtype];
-  return s ? s.icon : "💳";
+  return s ? s.icon : cdn("/app_static/images/icon_other.png");
 }
 
 /* 子类 → 卡片底色 */
 const SUBTYPE_BG = {
   wechat: "#e8f8ec",
   alipay: "#e8f1fb",
+  bank_card: "#f3f0ff",
   bank: "#f3f0ff",
   cash: "#e1fae3",
   provident_fund: "#eaf3ff",
@@ -429,7 +497,9 @@ const form = reactive({
   include_in_disposable: true,
   include_in_daily_limit: true,
   include_in_total_asset: true,
+  iconFileID: "",
 });
+const assetIconUrl = ref("");
 
 function openAdd() {
   editingAccount.value = null;
@@ -441,8 +511,44 @@ function openAdd() {
     include_in_disposable: true,
     include_in_daily_limit: true,
     include_in_total_asset: true,
+    iconFileID: "",
   });
+  assetIconUrl.value = "";
   showSheet.value = true;
+}
+// 选择并上传自定义账户图标（落库云存储 fileID）
+const uploadingAssetIcon = ref(false);
+async function pickAssetIcon() {
+  if (uploadingAssetIcon.value) return;
+  let imgPath = "";
+  try {
+    const res = await uni.chooseImage({
+      count: 1,
+      sizeType: ["compressed"],
+      sourceType: ["album", "camera"],
+    });
+    imgPath = res.tempFilePaths && res.tempFilePaths[0];
+  } catch (_e) {
+    return;
+  }
+  if (!imgPath) return;
+  uploadingAssetIcon.value = true;
+  uni.showLoading({ title: "上传中...", mask: true });
+  try {
+    const up = await uploadAssetIcon(imgPath);
+    form.iconFileID = up.fileID;
+    assetIconUrl.value = await getCloudTempUrl(up.fileID);
+    uni.hideLoading();
+  } catch (e) {
+    uni.hideLoading();
+    uni.showToast({ title: "图标上传失败", icon: "none" });
+  } finally {
+    uploadingAssetIcon.value = false;
+  }
+}
+function clearAssetIcon() {
+  form.iconFileID = "";
+  assetIconUrl.value = "";
 }
 
 // FR-2.2 截图建账：选图 → 上传云 → OCR 识别账户名/余额/类别 → 预填新建表单
@@ -536,11 +642,13 @@ function openRecognizedSheet(r, ic, sub, classDefaults) {
     include_in_disposable: classDefaults.d,
     include_in_daily_limit: classDefaults.l,
     include_in_total_asset: classDefaults.t,
+    iconFileID: "",
   });
+  assetIconUrl.value = "";
   showSheet.value = true;
   uni.showToast({ title: "已识别，请确认", icon: "none" });
 }
-function openEdit(a) {
+async function openEdit(a) {
   editingAccount.value = a;
   Object.assign(form, {
     name: a.name,
@@ -550,7 +658,9 @@ function openEdit(a) {
     include_in_disposable: !!a.include_in_disposable,
     include_in_daily_limit: !!a.include_in_daily_limit,
     include_in_total_asset: !!a.include_in_total_asset,
+    iconFileID: a.icon || "",
   });
+  assetIconUrl.value = a.icon ? await getCloudTempUrl(a.icon) : "";
   showSheet.value = true;
 }
 function onClassChange(c) {
@@ -578,6 +688,7 @@ async function saveAccount() {
     include_in_disposable: form.include_in_disposable,
     include_in_daily_limit: form.include_in_daily_limit,
     include_in_total_asset: form.include_in_total_asset,
+    icon: form.iconFileID || undefined,
   };
   try {
     if (editingAccount.value) {
@@ -614,16 +725,18 @@ function goBack() {
 }
 
 /* 顶部安全区 */
-function resolveTopPadding() {
+function resolveTop() {
   try {
-    const menuButton = uni.getMenuButtonBoundingClientRect();
-    if (menuButton && menuButton.bottom > 0)
-      return `${menuButton.bottom + uni.upx2px(16)}px`;
-  } catch (_) {}
-  const { statusBarHeight = 0 } = uni.getSystemInfoSync();
-  return `${statusBarHeight + uni.upx2px(88)}px`;
+    const rect = uni.getMenuButtonBoundingClientRect();
+    if (rect && rect.top > 0 && rect.height > 0) {
+      return { padTop: `${rect.top + 4}px`, barH: `${rect.height}px` };
+    }
+  } catch (e) {}
+  const { statusBarHeight = 20 } = uni.getSystemInfoSync();
+  return { padTop: `${statusBarHeight + 48}px`, barH: "32px" };
 }
-const pagePaddingTop = ref(resolveTopPadding());
+const top = resolveTop();
+const pagePaddingTop = ref(top.padTop);
 
 onLoad((q) => {
   if (q && q.action === "add") {
@@ -632,15 +745,16 @@ onLoad((q) => {
 });
 
 onMounted(() => {
-  pagePaddingTop.value = resolveTopPadding();
+  const t = resolveTop();
+  pagePaddingTop.value = t.padTop;
   userStore.loadAssetAccounts().catch(() => {});
 });
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .asset-page {
   min-height: 100vh;
-  background: linear-gradient(180deg, #f2fcf2, #ffffff);
+  background: linear-gradient(180deg, $sj-g1, #ffffff);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -649,139 +763,138 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px 10px;
+  padding: 0 32rpx 20rpx;
 }
-.back-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.75);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: #6b8c7a;
-  font-size: 16px;
+.back-icon {
+  width: 60rpx;
+  height: 60rpx;
 }
 .topbar-title {
-  font-size: 17px;
+  font-size: 34rpx;
   font-weight: 700;
-  color: var(--ink);
+  color: $sj-ink;
 }
 .add-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #4fd974, #25cc5d);
+  flex: 1;
+  height: 72rpx;
+  padding: 0 36rpx;
+  border-radius: 36rpx;
+  background: linear-gradient(135deg, $sj-g4, $sj-g5);
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 12rpx;
   cursor: pointer;
   color: #fff;
-  font-size: 20px;
-  font-weight: 300;
+  font-size: 28rpx;
+  font-weight: 600;
 }
-.topbar-actions {
+.action-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 20rpx;
+  margin: 24rpx 32rpx 0;
 }
 .cam-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
+  flex: 1;
+  height: 72rpx;
+  padding: 0 36rpx;
+  border-radius: 36rpx;
   background: rgba(255, 255, 255, 0.85);
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 12rpx;
   cursor: pointer;
-  font-size: 18px;
-  border: 1px solid rgba(194, 242, 200, 0.6);
+  font-size: 28rpx;
+  font-weight: 600;
+  color: $sj-ink;
+  border: 2rpx solid rgba(194, 242, 200, 0.6);
 }
 
 .glass-hero {
-  margin: 16px;
-  padding: 18px;
+  margin: 32rpx;
+  padding: 36rpx;
   text-align: center;
 }
 .ov-title {
-  font-size: 12px;
-  color: var(--ink4);
+  font-size: 24rpx;
+  color: $sj-ink4;
   display: block;
 }
 .ov-amount {
-  font-size: 34px;
+  font-size: 68rpx;
   font-weight: 900;
   display: block;
-  margin-top: 4px;
+  margin-top: 8rpx;
   letter-spacing: -1;
 }
 .ov-sub {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-top: 12px;
-  gap: 20px;
+  margin-top: 24rpx;
+  gap: 40rpx;
 }
 .ov-sub-item {
   text-align: center;
 }
 .ov-sub-val {
-  font-size: 15px;
+  font-size: 30rpx;
   font-weight: 700;
   display: block;
-  color: var(--ink);
+  color: $sj-ink;
 }
 .ov-sub-lbl {
-  font-size: 10px;
-  color: var(--ink4);
+  font-size: 20rpx;
+  color: $sj-ink4;
 }
 .ov-divider {
-  width: 1px;
-  height: 28px;
+  width: 2rpx;
+  height: 56rpx;
   background: rgba(194, 242, 200, 0.4);
 }
 
 .class-tabs {
   display: flex;
-  gap: 8px;
-  margin: 8px 16px 4px;
+  gap: 16rpx;
+  margin: 16rpx 32rpx 8rpx;
 }
 .class-tab {
   flex: 1;
   text-align: center;
-  padding: 10px 0;
-  border-radius: 14px;
+  padding: 20rpx 0;
+  border-radius: 28rpx;
   background: rgba(255, 255, 255, 0.6);
-  font-size: 13px;
+  font-size: 26rpx;
   font-weight: 600;
-  color: var(--ink4);
+  color: $sj-ink4;
   cursor: pointer;
 }
 .class-tab.active {
-  background: linear-gradient(135deg, #4fd974, #25cc5d);
+  background: linear-gradient(135deg, $sj-g4, $sj-g5);
   color: #fff;
 }
 
 .account-card {
-  margin: 10px 16px 0;
-  padding: 14px 16px;
+  margin: 20rpx 32rpx 0;
+  padding: 28rpx 32rpx;
   cursor: pointer;
 }
 .acc-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 20rpx;
 }
 .acc-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
+  width: 84rpx;
+  height: 84rpx;
+  border-radius: 24rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  font-size: 18px;
+  font-size: 36rpx;
 }
 .acc-info {
   flex: 1;
@@ -790,45 +903,45 @@ onMounted(() => {
 .acc-name-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 12rpx;
 }
 .acc-name {
-  font-size: 14px;
+  font-size: 28rpx;
   font-weight: 700;
-  color: var(--ink);
+  color: $sj-ink;
 }
 .acc-type {
-  font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 6px;
+  font-size: 20rpx;
+  padding: 4rpx 12rpx;
+  border-radius: 12rpx;
   background: rgba(194, 242, 200, 0.3);
-  color: #6b8c7a;
+  color: $sj-ink3;
 }
 .acc-sub {
-  font-size: 11px;
-  color: var(--ink4);
+  font-size: 22rpx;
+  color: $sj-ink4;
   display: block;
-  margin-top: 2px;
+  margin-top: 4rpx;
 }
 .acc-balance-group {
   text-align: right;
 }
 .acc-balance {
-  font-size: 16px;
+  font-size: 32rpx;
   font-weight: 800;
   display: block;
 }
 .acc-actions {
   display: flex;
-  gap: 6px;
-  margin-top: 4px;
+  gap: 12rpx;
+  margin-top: 8rpx;
   justify-content: flex-end;
 }
 .acc-edit,
 .acc-del {
-  font-size: 12px;
+  font-size: 24rpx;
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 4rpx 8rpx;
 }
 .acc-edit:active,
 .acc-del:active {
@@ -837,9 +950,9 @@ onMounted(() => {
 
 .empty-tip {
   text-align: center;
-  color: var(--ink4);
-  font-size: 13px;
-  padding: 40px 0;
+  color: $sj-ink4;
+  font-size: 26rpx;
+  padding: 80rpx 0;
 }
 
 .sheet-overlay {
@@ -860,65 +973,126 @@ onMounted(() => {
     rgba(255, 255, 255, 0.98),
     rgba(242, 252, 242, 0.96)
   );
-  border-radius: 24px 24px 0 0;
-  padding: 0 20px 30px;
+  border-radius: 48rpx 48rpx 0 0;
+  padding: 0 40rpx 60rpx;
 }
 .sheet-handle {
   display: flex;
   justify-content: center;
-  padding: 12px 0 8px;
+  padding: 24rpx 0 16rpx;
 }
 .handle-bar {
-  width: 38px;
-  height: 4px;
-  border-radius: 3px;
+  width: 76rpx;
+  height: 8rpx;
+  border-radius: 6rpx;
   background: rgba(194, 242, 200, 0.8);
 }
 .sheet-title {
-  font-size: 16px;
+  font-size: 32rpx;
   font-weight: 800;
-  color: var(--ink);
+  color: $sj-ink;
   display: block;
-  margin-bottom: 14px;
+  margin-bottom: 28rpx;
 }
 
 .form-label {
-  font-size: 12px;
-  color: #6b8c7a;
+  font-size: 24rpx;
+  color: $sj-ink3;
   font-weight: 600;
   display: block;
-  margin-bottom: 6px;
-  margin-top: 12px;
+  margin-bottom: 12rpx;
+  margin-top: 24rpx;
+}
+.icon-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 24rpx;
+}
+.icon-row .form-label {
+  margin-bottom: 0;
+  margin-top: 0;
+}
+.icon-picker {
+  position: relative;
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 26rpx;
+  background: rgba(242, 252, 242, 0.8);
+  border: 2rpx dashed rgba(134, 224, 150, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+}
+.icon-picker-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 26rpx;
+}
+.icon-picker-add {
+  font-size: 40rpx;
+  color: $sj-ink3;
+  line-height: 1;
+}
+.icon-picker-clear {
+  position: absolute;
+  top: -12rpx;
+  right: -12rpx;
+  width: 32rpx;
+  height: 32rpx;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 20rpx;
+  line-height: 32rpx;
+  text-align: center;
+}
+.acc-icon-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 26rpx;
+}
+.sheet-item-icon-img {
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 18rpx;
+  margin-right: 20rpx;
 }
 .sheet-input {
   width: 100%;
-  height: 44px;
-  border-radius: 14px;
+  height: 88rpx;
+  border-radius: 28rpx;
   background: rgba(242, 252, 242, 0.8);
-  border: 1px solid rgba(194, 242, 200, 0.4);
-  padding: 0 14px;
-  font-size: 14px;
-  margin-bottom: 8px;
+  border: 2rpx solid rgba(194, 242, 200, 0.4);
+  padding: 0 28rpx;
+  font-size: 28rpx;
+  margin-bottom: 16rpx;
   box-sizing: border-box;
 }
 
 .type-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 16rpx;
 }
 .type-chip {
-  padding: 6px 14px;
-  border-radius: 12px;
+  padding: 12rpx 28rpx;
+  border-radius: 24rpx;
   background: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(194, 242, 200, 0.3);
-  font-size: 12px;
+  border: 2rpx solid rgba(194, 242, 200, 0.3);
+  font-size: 24rpx;
   font-weight: 600;
-  color: #6b8c7a;
+  color: $sj-ink3;
   cursor: pointer;
 }
+.subtype-chip-icon {
+  width: 56rpx;
+  height: 56rpx;
+  object-fit: contain;
+}
 .type-chip.active {
-  background: linear-gradient(135deg, #4fd974, #25cc5d);
+  background: linear-gradient(135deg, $sj-g4, $sj-g5);
   color: #fff;
   border-color: transparent;
 }
@@ -927,22 +1101,22 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 0;
+  padding: 16rpx 0;
 }
 .toggle-lbl {
-  font-size: 13px;
-  color: var(--ink);
+  font-size: 26rpx;
+  color: $sj-ink;
   font-weight: 600;
 }
 
 .save-btn {
-  margin-top: 18px;
-  padding: 14px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #4fd974, #25cc5d);
+  margin-top: 36rpx;
+  padding: 28rpx;
+  border-radius: 32rpx;
+  background: linear-gradient(135deg, $sj-g4, $sj-g5);
   text-align: center;
   color: #fff;
-  font-size: 14px;
+  font-size: 28rpx;
   font-weight: 800;
   cursor: pointer;
 }
@@ -952,99 +1126,99 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin: 12px 0 4px;
-  padding: 14px 16px;
+  margin: 24rpx 32rpx;
+  padding: 28rpx 32rpx;
   cursor: pointer;
 }
 .wa-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 24rpx;
 }
 .wa-icon {
-  font-size: 30px;
+  font-size: 60rpx;
 }
 .wa-text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4rpx;
 }
 .wa-name {
-  font-size: 14px;
+  font-size: 28rpx;
   font-weight: 700;
-  color: var(--ink);
+  color: $sj-ink;
 }
 .wa-sub {
-  font-size: 11px;
-  color: #6b8c7a;
+  font-size: 22rpx;
+  color: $sj-ink3;
 }
 .wa-btn {
-  font-size: 13px;
+  font-size: 26rpx;
   font-weight: 700;
   color: #fff;
-  background: linear-gradient(135deg, #4fd974, #25cc5d);
-  padding: 7px 18px;
-  border-radius: 999px;
+  background: linear-gradient(135deg, $sj-g4, $sj-g5);
+  padding: 14rpx 36rpx;
+  border-radius: 999rpx;
 }
 
 .alloc-from {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  border-radius: 14px;
+  gap: 20rpx;
+  padding: 24rpx 28rpx;
+  border-radius: 28rpx;
   background: rgba(242, 252, 242, 0.8);
-  margin-bottom: 4px;
+  margin-bottom: 8rpx;
 }
 .af-label {
-  font-size: 12px;
-  color: #6b8c7a;
+  font-size: 24rpx;
+  color: $sj-ink3;
 }
 .af-name {
-  font-size: 14px;
+  font-size: 28rpx;
   font-weight: 700;
-  color: var(--ink);
+  color: $sj-ink;
 }
 .af-bal {
   margin-left: auto;
-  font-size: 14px;
+  font-size: 28rpx;
   font-weight: 700;
-  color: var(--g5);
+  color: $sj-g5;
 }
 
 .amount-row {
   display: flex;
   align-items: baseline;
-  gap: 4px;
-  padding: 12px 14px;
-  border-radius: 14px;
+  gap: 8rpx;
+  padding: 24rpx 28rpx;
+  border-radius: 28rpx;
   background: rgba(242, 252, 242, 0.8);
-  border: 1px solid rgba(194, 242, 200, 0.4);
-  margin-bottom: 8px;
+  border: 2rpx solid rgba(194, 242, 200, 0.4);
+  margin-bottom: 16rpx;
   cursor: pointer;
 }
 .amount-row .cur {
-  font-size: 18px;
+  font-size: 36rpx;
   font-weight: 700;
-  color: var(--ink);
+  color: $sj-ink;
 }
 .amount-row .amt {
-  font-size: 22px;
+  font-size: 44rpx;
   font-weight: 800;
-  color: var(--ink);
+  color: $sj-ink;
 }
 .amount-row .amt.placeholder {
   color: #b0b4bb;
 }
 
 .sheet-confirm {
-  margin-top: 16px;
-  padding: 14px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #4fd974, #25cc5d);
+  margin-top: 32rpx;
+  padding: 28rpx;
+  border-radius: 32rpx;
+  background: linear-gradient(135deg, $sj-g4, $sj-g5);
   text-align: center;
   color: #fff;
-  font-size: 14px;
+  font-size: 28rpx;
   font-weight: 800;
   cursor: pointer;
 }
@@ -1052,27 +1226,27 @@ onMounted(() => {
   opacity: 0.45;
 }
 .sheet-cancel {
-  margin-top: 10px;
-  padding: 14px;
-  border-radius: 16px;
+  margin-top: 20rpx;
+  padding: 28rpx;
+  border-radius: 32rpx;
   background: rgba(255, 255, 255, 0.7);
   text-align: center;
-  color: #6b8c7a;
-  font-size: 14px;
+  color: $sj-ink3;
+  font-size: 28rpx;
   font-weight: 600;
   cursor: pointer;
 }
 
 .sheet-item-sub {
-  font-size: 11px;
-  color: #6b8c7a;
+  font-size: 22rpx;
+  color: $sj-ink3;
   font-weight: 600;
-  margin-left: 4px;
+  margin-left: 8rpx;
 }
 .empty-tip {
-  font-size: 12px;
+  font-size: 24rpx;
   color: #9aa3a8;
   text-align: center;
-  padding: 20px 0;
+  padding: 40rpx 0;
 }
 </style>

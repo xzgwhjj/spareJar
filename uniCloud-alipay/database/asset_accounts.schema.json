@@ -38,7 +38,7 @@
       "enum": [
         "wechat",
         "alipay",
-        "bank",
+        "bank_card",
         "cash",
         "provident_fund",
         "insurance",
@@ -54,6 +54,11 @@
       "bsonType": "string",
       "description": "账户名",
       "maxLength": 64
+    },
+    "icon": {
+      "bsonType": "string",
+      "description": "自定义图标云存储 fileID（cloud://...），留空则前端按子类型展示默认 emoji",
+      "maxLength": 256
     },
     "initial_balance": {
       "bsonType": "int",

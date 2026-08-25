@@ -60,9 +60,6 @@
           @click="switchTab(t.key)"
         >
           <text class="tab-label">{{ t.label }}</text>
-          <view class="tab-icon-wrap">
-            <text class="tab-icon">{{ t.icon }}</text>
-          </view>
         </view>
         <view
           class="tab-slider"
@@ -530,10 +527,23 @@
                     justify-content: center;
                     font-size: 40rpx;
                     flex-shrink: 0;
+                    overflow: hidden;
                   "
                   :style="{ background: a.colorBg }"
-                  >{{ a.icon }}</view
                 >
+                  <image
+                    v-if="a.iconFileID && accIconUrls[a.iconFileID]"
+                    :src="accIconUrls[a.iconFileID]"
+                    mode="aspectFill"
+                    style="width: 100%; height: 100%"
+                  />
+                  <image
+                    v-else
+                    :src="a.icon"
+                    mode="aspectFit"
+                    style="width: 48rpx; height: 48rpx"
+                  />
+                </view>
                 <view>
                   <text
                     style="
@@ -544,9 +554,15 @@
                     "
                     >{{ a.name }}</text
                   >
-                  <text style="display: block; font-size: 20rpx; color: var(--ink4)">{{
-                    a.type
-                  }}</text>
+                  <text
+                    style="
+                      display: block;
+                      font-size: 24rpx;
+                      color: var(--ink4);
+                      margin-top: 6rpx;
+                    "
+                    >{{ a.type }}</text
+                  >
                 </view>
               </view>
               <text
@@ -561,55 +577,504 @@
 
       <!-- TAB: 报表 -->
       <view v-show="pageTab === 'chart'">
-        <view class="glass-mid" style="margin: 32rpx; padding: 36rpx">
-          <text class="chart-title">📊 月度收支趋势</text>
-          <view class="chart-area">
+        <!-- 时间周期切换 + 账本筛选（复用既有日历维度 / picker） -->
+        <view class="rep-toolbar">
+          <view class="rep-key" @click="openRepPop">
+            <text class="rep-key-label">{{ repKeyLabel }}</text>
+            <text class="rep-ledger-caret">▾</text>
+          </view>
+          <picker
+            mode="selector"
+            :range="ledgerOptions"
+            range-key="label"
+            @change="onRepLedgerChange"
+          >
+            <view class="rep-ledger">
+              <text>{{ repLedgerId ? currentLedgerName : "全部账本" }}</text>
+              <text class="rep-ledger-caret">▾</text>
+            </view>
+          </picker>
+          <view class="rep-export" @click="exportMonth">
+            <text>导出</text>
+          </view>
+        </view>
+
+        <!-- P0：动态收支仪表盘 -->
+        <view class="glass-mid dash">
+          <view class="dash-head">
+            <text class="chart-ico">🎛️</text>
+            <text class="chart-h-title">收支仪表盘</text>
+            <view class="dash-live">
+              <view class="dash-live-dot" />
+              <text>实时</text>
+            </view>
+          </view>
+
+          <!-- Gauge 主仪表（静态轨道用 image 引入 svg 文件，动态弧保留内联） -->
+          <view class="dash-gauge" :style="{ '--dash-c': dashColor }">
+            <image
+              class="dash-track"
+              src="/static/images/gauge-track.svg"
+              mode="scaleToFill"
+            />
+            <svg viewBox="0 0 200 110" class="dash-svg">
+              <defs>
+                <filter id="gaugeGlow" x="-40%" y="-40%" width="180%" height="180%">
+                  <feGaussianBlur stdDeviation="2" result="b" />
+                  <feMerge>
+                    <feMergeNode in="b" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+                <linearGradient id="gaugeGrad" x1="0" y1="1" x2="1" y2="0">
+                  <stop offset="0%" stop-color="#38bdf8" />
+                  <stop offset="100%" stop-color="#0ca678" />
+                </linearGradient>
+              </defs>
+              <path
+                d="M 20 100 A 80 80 0 0 1 180 100"
+                fill="none"
+                :stroke="dashMetric === 'expense' ? '#e8590c' : 'url(#gaugeGrad)'"
+                stroke-width="16"
+                stroke-linecap="round"
+                :stroke-dasharray="`${dashArcLen} ${GAUGE_CIRC}`"
+                class="dash-arc"
+                filter="url(#gaugeGlow)"
+              />
+            </svg>
+            <view class="dash-center">
+              <text class="dash-center-label">{{ DASH_DEFS[dashMetric].label }}</text>
+              <text class="dash-center-val" :style="{ color: dashColor }">{{
+                dashDisplayText
+              }}</text>
+              <view class="mom" :class="momClass(dashMom)">
+                <text class="mom-ico">{{ momIco(dashMom) }}</text>
+                <text>{{ dashMomText }}</text>
+              </view>
+            </view>
+          </view>
+
+          <!-- 指标切换（联动） -->
+          <view class="dash-metrics">
             <view
-              v-for="(s, i) in MONTHLY"
-              :key="i"
-              class="chart-col"
-              :style="{
-                flexDirection: 'column-reverse',
-                alignItems: 'center',
-                height: '360rpx',
-                justifyContent: 'flex-end',
-              }"
+              v-for="(def, k) in DASH_DEFS"
+              :key="k"
+              class="dash-metric"
+              :class="{ active: dashMetric === k }"
+              :style="dashMetric === k ? { '--mc': def.color } : {}"
+              @click="setDashMetric(k)"
             >
-              <view class="bar-group">
+              <text class="dash-m-label">{{ def.label }}</text>
+              <text class="dash-m-val">{{ metricValOf(k) }}</text>
+            </view>
+          </view>
+
+          <!-- 本期 vs 上期 对比条 -->
+          <view class="dash-compare">
+            <view
+              v-for="c in dashCompare"
+              :key="c.label"
+              class="dash-cmp-row"
+            >
+              <text class="dash-cmp-label">{{ c.label }}</text>
+              <view class="dash-cmp-track">
                 <view
-                  class="bar income-bar"
-                  :style="{ height: (s.income / maxBar) * 240 + 'rpx' }"
-                />
-                <view
-                  class="bar expense-bar"
-                  :style="{ height: (s.expense / maxBar) * 240 + 'rpx' }"
+                  class="dash-cmp-fill"
+                  :style="{
+                    width: c.pct + '%',
+                    background: c.label === '本期' ? dashColor : 'rgba(15,28,20,0.12)',
+                  }"
                 />
               </view>
-              <text class="bar-label">{{ s.month }}</text>
+              <text class="dash-cmp-val">¥{{ fmt(c.value) }}</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- P1：未来科技资产面板 + 账户分布 -->
+        <view class="tech-asset">
+          <view class="tech-bg" />
+          <view class="tech-scan" />
+          <view class="tech-particle p1" />
+          <view class="tech-particle p2" />
+          <view class="tech-particle p3" />
+          <view class="tech-particle p4" />
+          <view class="tech-corner tl" />
+          <view class="tech-corner tr" />
+          <view class="tech-corner bl" />
+          <view class="tech-corner br" />
+
+          <view class="tech-head">
+            <view class="tech-title">
+              <view class="tech-pulse" />
+              <text class="tech-title-text">资产净值</text>
+            </view>
+            <text class="tech-status">{{ assetFocus === "net" ? "实时" : "账户" }}</text>
+          </view>
+
+          <!-- 主读数（联动滚动） -->
+          <view class="tech-main">
+            <text class="tech-main-label" :style="{ color: assetMain.color }">{{
+              assetMain.label
+            }}</text>
+            <text class="tech-main-val" :style="{ color: assetMain.color }">{{
+              "¥" + fmt(Math.round(assetMain.v))
+            }}</text>
+          </view>
+
+          <!-- 子指标 -->
+          <view class="tech-subs">
+            <view class="tech-sub">
+              <text class="tech-sub-label">可用</text>
+              <text class="tech-sub-val">¥{{ fmt(Math.round(assetCash.display)) }}</text>
+            </view>
+            <view class="tech-sub">
+              <text class="tech-sub-label">投资</text>
+              <text class="tech-sub-val">¥{{ fmt(Math.round(assetInvest.display)) }}</text>
+            </view>
+            <view class="tech-sub">
+              <text class="tech-sub-label">负债</text>
+              <text class="tech-sub-val tech-liab">¥{{ fmt(Math.round(assetLiab.display)) }}</text>
+            </view>
+          </view>
+
+          <!-- 账户分布（霓虹流光条，点击联动） -->
+          <view class="tech-dist">
+            <view
+              v-for="g in accountDist"
+              :key="g.key"
+              class="tech-dist-item"
+              :class="{ active: assetFocus === g.key, dim: assetFocus !== 'net' && assetFocus !== g.key }"
+              @click="focusAsset(g.key)"
+            >
+              <view class="tech-dist-top">
+                <image class="tech-dist-ico" :src="g.icon" mode="aspectFit" />
+                <text class="tech-dist-name">{{ g.name }}</text>
+                <text class="tech-dist-val">¥{{ fmt(g.value) }}</text>
+                <text class="tech-dist-pct">{{ g.pct }}%</text>
+              </view>
+              <view class="tech-dist-track">
+                <view
+                  class="tech-dist-fill"
+                  :style="{
+                    width: Math.max(4, g.pct) + '%',
+                    background: g.accent,
+                    boxShadow: '0 0 12rpx ' + g.accent,
+                  }"
+                >
+                  <view class="tech-dist-sheen" />
+                </view>
+              </view>
+            </view>
+          </view>
+        </view>
+
+        <!-- 月度收支趋势 -->
+        <view class="glass-mid chart-card tech-trend-card">
+          <view class="chart-head">
+            <text class="chart-ico">📈</text>
+            <text class="chart-h-title">近6个月收支趋势</text>
+            <view v-if="trendIsMock" class="mock-badge">演示数据</view>
+          </view>
+          <!-- 聚焦月份实时汇总（数字滚动） -->
+          <view class="trend-sum">
+            <view class="trend-sum-item">
+              <text class="trend-sum-label">收入</text>
+              <text class="trend-sum-val inc">¥{{ fmt(trendIncUp.display) }}</text>
+            </view>
+            <view class="trend-sum-item">
+              <text class="trend-sum-label">支出</text>
+              <text class="trend-sum-val exp">¥{{ fmt(trendExpUp.display) }}</text>
+            </view>
+            <view class="trend-sum-item">
+              <text class="trend-sum-label">结余</text>
+              <text class="trend-sum-val net">¥{{ fmt(trendNetUp.display) }}</text>
+            </view>
+            <view class="trend-sum-month">{{ trendFocus.month }}</view>
+          </view>
+          <view class="tech-bar-area">
+            <view class="tech-bar-grid" />
+            <view class="tech-bar-scan" />
+            <view class="bar-area">
+              <!-- 叠加层：面积 + 折线 + 散点（与柱状图共用同一坐标系） -->
+              <svg viewBox="0 0 300 240" class="trend-overlay" aria-hidden="true">
+                <defs>
+                  <linearGradient id="areaIncG" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#25cc5d" stop-opacity="0.32" />
+                    <stop offset="100%" stop-color="#25cc5d" stop-opacity="0.02" />
+                  </linearGradient>
+                  <linearGradient id="areaExpG" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.28" />
+                    <stop offset="100%" stop-color="#f59e0b" stop-opacity="0.02" />
+                  </linearGradient>
+                  <filter id="lineGlow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur stdDeviation="2.2" result="b" />
+                    <feMerge>
+                      <feMergeNode in="b" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                </defs>
+                <path :d="trendChart.areaInc" fill="url(#areaIncG)" class="trend-area" />
+                <path :d="trendChart.areaExp" fill="url(#areaExpG)" class="trend-area trend-area-exp" />
+                <path
+                  :d="trendChart.lineInc"
+                  fill="none"
+                  class="trend-line line-inc"
+                  filter="url(#lineGlow)"
+                />
+                <path
+                  :d="trendChart.lineExp"
+                  fill="none"
+                  class="trend-line line-exp"
+                  filter="url(#lineGlow)"
+                />
+                <circle
+                  v-for="p in trendChart.points"
+                  :key="'inc' + p.i"
+                  :cx="p.x"
+                  :cy="p.yInc"
+                  :r="trendDotR(p.i)"
+                  fill="#fff"
+                  stroke="#25cc5d"
+                  stroke-width="2"
+                  class="trend-dot dot-inc"
+                  :style="{ animationDelay: 0.3 + p.i * 0.12 + 's' }"
+                />
+                <circle
+                  v-for="p in trendChart.points"
+                  :key="'exp' + p.i"
+                  :cx="p.x"
+                  :cy="p.yExp"
+                  :r="trendDotR(p.i)"
+                  fill="#fff"
+                  stroke="#f59e0b"
+                  stroke-width="2"
+                  class="trend-dot dot-exp"
+                  :style="{ animationDelay: 0.3 + p.i * 0.12 + 's' }"
+                />
+              </svg>
+              <view
+                v-for="(s, i) in trendData"
+                :key="i"
+                class="bar-col"
+                @click="onBarTap(i)"
+                :class="{ 'bar-col-hover': hoverMonthIdx === i }"
+              >
+                <view class="bar-pair">
+                  <view
+                    class="bar income-bar"
+                    :style="{
+                      height: Math.round((s.income / maxBar) * 220) + 'rpx',
+                      opacity: hoverMonthIdx === -1 || hoverMonthIdx === i ? 1 : 0.35,
+                      '--d': i * 0.1 + 's',
+                    }"
+                  />
+                  <view
+                    class="bar expense-bar"
+                    :style="{
+                      height: Math.round((s.expense / maxBar) * 220) + 'rpx',
+                      opacity: hoverMonthIdx === -1 || hoverMonthIdx === i ? 1 : 0.35,
+                      '--d': i * 0.1 + 's',
+                    }"
+                  />
+                </view>
+                <!-- 悬停提示 -->
+                <view v-if="hoverMonthIdx === i" class="bar-tip">
+                  <text class="tip-line inc">收入 ¥{{ fmt(s.income) }}</text>
+                  <text class="tip-line exp">支出 ¥{{ fmt(s.expense) }}</text>
+                  <text class="tip-line net">结余 ¥{{ fmt(s.income - s.expense) }}</text>
+                </view>
+              </view>
+            </view>
+          </view>
+          <view class="bar-months">
+            <text
+              v-for="(s, i) in trendData"
+              :key="i"
+              class="bar-month-label"
+              :class="{
+                'bar-month-active':
+                  hoverMonthIdx === i ||
+                  (hoverMonthIdx === -1 && i === trendData.length - 1),
+              }"
+              >{{ s.month }}</text
+            >
+          </view>
+          <view class="chart-legend">
+            <view class="legend-item">
+              <view class="legend-dot income-dot" />
+              <text class="legend-text">收入</text>
+            </view>
+            <view class="legend-item">
+              <view class="legend-dot expense-dot" />
+              <text class="legend-text">支出</text>
+            </view>
+            <view class="legend-item">
+              <view class="legend-dot trend-dot-legend inc" />
+              <text class="legend-text">收入趋势</text>
+            </view>
+            <view class="legend-item">
+              <view class="legend-dot trend-dot-legend exp" />
+              <text class="legend-text">支出趋势</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 本月支出分类 -->
+        <view class="glass-mid chart-card">
+          <view class="chart-head">
+            <text class="chart-ico">🥧</text>
+            <text class="chart-h-title">本月支出分类</text>
+          </view>
+          <view class="donut-wrap">
+            <svg class="donut" viewBox="0 0 120 120" @click="hoverCatIdx = -1">
+              <defs>
+                <filter id="donutGlow" x="-40%" y="-40%" width="180%" height="180%">
+                  <feGaussianBlur stdDeviation="2.4" result="b" />
+                  <feMerge>
+                    <feMergeNode in="b" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
+              <g transform="rotate(-90 60 60)">
+                <circle
+                  v-for="(seg, i) in donut.segs"
+                  :key="seg.id"
+                  cx="60"
+                  cy="60"
+                  :r="donut.R"
+                  fill="none"
+                  :stroke="seg.color"
+                  stroke-width="18"
+                  :stroke-dasharray="seg.dash"
+                  :stroke-dashoffset="seg.offset"
+                  class="donut-seg"
+                  :class="{
+                    'seg-hover': hoverCatIdx === i,
+                    'seg-dim': hoverCatIdx !== -1 && hoverCatIdx !== i,
+                  }"
+                  filter="url(#donutGlow)"
+                  @click.stop="onSegTap(i)"
+                />
+              </g>
+            </svg>
+            <view class="donut-center">
+              <text v-if="hoverCatIdx >= 0" class="donut-c-name">{{
+                donut.segs[hoverCatIdx].name
+              }}</text>
+              <text v-else class="donut-c-label">本月支出</text>
+              <text v-if="hoverCatIdx >= 0" class="donut-c-val"
+                >¥{{ fmt(donut.segs[hoverCatIdx].value) }}</text
+              >
+              <text v-else class="donut-c-val">¥{{ fmt(donut.total) }}</text>
+              <text v-if="hoverCatIdx >= 0" class="donut-c-pct"
+                >{{ donut.segs[hoverCatIdx].pct }}%</text
+              >
             </view>
           </view>
           <view
-            style="display: flex; gap: 32rpx; justify-content: center; margin-top: 24rpx"
+            v-for="(seg, i) in donut.segs"
+            :key="seg.id"
+            class="cat-row"
+            :class="{ 'cat-row-hover': hoverCatIdx === i }"
+            @click="onSegTap(i)"
           >
-            <view style="display: flex; align-items: center; gap: 8rpx">
-              <view
-                style="
-                  width: 16rpx;
-                  height: 16rpx;
-                  border-radius: 4rpx;
-                  background: var(--g5);
-                "
-              /><text style="font-size: 22rpx; color: var(--ink3)">收入</text>
+            <view class="cat-top">
+              <view class="cat-name-wrap">
+                <view class="cat-dot" :style="{ background: seg.color }" />
+                <text class="cat-name">{{ seg.name }}</text>
+              </view>
+              <text class="cat-pct"
+                >{{ seg.pct }}%
+                <text
+                  v-if="seg.mom !== null"
+                  class="cat-mom"
+                  :class="seg.mom >= 0 ? 'up' : 'down'"
+                  >{{ seg.mom >= 0 ? "▲" : "▼" }}{{ Math.abs(seg.mom) }}%</text
+                ></text
+              >
             </view>
-            <view style="display: flex; align-items: center; gap: 8rpx">
+            <view class="cat-track">
               <view
-                style="
-                  width: 16rpx;
-                  height: 16rpx;
-                  border-radius: 4rpx;
-                  background: var(--amber);
-                "
-              /><text style="font-size: 22rpx; color: var(--ink3)">支出</text>
+                class="cat-fill"
+                :style="{
+                  width: Math.max(4, Math.round((seg.value / catMax) * 100)) + '%',
+                  background: seg.color,
+                }"
+              />
+            </view>
+          </view>
+        </view>
+
+        <!-- P2：预算执行率对比（复用 displayLedgers 周期聚合） -->
+        <view class="glass-mid chart-card">
+          <view class="chart-head">
+            <text class="chart-ico">🎯</text>
+            <text class="chart-h-title">预算执行率</text>
+          </view>
+          <view v-for="l in budgetRows" :key="l._id" class="cat-row">
+            <view class="cat-top">
+              <view class="cat-name-wrap">
+                <text class="cat-emoji">{{ l.emoji }}</text>
+                <text class="cat-name">{{ l.name }}</text>
+              </view>
+              <text class="cat-pct" :class="{ 'is-over': l.pct >= 100 }"
+                >{{ l.pct }}%</text
+              >
+            </view>
+            <view class="cat-track">
+              <view
+                class="cat-fill budget-fill"
+                :class="{ 'is-over': l.pct >= 100 }"
+                :style="{
+                  width: Math.min(100, l.pct) + '%',
+                  background: l.pct >= 100 ? 'var(--red)' : l.colorBg,
+                }"
+              />
+            </view>
+            <text class="budget-sub">¥{{ fmt(l.spent) }} / ¥{{ fmt(l.limit) }}</text>
+          </view>
+          <view v-if="!budgetRows.length" class="rep-empty">当前周期无带预算的账本</view>
+        </view>
+
+        <!-- 周期选择弹层（复用 calendar-period-picker） -->
+        <view v-if="repPop" class="rep-pop">
+          <view class="rep-pop-mask" @click="closeRepPop" />
+          <view class="rep-pop-sheet">
+            <view class="rep-pop-head">
+              <text class="rep-pop-title">选择周期</text>
+              <view class="rep-dim rep-dim-pop">
+                <view
+                  v-for="d in [
+                    { k: 'day', t: '日' },
+                    { k: 'month', t: '月' },
+                    { k: 'year', t: '年' },
+                  ]"
+                  :key="d.k"
+                  class="rep-dim-item"
+                  :class="{ active: repDim === d.k }"
+                  @click="setRepDim(d.k)"
+                  >{{ d.t }}</view
+                >
+              </view>
+            </view>
+            <scroll-view scroll-y class="rep-pop-body">
+              <calendar-period-picker
+                v-model="repKey"
+                :dim="repDim"
+                :day-expense-map="repDayExpenseMap"
+                :day-income-map="repDayIncomeMap"
+                :month-expense-map="repMonthExpenseMap"
+                :month-income-map="repMonthIncomeMap"
+                :year-expense-map="repYearExpenseMap"
+                :year-income-map="repYearIncomeMap"
+              />
+            </scroll-view>
+            <view class="rep-pop-foot">
+              <view class="rep-pop-cancel" @click="closeRepPop">取消</view>
+              <view class="rep-pop-ok" @click="closeRepPop">完成</view>
             </view>
           </view>
         </view>
@@ -1066,13 +1531,32 @@
         <view class="cam-row" @tap="pickAndRecognizeAsset">
           <image
             class="cam-icon"
-            :src="cdn('/app_static/images/icon_recognize.png')"
+            :src="cdn('/app_static/images/icon_scan_asset.png')"
             mode="aspectFit"
           />
           <text class="cam-text">拍照 / 截图自动识别建资产账户</text>
         </view>
 
         <view class="form-grid">
+          <view class="form-row form-row-icon">
+            <text class="form-label">账户图标</text>
+            <view class="icon-picker" @tap="pickAssetIcon">
+              <image
+                v-if="assetForm.iconFileID"
+                class="icon-picker-img"
+                :src="assetIconUrl"
+                mode="aspectFill"
+              />
+              <text v-else class="icon-picker-add">＋</text>
+              <view
+                v-if="assetForm.iconFileID"
+                class="icon-picker-clear"
+                @tap.stop="clearAssetIcon"
+                >✕</view
+              >
+            </view>
+          </view>
+
           <view class="form-row">
             <text class="form-label">账户名称</text>
             <input
@@ -1104,7 +1588,7 @@
 
           <view class="form-row">
             <text class="form-label">子类型</text>
-            <view class="seg">
+            <view class="seg seg-subtype">
               <view
                 v-for="opt in assetSubtypes"
                 :key="opt.v"
@@ -1137,26 +1621,53 @@
               title="初始余额"
             />
           </view>
-
-          <view class="form-row">
-            <text class="form-label">计入可支配</text>
-            <switch
-              :checked="assetForm.include_in_disposable"
-              color="#25cc5d"
-              @change="assetForm.include_in_disposable = $event.detail.value"
-            />
+          <text class="form-section-title">计入规则</text>
+          <view class="form-switch-row">
+            <view class="switch-item">
+              <text class="switch-label">计入可支配</text>
+              <view
+                class="switch"
+                :class="{ checked: assetForm.include_in_disposable }"
+                @tap="assetForm.include_in_disposable = !assetForm.include_in_disposable"
+              >
+                <view class="slider">
+                  <view class="dot dot-green" />
+                  <view class="dot dot-gray" />
+                </view>
+              </view>
+            </view>
+            <view class="switch-item">
+              <text class="switch-label">计入日限额</text>
+              <view
+                class="switch"
+                :class="{ checked: assetForm.include_in_daily_limit }"
+                @tap="
+                  assetForm.include_in_daily_limit = !assetForm.include_in_daily_limit
+                "
+              >
+                <view class="slider">
+                  <view class="dot dot-green" />
+                  <view class="dot dot-gray" />
+                </view>
+              </view>
+            </view>
+            <view class="switch-item">
+              <text class="switch-label">计入总资产</text>
+              <view
+                class="switch"
+                :class="{ checked: assetForm.include_in_total_asset }"
+                @tap="
+                  assetForm.include_in_total_asset = !assetForm.include_in_total_asset
+                "
+              >
+                <view class="slider">
+                  <view class="dot dot-green" />
+                  <view class="dot dot-gray" />
+                </view>
+              </view>
+            </view>
           </view>
-
-          <view class="form-row">
-            <text class="form-label">计入日限额</text>
-            <switch
-              :checked="assetForm.include_in_daily_limit"
-              color="#25cc5d"
-              @change="assetForm.include_in_daily_limit = $event.detail.value"
-            />
-          </view>
-
-          <view class="form-row">
+          <view v-if="assetForm.include_in_daily_limit" class="form-row">
             <text class="form-label">日限额</text>
             <number-field
               v-model="assetForm.daily_limit"
@@ -1175,15 +1686,6 @@
               placeholder="选填"
               placeholder-class="form-ph"
               maxlength="50"
-            />
-          </view>
-
-          <view class="form-row">
-            <text class="form-label">计入总资产</text>
-            <switch
-              :checked="assetForm.include_in_total_asset"
-              color="#25cc5d"
-              @change="assetForm.include_in_total_asset = $event.detail.value"
             />
           </view>
         </view>
@@ -1214,7 +1716,11 @@ import MemberManager from "@/components/MemberManager.vue";
 import { checkLoggedIn, useUserStore } from "@/stores/user.js";
 import { createAssetAccountAction } from "@/stores/asset.js";
 import { cdn, resolveCover, getCloudTempUrl, getCloudTempUrls } from "@/utils/cdn.js";
-import { deleteLedgerCover, uploadLedgerCover } from "@/utils/cloudFile.js";
+import {
+  deleteLedgerCover,
+  uploadLedgerCover,
+  uploadAssetIcon,
+} from "@/utils/cloudFile.js";
 import { safeYuanToFen, fenToYuanString } from "@/utils/money.js";
 import { recognizeAsset as apiRecognizeAsset } from "@/api/sparejar.js";
 import {
@@ -2035,6 +2541,355 @@ const monthExpense = computed(() =>
 );
 const monthNet = computed(() => monthIncome.value - monthExpense.value);
 
+// ===== 报表专用：时间周期（复用既有日历维度）+ 账本筛选 =====
+const repDim = ref("month"); // 'day' | 'month' | 'year'
+const repKey = ref(monthKey); // 与 ovKey 同格式
+const pad2k = (n) => (n < 10 ? `0${n}` : String(n));
+function repDefaultKey(dim) {
+  const now = new Date();
+  if (dim === "day")
+    return `${now.getFullYear()}-${pad2k(now.getMonth() + 1)}-${pad2k(now.getDate())}`;
+  if (dim === "month") return `${now.getFullYear()}-${pad2k(now.getMonth() + 1)}`;
+  return String(now.getFullYear());
+}
+// 切换维度时：仅当新维度下当前值格式不匹配才重置为默认（避免误清选择）
+function setRepDim(dim) {
+  if (dim === repDim.value) return;
+  const k = repKey.value;
+  const ok =
+    (dim === "day" && /^\d{4}-\d{2}-\d{2}$/.test(k)) ||
+    (dim === "month" && /^\d{4}-\d{2}$/.test(k)) ||
+    (dim === "year" && /^\d{4}$/.test(k));
+  repDim.value = dim;
+  if (!ok) repKey.value = repDefaultKey(dim);
+}
+// 报表周期按钮展示文案
+const repKeyLabel = computed(() => {
+  const k = repKey.value || "";
+  const dim = repDim.value;
+  if (dim === "day") {
+    const [y, m, d] = k.split("-");
+    return `${y}年${Number(m)}月${Number(d)}日`;
+  }
+  if (dim === "month") {
+    const [y, m] = k.split("-");
+    return `${y}年${Number(m)}月`;
+  }
+  return `${k}年`;
+});
+// 周期选择弹层
+const repPop = ref(false);
+function openRepPop() {
+  repPop.value = true;
+}
+function closeRepPop() {
+  repPop.value = false;
+}
+// 弹层内日历格子的收/支汇总（随报表账本筛选联动）
+const repDayExpenseMap = computed(() => {
+  const map = {};
+  for (const t of transactions.value) {
+    if (t.type === "expense" && t.date_key && inRepLedger(t))
+      map[t.date_key] = (map[t.date_key] || 0) + t.amount;
+  }
+  return map;
+});
+const repDayIncomeMap = computed(() => {
+  const map = {};
+  for (const t of transactions.value) {
+    if (t.type !== "expense" && t.date_key && inRepLedger(t))
+      map[t.date_key] = (map[t.date_key] || 0) + t.amount;
+  }
+  return map;
+});
+const repMonthExpenseMap = computed(() => {
+  const map = {};
+  for (const t of transactions.value) {
+    if (t.type === "expense" && t.month_key && inRepLedger(t))
+      map[t.month_key] = (map[t.month_key] || 0) + t.amount;
+  }
+  return map;
+});
+const repMonthIncomeMap = computed(() => {
+  const map = {};
+  for (const t of transactions.value) {
+    if (t.type !== "expense" && t.month_key && inRepLedger(t))
+      map[t.month_key] = (map[t.month_key] || 0) + t.amount;
+  }
+  return map;
+});
+const repYearExpenseMap = computed(() => {
+  const map = {};
+  for (const t of transactions.value) {
+    if (t.type === "expense" && t.date_key && inRepLedger(t)) {
+      const y = t.date_key.slice(0, 4);
+      map[y] = (map[y] || 0) + t.amount;
+    }
+  }
+  return map;
+});
+const repYearIncomeMap = computed(() => {
+  const map = {};
+  for (const t of transactions.value) {
+    if (t.type !== "expense" && t.date_key && inRepLedger(t)) {
+      const y = t.date_key.slice(0, 4);
+      map[y] = (map[y] || 0) + t.amount;
+    }
+  }
+  return map;
+});
+// 报表维度下的周期匹配（与 inSelectedPeriod 同逻辑）
+function inRepPeriod(t) {
+  const dim = repDim.value;
+  const key = repKey.value;
+  if (dim === "day") return t.date_key === key;
+  if (dim === "month") return t.month_key === key;
+  return (t.date_key || "").startsWith(key + "-");
+}
+// 当前周期已选账本（null=全部）
+const repLedgerId = ref(null);
+function inRepLedger(t) {
+  return repLedgerId.value ? t.ledger_id === repLedgerId.value : true;
+}
+function inRep(t) {
+  return inRepPeriod(t) && inRepLedger(t);
+}
+
+// ===== P0：本期概览（随报表周期联动）=====
+const repIncome = computed(() =>
+  transactions.value
+    .filter((t) => t.type !== "expense" && inRep(t))
+    .reduce((s, t) => s + t.amount, 0)
+);
+const repExpense = computed(() =>
+  transactions.value
+    .filter((t) => t.type === "expense" && inRep(t))
+    .reduce((s, t) => s + t.amount, 0)
+);
+const repNet = computed(() => repIncome.value - repExpense.value);
+const repSaveRate = computed(() =>
+  repIncome.value > 0 ? Math.round((repNet.value / repIncome.value) * 100) : 0
+);
+
+// 环比：与上一周期对比（仅 day/month/year 有明确上一周期）
+function prevKeyOf(dim, key) {
+  if (dim === "month") {
+    const [y, m] = key.split("-").map(Number);
+    const d = new Date(y, m - 2, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  }
+  if (dim === "day") {
+    const [y, m, d] = key.split("-").map(Number);
+    const dt = new Date(y, m - 1, d - 1);
+    return formatDateKey(dt);
+  }
+  return String(Number(key) - 1); // year
+}
+function periodAgg(key, filterFn) {
+  const dim = repDim.value;
+  return transactions.value
+    .filter((t) => {
+      const ok =
+        dim === "day"
+          ? t.date_key === key
+          : dim === "month"
+          ? t.month_key === key
+          : (t.date_key || "").startsWith(key + "-");
+      return ok && inRepLedger(t) && filterFn(t);
+    })
+    .reduce((s, t) => s + t.amount, 0);
+}
+// 环比率：返回正数=上升，负数=下降，null=无可比
+function momRate(cur, prev) {
+  if (!prev) return null;
+  return Math.round(((cur - prev) / prev) * 100);
+}
+const prevKey = computed(() => prevKeyOf(repDim.value, repKey.value));
+const repIncomeMom = computed(() =>
+  momRate(
+    repIncome.value,
+    periodAgg(prevKey.value, (t) => t.type !== "expense")
+  )
+);
+const repExpenseMom = computed(() =>
+  momRate(
+    repExpense.value,
+    periodAgg(prevKey.value, (t) => t.type === "expense")
+  )
+);
+const repNetMom = computed(() => {
+  const prevNet =
+    periodAgg(prevKey.value, (t) => t.type !== "expense") -
+    periodAgg(prevKey.value, (t) => t.type === "expense");
+  return momRate(repNet.value, prevNet);
+});
+
+// ===== 动态仪表盘：指标联动 + 数值滚动动画 =====
+const DASH_DEFS = {
+  income: { label: "收入", color: "#0ca678" },
+  expense: { label: "支出", color: "#e8590c" },
+  net: { label: "结余", color: "#2f9e44" },
+  rate: { label: "结余率", color: "#7c6cf8" },
+};
+const dashMetric = ref("income");
+function setDashMetric(k) {
+  if (dashMetric.value === k) return;
+  dashMetric.value = k;
+}
+const dashColor = computed(() => DASH_DEFS[dashMetric.value].color);
+// 各指标当前值的展示文案（chips 用）
+function metricValOf(k) {
+  if (k === "income") return "¥" + fmt(repIncome.value);
+  if (k === "expense") return "¥" + fmt(repExpense.value);
+  if (k === "net") return "¥" + fmt(repNet.value);
+  return repSaveRate.value + "%";
+}
+
+// 上期聚合（用于环比/对比）
+const prevIncomeVal = computed(() =>
+  periodAgg(prevKey.value, (t) => t.type !== "expense")
+);
+const prevExpenseVal = computed(() =>
+  periodAgg(prevKey.value, (t) => t.type === "expense")
+);
+const prevNetVal = computed(() => prevIncomeVal.value - prevExpenseVal.value);
+const prevRateVal = computed(() =>
+  prevIncomeVal.value > 0
+    ? Math.round(((prevNetVal.value) / prevIncomeVal.value) * 100)
+    : 0
+);
+
+// 当前选中指标的现值 / 上期值 / 环比
+const dashCur = computed(() => {
+  if (dashMetric.value === "income") return repIncome.value;
+  if (dashMetric.value === "expense") return repExpense.value;
+  if (dashMetric.value === "net") return repNet.value;
+  return repSaveRate.value;
+});
+const dashPrev = computed(() => {
+  if (dashMetric.value === "income") return prevIncomeVal.value;
+  if (dashMetric.value === "expense") return prevExpenseVal.value;
+  if (dashMetric.value === "net") return prevNetVal.value;
+  return prevRateVal.value;
+});
+const dashMom = computed(() => {
+  if (dashMetric.value === "rate")
+    return dashPrev.value ? dashCur.value - dashPrev.value : null; // 结余率差值（百分点）
+  return momRate(dashCur.value, dashPrev.value);
+});
+const dashMomText = computed(() => {
+  if (dashMom.value === null) return "无对比";
+  const s = dashMom.value >= 0 ? "+" : "";
+  return dashMetric.value === "rate"
+    ? `${s}${dashMom.value}pp`
+    : `${s}${dashMom.value}%`;
+});
+
+// Gauge 达成比例 0~100（结余率直接取值；其余为 本期/上期）
+const dashRatio = computed(() => {
+  if (dashMetric.value === "rate")
+    return Math.min(100, Math.max(0, repSaveRate.value));
+  const prev = dashPrev.value;
+  if (!prev || prev <= 0) return dashCur.value > 0 ? 100 : 0;
+  return Math.min(100, Math.max(0, Math.round((dashCur.value / prev) * 100)));
+});
+
+// 数值滚动动画（requestAnimationFrame + easeOutCubic）
+const dashDisplay = ref(0);
+const rafTimer = typeof requestAnimationFrame === "function" ? requestAnimationFrame : (cb) => setTimeout(cb, 16);
+function animateValue(from, to, dur = 650) {
+  const t0 = Date.now();
+  const tick = () => {
+    const p = Math.min(1, (Date.now() - t0) / dur);
+    const e = 1 - Math.pow(1 - p, 3); // easeOutCubic
+    dashDisplay.value = from + (to - from) * e;
+    if (p < 1) rafTimer(tick);
+    else dashDisplay.value = to;
+  };
+  rafTimer(tick);
+}
+watch(
+  [dashCur, dashMetric],
+  ([to]) => animateValue(dashDisplay.value, to),
+  { immediate: true }
+);
+const dashDisplayText = computed(() => {
+  const v = Math.round(dashDisplay.value);
+  if (dashMetric.value === "rate") return v + "%";
+  return "¥" + fmt(v);
+});
+
+// 本期 vs 上期 对比条
+const dashCompare = computed(() => {
+  const cur = dashCur.value;
+  const prev = dashPrev.value;
+  const max = Math.max(cur, prev, 1);
+  return [
+    { label: "本期", value: cur, pct: Math.round((cur / max) * 100) },
+    { label: "上期", value: prev, pct: Math.round((prev / max) * 100) },
+  ];
+});
+
+// Gauge 弧（上半圆）几何
+const GAUGE_R = 80;
+const GAUGE_CIRC = Math.PI * GAUGE_R; // 半圆弧长
+const dashArcLen = computed(() => (dashRatio.value / 100) * GAUGE_CIRC);
+
+// 环比展示辅助
+function momClass(v) {
+  if (v === null) return "muted";
+  return v >= 0 ? "up" : "down";
+}
+function momIco(v) {
+  if (v === null) return "—";
+  return v >= 0 ? "▲" : "▼";
+}
+function momText(v) {
+  if (v === null) return "无对比";
+  return Math.abs(v) + "%";
+}
+
+// 账本筛选选项（全部 + 各账本）
+const ledgerOptions = computed(() => [
+  { id: null, label: "全部账本" },
+  ...ledgers.value.map((l) => ({ id: l._id, label: l.name })),
+]);
+const currentLedgerName = computed(() => {
+  const o = ledgerOptions.value.find((x) => x.id === repLedgerId.value);
+  return o ? o.label : "全部账本";
+});
+function onRepLedgerChange(e) {
+  const idx = Number(e.detail.value);
+  repLedgerId.value = ledgerOptions.value[idx]?.id ?? null;
+}
+
+// 导出 / 分享月报：生成文本摘要并复制到剪贴板（可再分享）
+function exportMonth() {
+  const dimWord = repDim.value === "day" ? "日" : repDim.value === "year" ? "年" : "月";
+  const lines = [
+    `【余钱罐${dimWord}报 ${repKey.value}】`,
+    `收入：¥${fmt(repIncome.value)}`,
+    `支出：¥${fmt(repExpense.value)}`,
+    `结余：¥${fmt(repNet.value)}（结余率 ${repSaveRate.value}%）`,
+    `资产净值：¥${fmt(net.value)}（可用 ¥${fmt(cash.value)} / 投资 ¥${fmt(
+      invest.value
+    )} / 负债 ¥${fmt(liab.value)}）`,
+    `支出分类 TOP：`,
+  ];
+  monthExpenseByCat.value.forEach((c) => {
+    lines.push(
+      `  - ${c.name}：¥${fmt(c.value)}${
+        c.mom !== null ? `（环比 ${c.mom >= 0 ? "+" : ""}${c.mom}%）` : ""
+      }`
+    );
+  });
+  const text = lines.join("\n");
+  uni.setClipboardData({
+    data: text,
+    success: () => uni.showToast({ title: "月报已复制", icon: "success" }),
+  });
+}
+
 // 全局统计卡片：默认简洁总览，点击展开日/月/年明细
 const ovExpanded = ref(false);
 
@@ -2242,6 +3097,44 @@ const ledgerViews = computed(() =>
   })
 );
 
+// P2：预算执行率（随报表周期 + 账本筛选联动）
+const budgetRows = computed(() => {
+  const dim = repDim.value;
+  const key = repKey.value;
+  const inPeriod = (t) => {
+    if (dim === "day") return t.date_key === key;
+    if (dim === "month") return t.month_key === key;
+    return (t.date_key || "").startsWith(key + "-");
+  };
+  return ledgers.value
+    .filter((l) => !repLedgerId.value || l._id === repLedgerId.value)
+    .map((l, i) => {
+      const monthly = l.monthly_budget || 0;
+      let limit = monthly;
+      if (dim === "day") limit = monthly ? Math.round(monthly / 30) : 0;
+      else if (dim === "year") limit = monthly * 12;
+      if (limit <= 0) return null;
+      const txs = l.is_system
+        ? transactions.value
+        : transactions.value.filter((t) => t.ledger_id === l._id);
+      const spent = txs
+        .filter((t) => t.type === "expense" && inPeriod(t))
+        .reduce((s, t) => s + t.amount, 0);
+      const pal = PALETTE[i % PALETTE.length];
+      return {
+        _id: l._id,
+        name: l.name,
+        emoji: l.icon || "📒",
+        spent,
+        limit,
+        pct: Math.round((spent / limit) * 100),
+        colorBg: pal.colorBg,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.pct - a.pct);
+});
+
 // 维度中文前缀：用于进度条"使用/限额"标签
 const dimWord = (dim) => (dim === "day" ? "日" : dim === "year" ? "年" : "月");
 
@@ -2258,56 +3151,159 @@ function coverTheme(l) {
 
 // —— 资产 Tab：接入真实资产账户（阶段 10） ——
 const ASSET_SUBTYPE_ICON = {
-  wechat: "💚",
-  alipay: "💙",
-  bank: "🏦",
-  cash: "💵",
-  provident_fund: "🏠",
-  insurance: "🛡️",
-  fund: "📈",
-  stock: "📊",
-  bond: "📜",
-  gold: "🪙",
-  wealth: "💼",
-  other: "📦",
+  wechat: cdn("/app_static/images/icon_wechat.png"),
+  alipay: cdn("/app_static/images/icon_alipay.png"),
+  bank_card: cdn("/app_static/images/icon_bank_card.png"),
+  bank: cdn("/app_static/images/icon_bank_card.png"),
+  cash: cdn("/app_static/images/icon_cash.png"),
+  huabei: cdn("/app_static/images/icon_huabei.png"),
+  credit_card: cdn("/app_static/images/icon_credit_card.png"),
+  jdbt: cdn("/app_static/images/icon_jdbt.png"),
+  loan: cdn("/app_static/images/icon_loan.png"),
+  provident_fund: cdn("/app_static/images/icon_provident_fund.png"),
+  insurance: cdn("/app_static/images/icon_insurance.png"),
+  fund: cdn("/app_static/images/icon_fund.png"),
+  stock: cdn("/app_static/images/icon_stock.png"),
+  bond: cdn("/app_static/images/icon_bond.png"),
+  gold: cdn("/app_static/images/icon_gold.png"),
+  other: cdn("/app_static/images/icon_other.png"),
 };
 const ASSET_SUBTYPE_BG = {
   wechat: "#e8f8ec",
   alipay: "#e8f1fb",
+  bank_card: "#f3f0ff",
   bank: "#f3f0ff",
   cash: "#e1fae3",
+  huabei: "#fdeef3",
+  credit_card: "#eef1f4",
+  jdbt: "#f3f0ff",
+  loan: "#fbf3e0",
   provident_fund: "#eaf3ff",
   insurance: "#fdeef0",
   fund: "#fffbeb",
   stock: "#eef5ff",
   bond: "#f3f0ff",
   gold: "#fbf3e0",
-  wealth: "#eafaf1",
   other: "#eef1f4",
 };
 const ASSET_SUBTYPE_LABEL = {
   wechat: "微信",
   alipay: "支付宝",
+  bank_card: "银行卡",
   bank: "银行卡",
   cash: "现金",
+  huabei: "花呗",
+  credit_card: "信用卡",
+  jdbt: "京东白条",
+  loan: "借款",
   provident_fund: "公积金",
   insurance: "医保",
   fund: "基金",
   stock: "股票",
   bond: "债券",
   gold: "黄金",
-  wealth: "理财",
   other: "其他",
 };
 const ACCOUNTS = computed(() =>
   (state.assets || []).map((a) => ({
     _id: a._id,
-    icon: ASSET_SUBTYPE_ICON[a.account_subtype] || "💳",
+    icon:
+      ASSET_SUBTYPE_ICON[a.account_subtype] || cdn("/app_static/images/icon_other.png"),
     colorBg: ASSET_SUBTYPE_BG[a.account_subtype] || "#e1fae3",
+    iconFileID: a.icon || "",
     name: a.name,
     type: ASSET_SUBTYPE_LABEL[a.account_subtype] || a.account_subtype,
     balance: a.balance,
   }))
+);
+// 账户分布：按 subtype 汇总余额（用于资产分布条），按余额降序
+const accountDist = computed(() => {
+  const groups = {};
+  (state.assets || []).forEach((a) => {
+    const k = a.account_subtype || "other";
+    groups[k] = (groups[k] || 0) + (a.balance || 0);
+  });
+  const total = Object.values(groups).reduce((s, v) => s + v, 0) || 1;
+  return Object.keys(groups)
+    .map((k, i) => ({
+      key: k,
+      name: ASSET_SUBTYPE_LABEL[k] || k,
+      colorBg: ASSET_SUBTYPE_BG[k] || "#eef1f4",
+      icon: ASSET_SUBTYPE_ICON[k] || cdn("/app_static/images/icon_other.png"),
+      value: groups[k],
+      pct: Math.round((groups[k] / total) * 100),
+      accent: NEON_PALETTE[i % NEON_PALETTE.length],
+    }))
+    .sort((a, b) => b.value - a.value);
+});
+// 未来科技面板：白色 + g0~g5 绿阶配色 + 通用数字滚动工厂
+const NEON_PALETTE = [
+  "#25cc5d", // g5 品牌主色
+  "#8ae99b", // g4
+  "#acf5b7", // g3
+  "#c6fbce", // g2-1
+  "#25cc5d",
+  "#8ae99b",
+  "#acf5b7",
+];
+// 小程序环境无 requestAnimationFrame，统一用 setTimeout 兜底
+const rafTick =
+  typeof requestAnimationFrame === "function"
+    ? (cb) => requestAnimationFrame(cb)
+    : (cb) => setTimeout(cb, 16);
+const cancelRafTick =
+  typeof cancelAnimationFrame === "function"
+    ? (id) => cancelAnimationFrame(id)
+    : (id) => clearTimeout(id);
+function createCountUp(dur = 650) {
+  const display = ref(0);
+  let raf = null;
+  function setTo(to) {
+    const from = display.value;
+    const t0 = Date.now();
+    if (raf) cancelRafTick(raf);
+    const tick = () => {
+      const p = Math.min(1, (Date.now() - t0) / dur);
+      const e = 1 - Math.pow(1 - p, 3);
+      display.value = from + (to - from) * e;
+      if (p < 1) raf = rafTick(tick);
+      else display.value = to;
+    };
+    raf = rafTick(tick);
+  }
+  return { display, setTo };
+}
+// 资产卡联动：assetFocus = 'net' | 账户 key
+const assetFocus = ref("net");
+const assetNet = createCountUp();
+const assetCash = createCountUp();
+const assetInvest = createCountUp();
+const assetLiab = createCountUp();
+const assetSub = createCountUp();
+const assetMain = computed(() => {
+  const f = assetFocus.value;
+  if (f === "net") return { label: "资产净值", color: "#25cc5d", v: assetNet.display };
+  const g = accountDist.value.find((x) => x.key === f);
+  if (!g) return { label: "资产净值", color: "#25cc5d", v: assetNet.display };
+  return { label: g.name, color: g.accent, v: assetSub.display };
+});
+function focusAsset(key) {
+  assetFocus.value = assetFocus.value === key ? "net" : key;
+}
+// 资产账户自定义图标：批量解析云存储 fileID → 临时可访问 URL
+const accIconUrls = ref({});
+watch(
+  () => ACCOUNTS.value.map((a) => a.iconFileID).join("|"),
+  async () => {
+    const ids = ACCOUNTS.value.map((a) => a.iconFileID).filter(Boolean);
+    if (!ids.length) {
+      accIconUrls.value = {};
+      return;
+    }
+    const map = await getCloudTempUrls(ids);
+    accIconUrls.value = map;
+  },
+  { immediate: true }
 );
 
 const STICKERS = [
@@ -2321,16 +3317,193 @@ const STICKERS = [
   { id: "s8", emoji: "🎁", name: "红包", used: 5, category: "收入" },
 ];
 
-const MONTHLY = [
-  { month: "1月", income: 8200, expense: 5340 },
-  { month: "2月", income: 8200, expense: 4120 },
-  { month: "3月", income: 8500, expense: 6780 },
-  { month: "4月", income: 8200, expense: 5920 },
-  { month: "5月", income: 9100, expense: 6230 },
-  { month: "6月", income: 8200, expense: 3840 },
+// ===== P0：图表数据全部从 transactions 实时聚合（金额单位为分） =====
+function monthKeyOf(offset) {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() - offset);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+// 最近 6 个月（含本月）收支趋势
+const monthlyTrend = computed(() => {
+  const tx = transactions.value || [];
+  const months = [];
+  for (let i = 5; i >= 0; i--) {
+    const key = monthKeyOf(i);
+    const income = tx
+      .filter((t) => t.type !== "expense" && t.month_key === key)
+      .reduce((s, t) => s + t.amount, 0);
+    const expense = tx
+      .filter((t) => t.type === "expense" && t.month_key === key)
+      .reduce((s, t) => s + t.amount, 0);
+    months.push({ month: key.slice(5) + "月", income, expense });
+  }
+  return months;
+});
+// 演示用模拟数据（单位：分），仅当真实数据为空时用于直观展示动态效果
+const MOCK_TREND = [
+  { income: 1850000, expense: 1320000 },
+  { income: 2100000, expense: 1460000 },
+  { income: 1680000, expense: 1580000 },
+  { income: 2450000, expense: 1210000 },
+  { income: 2290000, expense: 1750000 },
+  { income: 2760000, expense: 1630000 },
 ];
+const trendIsMock = computed(() =>
+  monthlyTrend.value.every((m) => !m.income && !m.expense)
+);
+// 趋势数据：真实为空时退化为模拟数据，保证图表始终有动态效果
+const trendData = computed(() => {
+  if (trendIsMock.value) {
+    return MOCK_TREND.map((m, i) => ({
+      month: monthKeyOf(5 - i).slice(5) + "月",
+      income: m.income,
+      expense: m.expense,
+    }));
+  }
+  return monthlyTrend.value;
+});
+// 当前周期支出按分类聚合（取前 6 类），并附上一周期对比用于环比
+const monthExpenseByCat = computed(() => {
+  const tx = transactions.value || [];
+  const cur = {};
+  const prev = {};
+  const inPrev = (t) => {
+    const dim = repDim.value;
+    const key = prevKey.value;
+    if (dim === "day") return t.date_key === key;
+    if (dim === "month") return t.month_key === key;
+    return (t.date_key || "").startsWith(key + "-");
+  };
+  tx.forEach((t) => {
+    if (t.type !== "expense" || !inRepLedger(t)) return;
+    const id = t.category_id || "unknown";
+    if (inRepPeriod(t)) cur[id] = (cur[id] || 0) + (t.amount || 0);
+    else if (inPrev(t)) prev[id] = (prev[id] || 0) + (t.amount || 0);
+  });
+  const cats = state.categories || [];
+  const nameOf = (id) =>
+    (cats.find((c) => String(c._id) === String(id)) || {}).name || "其他";
+  return Object.keys(cur)
+    .map((id) => {
+      const value = cur[id];
+      const p = prev[id] || 0;
+      const mom = p > 0 ? Math.round(((value - p) / p) * 100) : null;
+      return { id, name: nameOf(id), value, prev: p, mom };
+    })
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 6);
+});
 
-const maxBar = Math.max(...MONTHLY.map((s) => s.income));
+const CAT_PALETTE = [
+  "#ff7a7a",
+  "#ffb347",
+  "#9d7bff",
+  "#4ade80",
+  "#38bdf8",
+  "#f6c453",
+  "#7ee0c4",
+];
+const maxBar = computed(() =>
+  Math.max(1, ...trendData.value.flatMap((m) => [m.income, m.expense]))
+);
+// 趋势叠加图表：折线 + 面积 + 散点，与柱状图共用同一坐标系（均按 maxBar 归一化）
+const TREND_W = 300;
+const TREND_H = 240;
+const trendChart = computed(() => {
+  const data = trendData.value;
+  const n = data.length;
+  if (!n)
+    return { lineInc: "", lineExp: "", areaInc: "", areaExp: "", points: [] };
+  const max = maxBar.value || 1;
+  const X = (i) => 14 + (i / (n - 1)) * (TREND_W - 28);
+  const Y = (v) => TREND_H - 22 - (v / max) * (TREND_H - 42);
+  const incPts = data.map((d, i) => [X(i), Y(d.income)]);
+  const expPts = data.map((d, i) => [X(i), Y(d.expense)]);
+  const toPath = (pts) =>
+    pts
+      .map((p, i) => (i ? `L ${p[0].toFixed(1)} ${p[1].toFixed(1)}` : `M ${p[0].toFixed(1)} ${p[1].toFixed(1)}`))
+      .join(" ");
+  const toArea = (pts) =>
+    `${toPath(pts)} L ${pts[n - 1][0].toFixed(1)} ${TREND_H} L ${pts[0][0].toFixed(1)} ${TREND_H} Z`;
+  return {
+    lineInc: toPath(incPts),
+    lineExp: toPath(expPts),
+    areaInc: toArea(incPts),
+    areaExp: toArea(expPts),
+    points: data.map((d, i) => ({
+      x: +X(i).toFixed(1),
+      yInc: +Y(d.income).toFixed(1),
+      yExp: +Y(d.expense).toFixed(1),
+      i,
+    })),
+  };
+});
+// 散点半径：当前聚焦的数据点放大突出
+function trendDotR(i) {
+  const on =
+    hoverMonthIdx.value === i ||
+    (hoverMonthIdx.value === -1 && i === trendChart.value.points.length - 1);
+  return on ? 4.8 : 3;
+}
+const catMax = computed(() =>
+  Math.max(1, ...monthExpenseByCat.value.map((c) => c.value))
+);
+
+// 柱状图交互高亮（点击/悬停切换）+ 聚焦月份数字滚动
+const hoverMonthIdx = ref(-1);
+const trendFocusIdx = ref(5); // 默认聚焦最近一个月
+const trendFocus = computed(
+  () =>
+    trendData.value[trendFocusIdx.value] ||
+    trendData.value[trendData.value.length - 1]
+);
+const trendIncUp = createCountUp();
+const trendExpUp = createCountUp();
+const trendNetUp = createCountUp();
+watch(
+  () => trendFocus.value,
+  (f) => {
+    trendIncUp.setTo(f.income);
+    trendExpUp.setTo(f.expense);
+    trendNetUp.setTo(f.income - f.expense);
+  },
+  { immediate: true }
+);
+function onBarTap(idx) {
+  hoverMonthIdx.value = hoverMonthIdx.value === idx ? -1 : idx;
+  trendFocusIdx.value = idx;
+}
+
+// ===== 环形图（动态 SVG 几何） =====
+const donut = computed(() => {
+  const items = monthExpenseByCat.value;
+  const total = items.reduce((s, c) => s + c.value, 0) || 1;
+  const R = 50; // viewBox 半径
+  const inner = 33;
+  const circ = 2 * Math.PI * R;
+  let acc = 0;
+  const segs = items.map((c, i) => {
+    const frac = c.value / total;
+    const len = frac * circ;
+    const seg = {
+      id: c.id,
+      name: c.name,
+      value: c.value,
+      pct: Math.round(frac * 100),
+      color: CAT_PALETTE[i % CAT_PALETTE.length],
+      dash: `${len} ${circ - len}`,
+      offset: -acc, // 从 12 点方向顺时针
+    };
+    acc += len;
+    return seg;
+  });
+  return { total, R, inner, circ, segs };
+});
+const hoverCatIdx = ref(-1);
+function onSegTap(i) {
+  hoverCatIdx.value = hoverCatIdx.value === i ? -1 : i;
+}
 
 const cash = computed(() => (state.assetTotals ? state.assetTotals.disposable : 0));
 const invest = computed(() => (state.assetTotals ? state.assetTotals.investment : 0));
@@ -2345,6 +3518,35 @@ const assetDisplay = computed(() =>
     ? cash.value + invest.value
     : net.value
 );
+// 资产卡数字滚动联动：必须在 net/cash/invest/liab 定义之后注册（immediate 会立即求值）
+watch(
+  () => net.value,
+  (v) => assetNet.setTo(v),
+  { immediate: true }
+);
+watch(
+  () => cash.value,
+  (v) => assetCash.setTo(v),
+  { immediate: true }
+);
+watch(
+  () => invest.value,
+  (v) => assetInvest.setTo(v),
+  { immediate: true }
+);
+watch(
+  () => liab.value,
+  (v) => assetLiab.setTo(v),
+  { immediate: true }
+);
+watch(
+  () =>
+    assetFocus.value === "net"
+      ? 0
+      : accountDist.value.find((g) => g.key === assetFocus.value)?.value || 0,
+  (v) => assetSub.setTo(v),
+  { immediate: true }
+);
 
 async function loadData() {
   const uid = state.uid;
@@ -2355,7 +3557,11 @@ async function loadData() {
   }
   try {
     // 走云函数读取，禁止前端直连数据库
-    const [ledgerData, txData] = await Promise.all([listLedgers(), listTransactions({})]);
+    const [ledgerData, txData] = await Promise.all([
+      listLedgers(),
+      listTransactions({}),
+      userStore.loadCategories().catch(() => []),
+    ]);
     console.log("[ledger][loadData] 账本接口响应长度 =", ledgerData.length);
     console.log("[ledger][loadData] 交易接口响应长度 =", txData.length);
 
@@ -2488,28 +3694,29 @@ const ASSET_CLASS_OPTIONS = [
 ];
 const SUBTYPES = {
   daily: [
-    { v: "cash", label: "现金" },
-    { v: "bank_card", label: "银行卡" },
-    { v: "alipay", label: "支付宝" },
     { v: "wechat", label: "微信" },
-    { v: "wallet", label: "钱包" },
+    { v: "alipay", label: "支付宝" },
+    { v: "bank_card", label: "银行卡" },
+    { v: "cash", label: "现金" },
     { v: "other", label: "其他" },
   ],
   liability: [
+    { v: "huabei", label: "花呗" },
     { v: "credit_card", label: "信用卡" },
-    { v: "loan", label: "贷款" },
-    { v: "borrow", label: "借款" },
+    { v: "jdbt", label: "京东白条" },
+    { v: "loan", label: "借款" },
     { v: "other", label: "其他" },
   ],
   investment: [
-    { v: "stock", label: "股票" },
     { v: "fund", label: "基金" },
-    { v: "deposit", label: "存款" },
+    { v: "stock", label: "股票" },
+    { v: "bond", label: "债券" },
+    { v: "gold", label: "黄金" },
     { v: "other", label: "其他" },
   ],
   special: [
-    { v: "reserve", label: "备用金" },
-    { v: "insurance", label: "保险" },
+    { v: "provident_fund", label: "公积金" },
+    { v: "insurance", label: "医保" },
     { v: "other", label: "其他" },
   ],
 };
@@ -2523,7 +3730,7 @@ const showAssetSheet = ref(false);
 const assetForm = reactive({
   name: "",
   account_class: "daily",
-  account_subtype: "cash",
+  account_subtype: "wechat",
   subtype_name: "",
   balance: "",
   include_in_disposable: true,
@@ -2531,6 +3738,7 @@ const assetForm = reactive({
   daily_limit: "",
   note: "",
   include_in_total_asset: true,
+  iconFileID: "",
 });
 const assetSubtypes = computed(() => SUBTYPES[assetForm.account_class] || []);
 function classDefaults(c) {
@@ -2539,7 +3747,7 @@ function classDefaults(c) {
 function resetAssetForm() {
   assetForm.name = "";
   assetForm.account_class = "daily";
-  assetForm.account_subtype = "cash";
+  assetForm.account_subtype = "wechat";
   assetForm.subtype_name = "";
   assetForm.balance = "";
   assetForm.include_in_disposable = true;
@@ -2547,10 +3755,46 @@ function resetAssetForm() {
   assetForm.daily_limit = "";
   assetForm.note = "";
   assetForm.include_in_total_asset = true;
+  assetForm.iconFileID = "";
 }
 function openAddAssetSheet() {
   resetAssetForm();
   showAssetSheet.value = true;
+}
+// 选择并上传自定义账户图标（落库云存储 fileID）
+const uploadingAssetIcon = ref(false);
+const assetIconUrl = ref("");
+async function pickAssetIcon() {
+  if (uploadingAssetIcon.value) return;
+  let imgPath = "";
+  try {
+    const res = await uni.chooseImage({
+      count: 1,
+      sizeType: ["compressed"],
+      sourceType: ["album", "camera"],
+    });
+    imgPath = res.tempFilePaths && res.tempFilePaths[0];
+  } catch (_e) {
+    return;
+  }
+  if (!imgPath) return;
+  uploadingAssetIcon.value = true;
+  uni.showLoading({ title: "上传中...", mask: true });
+  try {
+    const up = await uploadAssetIcon(imgPath);
+    assetForm.iconFileID = up.fileID;
+    assetIconUrl.value = await getCloudTempUrl(up.fileID);
+    uni.hideLoading();
+  } catch (e) {
+    uni.hideLoading();
+    uni.showToast({ title: "图标上传失败", icon: "none" });
+  } finally {
+    uploadingAssetIcon.value = false;
+  }
+}
+function clearAssetIcon() {
+  assetForm.iconFileID = "";
+  assetIconUrl.value = "";
 }
 function onAssetClassChange() {
   const subs = SUBTYPES[assetForm.account_class] || [];
@@ -2574,13 +3818,14 @@ async function saveAssetAccount() {
       account_class: assetForm.account_class,
       account_subtype: assetForm.account_subtype,
       subtype_name: assetForm.subtype_name || undefined,
-      initial_balance_fen: safeYuanToFen(assetForm.balance || "0").value,
+      initial_balance: safeYuanToFen(assetForm.balance || "0").value,
       include_in_disposable: !!assetForm.include_in_disposable,
       daily_limit_fen: assetForm.daily_limit
         ? safeYuanToFen(assetForm.daily_limit).value
         : undefined,
       note: assetForm.note || undefined,
       include_in_total_asset: !!assetForm.include_in_total_asset,
+      icon: assetForm.iconFileID || undefined,
     };
     await createAssetAccountAction(payload);
     uni.showToast({ title: "创建成功", icon: "success" });
@@ -2686,6 +3931,7 @@ function openRecognizedSheet(r, ic, sub, classDefaults) {
     include_in_total_asset: classDefaults.t,
     daily_limit: "",
     note: "",
+    iconFileID: "",
   });
   showAssetSheet.value = true;
   uni.showToast({ title: "已识别，请确认", icon: "none" });
@@ -3125,7 +4371,7 @@ onUnmounted(() => {
   background: rgba(0, 0, 0, 0.45);
   display: flex;
   align-items: flex-end;
-  z-index: 1000;
+  z-index: 900;
 }
 .sheet {
   width: 100%;
@@ -3174,23 +4420,136 @@ onUnmounted(() => {
   overflow-y: auto;
   flex: 1;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
 }
 .form-row {
   display: flex;
   flex-direction: column;
   gap: 12rpx;
 }
+.form-section-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 4rpx;
+}
+.form-switch-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+.switch-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12rpx;
+  // background: $sj-g1;
+  border-radius: 16rpx;
+  padding: 20rpx 8rpx;
+}
+.switch-label {
+  font-size: 26rpx;
+  color: var(--ink);
+  text-align: center;
+}
+
+/* Uiverse 风格滑块开关（替代原生 switch） */
+.switch {
+  font-size: 28rpx;
+  position: relative;
+  display: inline-block;
+  width: 3.5em;
+  height: 2em;
+}
+.slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: #fff;
+  border-radius: 50px;
+  overflow: hidden;
+  transition: all 0.4s cubic-bezier(0.215, 0.61, 0.355, 1);
+  border: 1rpx solid $sj-g3;
+}
+.dot {
+  position: absolute;
+  height: 1.4em;
+  width: 1.4em;
+  bottom: 0.3em;
+  border-radius: inherit;
+  transition: all 0.4s cubic-bezier(0.215, 0.61, 0.355, 1);
+}
+.dot-green {
+  right: 0.3em;
+  background-color: $sj-g5;
+  transform: translateX(150%);
+}
+.dot-gray {
+  left: 0.3em;
+  background-color: #cccccc;
+}
+.switch.checked .dot-green {
+  transform: translateY(0);
+}
+.switch.checked .dot-gray {
+  transform: translateX(-150%);
+}
 .form-label {
   font-size: 26rpx;
   color: $sj-g4;
 }
+.form-row-icon {
+  align-items: flex-start;
+}
+.icon-picker {
+  position: relative;
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 26rpx;
+  background: $sj-g0;
+  border: 1rpx dashed $sj-g3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+}
+.icon-picker-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 26rpx;
+}
+.icon-picker-add {
+  font-size: 40rpx;
+  color: $sj-g4;
+  line-height: 1;
+}
+.icon-picker-clear {
+  position: absolute;
+  top: -12rpx;
+  right: -12rpx;
+  width: 32rpx;
+  height: 32rpx;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 20rpx;
+  line-height: 32rpx;
+  text-align: center;
+}
 .form-input {
   height: 80rpx;
-  background: $sj-g1;
+  background: $sj-g0;
   border-radius: 16rpx;
   padding: 0 24rpx;
   font-size: 30rpx;
-  color: $sj-g5;
+  color: var(--ink2);
 }
 .form-ph {
   color: $sj-g2-0;
@@ -3199,14 +4558,22 @@ onUnmounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 16rpx;
+  width: 100%;
 }
 .seg-item {
-  padding: 12rpx 24rpx;
-  background: $sj-g1;
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: center;
+  padding: 12rpx 0;
+  background: $sj-g0;
   border-radius: 999rpx;
   font-size: 26rpx;
-  color: $sj-g4;
+  color: var(--ink3);
   cursor: pointer;
+}
+/* 子类型：固定一行 4 个 */
+.seg-subtype .seg-item {
+  flex: 0 0 calc((100% - 48rpx) / 4);
 }
 .seg-item.active {
   background: $sj-g5;
@@ -3214,14 +4581,15 @@ onUnmounted(() => {
 }
 .form-amount {
   height: 80rpx;
-  background: $sj-g1;
+  background: $sj-g0;
   border-radius: 16rpx;
   padding: 0 24rpx;
   font-size: 30rpx;
-  color: $sj-g5;
+  color: var(--ink2);
 }
 .sheet-confirm {
   margin-top: 32rpx;
+  width: 100%;
   height: 88rpx;
   line-height: 88rpx;
   text-align: center;
@@ -3246,9 +4614,10 @@ onUnmounted(() => {
 /* 截图建账入口（弹窗内） */
 .cam-row {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 16rpx;
-  padding: 20rpx 24rpx;
+  gap: 12rpx;
+  padding: 28rpx 24rpx;
   margin-bottom: 24rpx;
   background: $sj-g1;
   border: 1rpx dashed $sj-g3;
@@ -3256,8 +4625,8 @@ onUnmounted(() => {
   cursor: pointer;
 }
 .cam-icon {
-  width: 44rpx;
-  height: 44rpx;
+  width: 150rpx;
+  height: 150rpx;
 }
 .cam-text {
   font-size: 28rpx;
@@ -4326,52 +5695,1226 @@ onUnmounted(() => {
   font-weight: 700;
 }
 
-.chart-title {
+/* ===== 报表：工具栏（周期 + 账本 + 导出）===== */
+.rep-toolbar {
+  margin: 24rpx 32rpx 0;
+  // padding: 20rpx 24rpx;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+.rep-dim {
+  display: flex;
+  gap: 6rpx;
+  background: rgba(15, 28, 20, 0.06);
+  border-radius: 999rpx;
+  padding: 4rpx;
+}
+.rep-dim-item {
+  padding: 8rpx 22rpx;
+  font-size: 22rpx;
+  color: var(--ink3);
+  border-radius: 999rpx;
+  transition: all 0.25s ease;
+  &.active {
+    color: #fff;
+    background: linear-gradient(135deg, #2f9e44, #0ca678);
+    box-shadow: 0 4rpx 12rpx rgba(44, 160, 74, 0.4);
+    font-weight: 700;
+  }
+}
+.rep-key {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6rpx;
+  padding: 10rpx 16rpx;
+  border: 1rpx solid rgba(15, 28, 20, 0.1);
+  border-radius: 999rpx;
+  background: #fff;
+  box-shadow: 0 2rpx 8rpx rgba(15, 28, 20, 0.05);
+  cursor: pointer;
+  &:active {
+    background: var(--g1);
+  }
+}
+.rep-key-label {
+  font-size: 22rpx;
+  font-weight: 600;
+  color: var(--ink2);
+}
+.rep-ledger {
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+  padding: 8rpx 18rpx;
+  border: 1rpx solid rgba(15, 28, 20, 0.1);
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  color: var(--ink2);
+  background: #fff;
+}
+.rep-ledger-caret {
+  font-size: 18rpx;
+  color: var(--ink4);
+}
+.rep-export {
+  display: flex;
+  align-items: center;
+  gap: 4rpx;
+  padding: 8rpx 16rpx;
+  @include sj-brand-gradient(135deg);
+  border-radius: 999rpx;
+  color: #fff;
+  font-size: 22rpx;
+  font-weight: 600;
+  box-shadow: 0 6rpx 16rpx rgba(44, 160, 74, 0.35);
+}
+.rep-export-ico {
+  font-size: 24rpx;
+}
+
+/* ===== 报表：P0 动态仪表盘 ===== */
+.mom {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 4rpx;
+  font-size: 20rpx;
+  padding: 2rpx 10rpx;
+  border-radius: 999rpx;
+  background: rgba(15, 28, 20, 0.05);
+  color: var(--ink4);
+  &.up {
+    color: #e8590c;
+    background: rgba(232, 89, 12, 0.1);
+  }
+  &.down {
+    color: #0ca678;
+    background: rgba(12, 166, 120, 0.1);
+  }
+  &.muted {
+    color: var(--ink4);
+  }
+}
+.mom-ico {
+  font-size: 16rpx;
+}
+.dash {
+  margin: 24rpx 32rpx 0;
+  padding: 28rpx;
+  overflow: hidden;
+}
+.dash-head {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 8rpx;
+}
+.dash-live {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 4rpx 14rpx;
+  border-radius: 999rpx;
+  background: rgba(44, 160, 74, 0.1);
+  font-size: 20rpx;
+  color: #0ca678;
+}
+.dash-live-dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: #0ca678;
+  animation: livePulse 1.6s ease-in-out infinite;
+}
+@keyframes livePulse {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(12, 166, 120, 0.5);
+  }
+  50% {
+    opacity: 0.55;
+    box-shadow: 0 0 0 8rpx rgba(12, 166, 120, 0);
+  }
+}
+
+/* Gauge 主仪表 */
+.dash-gauge {
+  position: relative;
+  margin: 0 auto;
+  width: 400rpx;
+  height: 230rpx;
+}
+.dash-track {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.dash-svg {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.dash-arc {
+  transition: stroke-dasharray 0.8s cubic-bezier(0.22, 1, 0.36, 1),
+    stroke 0.4s ease;
+}
+.dash-center {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 6rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4rpx;
+}
+.dash-center-label {
+  font-size: 22rpx;
+  color: var(--ink4);
+}
+.dash-center-val {
+  font-size: 44rpx;
+  font-weight: 900;
+  line-height: 1.1;
+  transition: color 0.4s ease;
+}
+.dash-center .mom {
+  align-self: center;
+}
+
+/* 指标切换 chips */
+.dash-metrics {
+  display: flex;
+  gap: 12rpx;
+  margin-top: 16rpx;
+}
+.dash-metric {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6rpx;
+  padding: 14rpx 4rpx;
+  border-radius: 18rpx;
+  background: rgba(15, 28, 20, 0.04);
+  transition: all 0.3s ease;
+  cursor: pointer;
+  &.active {
+    background: rgba(12, 166, 120, 0.1);
+    transform: translateY(-4rpx);
+    box-shadow: 0 8rpx 20rpx rgba(12, 166, 120, 0.25);
+  }
+  &:active {
+    transform: scale(0.97);
+  }
+}
+.dash-m-label {
+  font-size: 20rpx;
+  color: var(--ink4);
+}
+.dash-m-val {
+  font-size: 24rpx;
+  font-weight: 700;
+  color: var(--ink2);
+  transition: color 0.3s ease;
+}
+.dash-metric.active .dash-m-val {
+  color: var(--mc, #0ca678);
+}
+.dash-metric.active .dash-m-label {
+  color: var(--mc, #0ca678);
+  font-weight: 600;
+}
+
+/* 本期 vs 上期 对比条 */
+.dash-compare {
+  margin-top: 20rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+.dash-cmp-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+.dash-cmp-label {
+  width: 56rpx;
+  font-size: 20rpx;
+  color: var(--ink4);
+}
+.dash-cmp-track {
+  flex: 1;
+  height: 14rpx;
+  border-radius: 14rpx;
+  background: rgba(15, 28, 20, 0.06);
+  overflow: hidden;
+}
+.dash-cmp-fill {
+  height: 100%;
+  border-radius: 14rpx;
+  transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1), background 0.4s ease;
+}
+.dash-cmp-val {
+  min-width: 120rpx;
+  text-align: right;
+  font-size: 20rpx;
+  color: var(--ink3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== 报表：P1 未来科技资产面板 ===== */
+.tech-asset {
+  position: relative;
+  margin: 24rpx 32rpx 0;
+  padding: 28rpx;
+  border-radius: 28rpx;
+  overflow: hidden;
+  background: linear-gradient(160deg, #f5fff7 0%, #eefbef 55%, #f3fff6 100%);
+  border: 1rpx solid rgba(37, 204, 93, 0.22);
+  box-shadow: 0 14rpx 44rpx rgba(22, 163, 74, 0.14),
+    inset 0 1rpx 0 rgba(255, 255, 255, 0.9);
+}
+/* 网格背景 */
+.tech-bg {
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(
+      rgba(37, 204, 93, 0.08) 1rpx,
+      transparent 1rpx
+    ),
+    linear-gradient(90deg, rgba(37, 204, 93, 0.08) 1rpx, transparent 1rpx);
+  background-size: 44rpx 44rpx;
+  pointer-events: none;
+}
+/* 扫描线 */
+.tech-scan {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 120rpx;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(37, 204, 93, 0.08),
+    transparent
+  );
+  animation: scanMove 5s linear infinite;
+  pointer-events: none;
+}
+@keyframes scanMove {
+  0% {
+    top: -120rpx;
+  }
+  100% {
+    top: 100%;
+  }
+}
+/* 漂浮粒子 */
+.tech-particle {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: floatY 6s ease-in-out infinite;
+  &.p1 {
+    width: 8rpx;
+    height: 8rpx;
+    top: 18%;
+    left: 12%;
+    background: #25cc5d; /* g5 */
+    box-shadow: 0 0 12rpx rgba(37, 204, 93, 0.55);
+    animation-delay: 0s;
+  }
+  &.p2 {
+    width: 6rpx;
+    height: 6rpx;
+    top: 62%;
+    left: 82%;
+    background: #16a34a;
+    box-shadow: 0 0 10rpx rgba(22, 163, 74, 0.5);
+    animation-delay: 1.4s;
+  }
+  &.p3 {
+    width: 10rpx;
+    height: 10rpx;
+    top: 78%;
+    left: 20%;
+    background: #0e923f; /* g7 深绿 */
+    box-shadow: 0 0 14rpx rgba(14, 146, 63, 0.5);
+    animation-delay: 2.6s;
+  }
+  &.p4 {
+    width: 5rpx;
+    height: 5rpx;
+    top: 30%;
+    left: 68%;
+    background: #8ae99b; /* g4 浅绿 */
+    box-shadow: 0 0 10rpx rgba(138, 233, 155, 0.5);
+    animation-delay: 3.8s;
+  }
+}
+@keyframes floatY {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.85;
+  }
+  50% {
+    transform: translateY(-24rpx);
+    opacity: 0.45;
+  }
+}
+/* HUD 四角 */
+.tech-corner {
+  position: absolute;
+  width: 26rpx;
+  height: 26rpx;
+  border-color: rgba(14, 146, 63, 0.45);
+  border-style: solid;
+  pointer-events: none;
+  &.tl {
+    top: 14rpx;
+    left: 14rpx;
+    border-width: 3rpx 0 0 3rpx;
+    border-top-left-radius: 8rpx;
+  }
+  &.tr {
+    top: 14rpx;
+    right: 14rpx;
+    border-width: 3rpx 3rpx 0 0;
+    border-top-right-radius: 8rpx;
+  }
+  &.bl {
+    bottom: 14rpx;
+    left: 14rpx;
+    border-width: 0 0 3rpx 3rpx;
+    border-bottom-left-radius: 8rpx;
+  }
+  &.br {
+    bottom: 14rpx;
+    right: 14rpx;
+    border-width: 0 3rpx 3rpx 0;
+    border-bottom-right-radius: 8rpx;
+  }
+}
+.tech-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 22rpx;
+}
+.tech-title {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+.tech-pulse {
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 50%;
+  background: #16a34a;
+  box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.5);
+  animation: livePulse 1.6s ease-in-out infinite;
+}
+.tech-title-text {
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #0e923f; /* g7 */
+  letter-spacing: 2rpx;
+}
+.tech-status {
+  font-size: 20rpx;
+  color: #0e923f;
+  padding: 4rpx 14rpx;
+  border: 1rpx solid rgba(37, 204, 93, 0.35);
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.6);
+}
+/* 主读数 */
+.tech-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6rpx;
+  padding: 10rpx 0 20rpx;
+}
+.tech-main-label {
+  font-size: 22rpx;
+  letter-spacing: 4rpx;
+  text-shadow: 0 2rpx 8rpx rgba(37, 204, 93, 0.25);
+  transition: color 0.3s ease;
+}
+.tech-main-val {
+  font-size: 56rpx;
+  font-weight: 900;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 4rpx 16rpx rgba(37, 204, 93, 0.18);
+  transition: color 0.3s ease;
+}
+/* 子指标 */
+.tech-subs {
+  display: flex;
+  gap: 12rpx;
+  margin-bottom: 22rpx;
+}
+.tech-sub {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6rpx;
+  padding: 14rpx 4rpx;
+  border-radius: 16rpx;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1rpx solid rgba(37, 204, 93, 0.16);
+}
+.tech-sub-label {
+  font-size: 20rpx;
+  color: #6b8c7a;
+}
+.tech-sub-val {
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #0e923f;
+  font-variant-numeric: tabular-nums;
+  &.tech-liab {
+    color: #e11d48;
+  }
+}
+/* 账户分布：霓虹流光条 */
+.tech-dist-item {
+  margin-bottom: 14rpx;
+  padding: 12rpx 14rpx;
+  border-radius: 16rpx;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1rpx solid rgba(37, 204, 93, 0.14);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  &:last-child {
+    margin-bottom: 0;
+  }
+  &.active {
+    background: #f5fff7; /* g0 */
+    border-color: rgba(37, 204, 93, 0.4);
+    transform: translateX(4rpx);
+  }
+  &.dim {
+    opacity: 0.4;
+  }
+}
+.tech-dist-top {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 8rpx;
+}
+.tech-dist-ico {
+  width: 28rpx;
+  height: 28rpx;
+}
+.tech-dist-name {
+  font-size: 22rpx;
+  color: #0e923f; /* g7 深绿，白底可读 */
+}
+.tech-dist-val {
+  margin-left: auto;
+  font-size: 20rpx;
+  color: #6b8c7a;
+  font-variant-numeric: tabular-nums;
+}
+.tech-dist-pct {
+  min-width: 60rpx;
+  text-align: right;
+  font-size: 20rpx;
+  font-weight: 600;
+  color: #25cc5d; /* g5 */
+}
+.tech-dist-track {
+  height: 14rpx;
+  border-radius: 14rpx;
+  background: #f5fff7; /* g0 */
+  overflow: hidden;
+}
+.tech-dist-fill {
+  position: relative;
+  height: 100%;
+  border-radius: 14rpx;
+  transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+  overflow: hidden;
+}
+.tech-dist-sheen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 60%;
+  background: linear-gradient(
+    100deg,
+    transparent,
+    rgba(255, 255, 255, 0.55),
+    transparent
+  );
+  animation: sheenFlow 2.4s linear infinite;
+}
+@keyframes sheenFlow {
+  0% {
+    left: -70%;
+  }
+  100% {
+    left: 120%;
+  }
+}
+
+/* ===== 报表：P2 预算执行 ===== */
+.cat-emoji {
+  font-size: 26rpx;
+}
+.cat-mom {
+  font-size: 18rpx;
+  margin-left: 8rpx;
+  font-weight: 600;
+  &.up {
+    color: #e8590c;
+  }
+  &.down {
+    color: #0ca678;
+  }
+}
+.cat-pct.is-over {
+  color: var(--red);
+  font-weight: 700;
+}
+.budget-fill.is-over {
+  box-shadow: 0 0 12rpx rgba(232, 89, 12, 0.5);
+}
+.budget-sub {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 20rpx;
+  color: var(--ink4);
+  text-align: right;
+}
+.rep-empty {
+  padding: 30rpx 0;
+  text-align: center;
+  font-size: 22rpx;
+  color: var(--ink4);
+}
+
+/* ===== 报表：周期选择弹层 ===== */
+.rep-pop {
+  position: fixed;
+  inset: 0;
+  z-index: 101;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+.rep-pop-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 28, 20, 0.45);
+  animation: popFade 0.25s ease;
+}
+.rep-pop-sheet {
+  position: relative;
+  background: #fff;
+  border-radius: 32rpx 32rpx 0 0;
+  padding: 28rpx 28rpx calc(28rpx + env(safe-area-inset-bottom));
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 -12rpx 48rpx rgba(15, 28, 20, 0.18);
+  animation: popUp 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.rep-pop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20rpx;
+}
+.rep-pop-title {
+  font-size: 30rpx;
+  font-weight: 800;
+  color: var(--ink);
+}
+.rep-dim-pop {
+  padding: 4rpx;
+}
+.rep-pop-body {
+  flex: 1;
+  min-height: 200rpx;
+  max-height: 60vh;
+}
+.rep-pop-foot {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 20rpx;
+}
+.rep-pop-cancel,
+.rep-pop-ok {
+  flex: 1;
+  text-align: center;
+  padding: 18rpx 0;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+}
+.rep-pop-cancel {
+  background: var(--g0);
+  color: var(--ink3);
+  border: 1rpx solid var(--g2);
+}
+.rep-pop-ok {
+  color: #fff;
+  @include sj-brand-gradient(135deg);
+  box-shadow: 0 6rpx 16rpx rgba(44, 160, 74, 0.35);
+}
+@keyframes popFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes popUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.chart-card {
+  position: relative;
+  margin: 32rpx;
+  padding: 32rpx;
+  overflow: hidden;
+  // 卡片内发光描边，提升层次
+  box-shadow: 0 10rpx 40rpx rgba(15, 28, 20, 0.08),
+    inset 0 1rpx 0 rgba(255, 255, 255, 0.6);
+  &::after {
+    content: "";
+    position: absolute;
+    inset: auto -40rpx -60rpx auto;
+    width: 200rpx;
+    height: 200rpx;
+    background: radial-gradient(circle, rgba(77, 217, 116, 0.18), transparent 70%);
+    pointer-events: none;
+  }
+}
+
+.chart-head {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 28rpx;
+}
+.chart-ico {
+  font-size: 28rpx;
+  color: var(--g5);
+  filter: drop-shadow(0 2rpx 6rpx rgba(77, 217, 116, 0.4));
+}
+.chart-h-title {
   font-size: 26rpx;
   font-weight: 700;
   color: var(--ink);
-  display: block;
-  margin-bottom: 32rpx;
 }
 
-.chart-area {
-  display: flex;
-  justify-content: space-around;
-  align-items: flex-end;
+/* 科技感趋势：演示徽标 + 网格 + 扫描 + 实时汇总 */
+.mock-badge {
+  margin-left: auto;
+  font-size: 18rpx;
+  color: #0e923f;
+  padding: 4rpx 12rpx;
+  border: 1rpx solid rgba(37, 204, 93, 0.4);
+  border-radius: 999rpx;
+  background: rgba(37, 204, 93, 0.08);
 }
-
-.chart-col {
+.tech-bar-area {
+  position: relative;
+}
+.tech-bar-grid {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 260rpx;
+  background-image: linear-gradient(
+    rgba(37, 204, 93, 0.06) 1rpx,
+    transparent 1rpx
+  );
+  background-size: 100% 52rpx;
+  pointer-events: none;
+}
+.tech-bar-scan {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -120rpx;
+  height: 90rpx;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(37, 204, 93, 0.12),
+    transparent
+  );
+  animation: scanMove 5s linear infinite;
+  pointer-events: none;
+}
+.trend-sum {
+  position: relative;
   display: flex;
-  flex-direction: column-reverse;
   align-items: center;
-  height: 360rpx;
-  justify-content: flex-end;
+  margin-bottom: 18rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 16rpx;
+  background: linear-gradient(
+    135deg,
+    rgba(37, 204, 93, 0.08),
+    rgba(138, 233, 155, 0.06)
+  );
+  border: 1rpx solid rgba(37, 204, 93, 0.18);
+  overflow: hidden;
+  &::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 6rpx;
+    background: linear-gradient(180deg, #25cc5d, #8ae99b);
+    box-shadow: 0 0 12rpx rgba(37, 204, 93, 0.6);
+  }
 }
-
-.bar-group {
+.trend-sum-item {
+  flex: 1;
   display: flex;
-  gap: 6rpx;
+  flex-direction: column;
+  gap: 4rpx;
+  padding-left: 20rpx;
+}
+.trend-sum-label {
+  font-size: 18rpx;
+  color: var(--ink3);
+}
+.trend-sum-val {
+  font-size: 30rpx;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  &.inc {
+    color: #16a34a;
+  }
+  &.exp {
+    color: #d97706;
+  }
+  &.net {
+    color: #0e923f;
+  }
+}
+.trend-sum-month {
+  font-size: 20rpx;
+  color: #0e923f;
+  font-weight: 700;
+  padding: 6rpx 14rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1rpx solid rgba(37, 204, 93, 0.25);
+  white-space: nowrap;
+}
+
+/* 月度收支柱状图 */
+.bar-area {
+  position: relative;
+  z-index: 1;
+  display: flex;
   align-items: flex-end;
-  transition: all 0.4s ease;
+  gap: 16rpx;
+  height: 260rpx;
+  margin-bottom: 12rpx;
 }
 
+/* 叠加层：折线 + 面积 + 散点 */
+.trend-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  pointer-events: none;
+  overflow: visible;
+}
+.trend-line {
+  stroke-dasharray: 900;
+  stroke-dashoffset: 900;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  &.line-inc {
+    stroke: #25cc5d;
+    animation: drawLine 1.5s cubic-bezier(0.4, 0, 0.2, 1) 0.2s forwards;
+  }
+  &.line-exp {
+    stroke: #f59e0b;
+    animation: drawLine 1.5s cubic-bezier(0.4, 0, 0.2, 1) 0.45s forwards;
+  }
+}
+@keyframes drawLine {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.trend-area {
+  opacity: 0;
+  animation: fadeArea 1.2s ease 0.6s forwards;
+  &.trend-area-exp {
+    animation-delay: 0.85s;
+  }
+}
+@keyframes fadeArea {
+  to {
+    opacity: 1;
+  }
+}
+.trend-dot {
+  fill: #fff;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: dotPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes dotPop {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.bar-col {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  cursor: pointer;
+  transition: transform 0.25s ease;
+  &.bar-col-hover {
+    transform: translateY(-4rpx);
+  }
+}
+.bar-pair {
+  display: flex;
+  gap: 4rpx;
+  align-items: flex-end;
+  width: 100%;
+  justify-content: center;
+}
 .bar {
-  width: 28rpx;
-  border-radius: 8rpx 8rpx 0 0;
+  flex: 1;
+  max-width: 24rpx;
+  border-radius: 6rpx 6rpx 0 0;
+  // 从无到有生长（错峰弹出）+ 数据变化时平滑过渡
+  transition: height 0.7s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease,
+    filter 0.3s ease;
+  animation: barRise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--d, 0s);
+  transform-origin: bottom;
+  &.bar-dim {
+    filter: saturate(0.6);
+  }
 }
-
+@keyframes barRise {
+  from {
+    transform: scaleY(0);
+  }
+}
 .income-bar {
-  @include sj-brand-gradient(0deg);
+  @include sj-brand-gradient(180deg);
+  box-shadow: 0 0 14rpx rgba(77, 217, 116, 0.5);
+  opacity: 0.92;
+  position: relative;
+  &::after {
+    content: "";
+    position: absolute;
+    top: -6rpx;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 10rpx;
+    height: 10rpx;
+    border-radius: 50%;
+    background: #7ee0c4;
+    color: #7ee0c4;
+    box-shadow: 0 0 14rpx rgba(126, 224, 196, 0.95);
+    animation: dotPulse 2.4s ease-in-out infinite;
+    animation-delay: calc(var(--d, 0s) + 0.9s);
+  }
 }
-
 .expense-bar {
-  background: linear-gradient(0deg, #fbbf24, var(--amber));
+  background: linear-gradient(180deg, #f9c84a, var(--amber));
+  box-shadow: 0 0 14rpx rgba(249, 200, 74, 0.5);
+  opacity: 0.9;
+  position: relative;
+  &::after {
+    content: "";
+    position: absolute;
+    top: -6rpx;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 10rpx;
+    height: 10rpx;
+    border-radius: 50%;
+    background: #ffcf8a;
+    color: #ffcf8a;
+    box-shadow: 0 0 14rpx rgba(255, 207, 138, 0.95);
+    animation: dotPulse 2.4s ease-in-out infinite;
+    animation-delay: calc(var(--d, 0s) + 0.9s);
+  }
 }
-
-.bar-label {
+// 柱顶光标呼吸：无人操作时图表持续有动态光效
+@keyframes dotPulse {
+  0%,
+  100% {
+    transform: translateX(-50%) scale(1);
+    box-shadow: 0 0 10rpx currentColor;
+  }
+  50% {
+    transform: translateX(-50%) scale(1.45);
+    box-shadow: 0 0 22rpx currentColor;
+  }
+}
+// 悬停/选中反馈：高亮放大
+.bar-col {
+  &:hover .bar,
+  &.bar-col-hover .bar {
+    filter: brightness(1.18) saturate(1.1);
+  }
+  &:hover .income-bar,
+  &.bar-col-hover .income-bar {
+    transform: scaleY(1.04);
+  }
+  &:hover .expense-bar,
+  &.bar-col-hover .expense-bar {
+    transform: scaleY(1.04);
+  }
+}
+// 悬停浮窗
+.bar-tip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translate(-50%, -10rpx);
+  padding: 10rpx 14rpx;
+  border-radius: 14rpx;
+  background: rgba(15, 28, 20, 0.86);
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 2rpx;
+  white-space: nowrap;
+  z-index: 5;
+  animation: tipPop 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  .tip-line {
+    font-size: 20rpx;
+    line-height: 1.4;
+    color: #fff;
+    &.inc {
+      color: #7ee0c4;
+    }
+    &.exp {
+      color: #ffcf8a;
+    }
+    &.net {
+      color: #a5f3c4;
+    }
+  }
+}
+@keyframes tipPop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -10rpx);
+  }
+}
+.bar-months {
+  display: flex;
+  gap: 16rpx;
+}
+.bar-month-label {
+  flex: 1;
+  text-align: center;
   font-size: 18rpx;
   color: var(--ink4);
-  margin-top: 12rpx;
+  transition: color 0.25s ease, font-weight 0.25s ease;
+  &.bar-month-active {
+    color: var(--g5);
+    font-weight: 700;
+  }
+}
+
+/* 图例 */
+.chart-legend {
+  display: flex;
+  gap: 28rpx;
+  justify-content: center;
+  margin-top: 24rpx;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+.legend-dot {
+  width: 20rpx;
+  height: 20rpx;
+  border-radius: 6rpx;
+}
+.income-dot {
+  @include sj-brand-gradient(135deg);
+  box-shadow: 0 0 10rpx rgba(77, 217, 116, 0.5);
+}
+.expense-dot {
+  background: linear-gradient(135deg, #f9c84a, var(--amber));
+  box-shadow: 0 0 10rpx rgba(249, 200, 74, 0.5);
+}
+.trend-dot-legend {
+  width: 34rpx;
+  height: 10rpx;
+  border-radius: 5rpx;
+  &.inc {
+    background: linear-gradient(90deg, #25cc5d, #8ae99b);
+  }
+  &.exp {
+    background: linear-gradient(90deg, #f59e0b, #f9c84a);
+  }
+}
+.legend-text {
+  font-size: 22rpx;
+  color: var(--ink3);
+}
+
+/* ===== 环形图 ===== */
+.donut-wrap {
+  position: relative;
+  width: 240rpx;
+  height: 240rpx;
+  margin: 8rpx auto 28rpx;
+}
+.donut {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.donut-seg {
+  cursor: pointer;
+  transition: stroke-width 0.3s ease, opacity 0.3s ease,
+    stroke-dasharray 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  &.seg-hover {
+    stroke-width: 24;
+  }
+  &.seg-dim {
+    opacity: 0.35;
+  }
+}
+.donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  text-align: center;
+}
+.donut-c-label {
+  font-size: 20rpx;
+  color: var(--ink4);
+}
+.donut-c-name {
+  font-size: 24rpx;
+  font-weight: 700;
+  color: var(--ink);
+}
+.donut-c-val {
+  font-size: 32rpx;
+  font-weight: 800;
+  color: var(--ink);
+  margin-top: 2rpx;
+}
+.donut-c-pct {
+  font-size: 20rpx;
+  color: var(--g5);
+  margin-top: 2rpx;
+}
+
+/* 本月支出分类 */
+.cat-row {
+  margin-bottom: 20rpx;
+  padding: 6rpx 10rpx;
+  border-radius: 16rpx;
+  cursor: pointer;
+  transition: background 0.25s ease, transform 0.25s ease;
+  &.cat-row-hover {
+    background: rgba(77, 217, 116, 0.08);
+    transform: translateX(4rpx);
+  }
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+.cat-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8rpx;
+}
+.cat-name-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+.cat-dot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  box-shadow: 0 0 8rpx currentColor;
+}
+.cat-name {
+  font-size: 24rpx;
+  color: var(--ink2);
+  font-weight: 500;
+}
+.cat-pct {
+  font-size: 22rpx;
+  color: var(--ink3);
+}
+.cat-track {
+  height: 12rpx;
+  border-radius: 12rpx;
+  background: rgba(15, 28, 20, 0.07);
+  overflow: hidden;
+}
+.cat-fill {
+  height: 100%;
+  border-radius: 12rpx;
+  box-shadow: 0 0 10rpx currentColor;
+  transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .sticker-grid {

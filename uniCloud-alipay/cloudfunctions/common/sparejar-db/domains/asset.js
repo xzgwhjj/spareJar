@@ -49,6 +49,7 @@ async function createAssetAccount(userId, data) {
     name,
     initial_balance: initial,
     current_balance: initial,
+    icon: data.icon || '',
     include_in_disposable: def.include_in_disposable,
     include_in_daily_limit: def.include_in_daily_limit,
     include_in_total_asset: def.include_in_total_asset,
@@ -160,6 +161,7 @@ async function updateAssetAccount(userId, accountId, data) {
   const patch = { updated_at: nowTs() }
   if (data.name != null) patch.name = String(data.name).trim()
   if (data.account_subtype != null) patch.account_subtype = data.account_subtype
+  if (data.icon != null) patch.icon = String(data.icon || '')
   if (data.include_in_disposable != null) patch.include_in_disposable = !!data.include_in_disposable
   if (data.include_in_daily_limit != null) patch.include_in_daily_limit = !!data.include_in_daily_limit
   if (data.include_in_total_asset != null) patch.include_in_total_asset = !!data.include_in_total_asset

@@ -9,13 +9,12 @@
     </view>
 
     <view class="topbar" :style="{ paddingTop: pagePaddingTop }">
-      <view class="back-btn" @click="goBack">
-        <image
-          :src="cdn('/app_static/images/icon_left.png')"
-          class="back-icon"
-          mode="aspectFit"
-        ></image>
-      </view>
+      <image
+        :src="cdn('/app_static/images/icon_left.png')"
+        class="back-icon"
+        mode="aspectFit"
+        @click="goBack"
+      ></image>
       <text class="topbar-title"></text>
       <view style="width: 72rpx" />
     </view>
@@ -765,21 +764,10 @@ function handleLogout() {
   padding: 0 32rpx;
   z-index: 10;
 }
-.back-btn {
-  width: 72rpx;
-  height: 72rpx;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.75);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: #6b8c7a;
-  font-size: 32rpx;
-  .back-icon {
-    width: 50rpx;
-    height: 36rpx;
-  }
+
+.back-icon {
+  width: 60rpx;
+  height: 60rpx;
 }
 .topbar-title {
   font-size: 34rpx;

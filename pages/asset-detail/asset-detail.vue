@@ -11,7 +11,7 @@
         <!-- 头部 -->
         <view class="glass-hero card-in-1">
           <view class="hero-row">
-            <view class="hero-icon" :style="{ background: colorBgFor(account) }"><text>{{ iconFor(account) }}</text></view>
+            <view class="hero-icon" :style="{ background: colorBgFor(account) }"><image :src="iconFor(account)" mode="aspectFit" class="hero-icon-img" /></view>
             <view class="hero-info">
               <text class="hero-name">{{ account.name }}</text>
               <text class="hero-sub">{{ classLabel(account) }} · {{ subtypeLabel(account) }}</text>
@@ -174,6 +174,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user.js'
 import { listAccountBalanceLogs } from '@/api/sparejar.js'
 import { formatFen, safeYuanToFen } from '@/utils/money.js'
+import { cdn } from '@/utils/cdn.js'
 
 const userStore = useUserStore()
 const state = userStore.state
@@ -185,34 +186,33 @@ const account = computed(() => (state.assets || []).find((a) => a._id === accoun
 
 const SUBTYPES = {
   daily: [
-    { v: 'wechat', label: '微信', icon: '💚' },
-    { v: 'alipay', label: '支付宝', icon: '💙' },
-    { v: 'bank', label: '银行卡', icon: '🏦' },
-    { v: 'cash', label: '现金', icon: '💵' }
+    { v: 'wechat', label: '微信', icon: cdn('/app_static/images/icon_wechat.png') },
+    { v: 'alipay', label: '支付宝', icon: cdn('/app_static/images/icon_alipay.png') },
+    { v: 'bank_card', label: '银行卡', icon: cdn('/app_static/images/icon_bank_card.png') },
+    { v: 'cash', label: '现金', icon: cdn('/app_static/images/icon_cash.png') }
   ],
   special: [
-    { v: 'provident_fund', label: '公积金', icon: '🏠' },
-    { v: 'insurance', label: '医保', icon: '🛡️' }
+    { v: 'provident_fund', label: '公积金', icon: cdn('/app_static/images/icon_provident_fund.png') },
+    { v: 'insurance', label: '医保', icon: cdn('/app_static/images/icon_insurance.png') }
   ],
   investment: [
-    { v: 'fund', label: '基金', icon: '📈' },
-    { v: 'stock', label: '股票', icon: '📊' },
-    { v: 'bond', label: '债券', icon: '📜' },
-    { v: 'gold', label: '黄金', icon: '🪙' },
-    { v: 'wealth', label: '理财', icon: '💼' },
-    { v: 'other', label: '其他', icon: '📦' }
+    { v: 'fund', label: '基金', icon: cdn('/app_static/images/icon_fund.png') },
+    { v: 'stock', label: '股票', icon: cdn('/app_static/images/icon_stock.png') },
+    { v: 'bond', label: '债券', icon: cdn('/app_static/images/icon_bond.png') },
+    { v: 'gold', label: '黄金', icon: cdn('/app_static/images/icon_gold.png') },
+    { v: 'other', label: '其他', icon: cdn('/app_static/images/icon_other.png') }
   ]
 }
 const subtypeMap = {}
 for (const k in SUBTYPES) for (const s of SUBTYPES[k]) subtypeMap[s.v] = s
 const ASSET_TYPES = [
   { v: 'fund', label: '基金' }, { v: 'stock', label: '股票' }, { v: 'bond', label: '债券' },
-  { v: 'gold', label: '黄金' }, { v: 'wealth', label: '理财' }, { v: 'other', label: '其他' }
+  { v: 'gold', label: '黄金' }, { v: 'other', label: '其他' }
 ]
 const SUBTYPE_BG = {
-  wechat: '#e8f8ec', alipay: '#e8f1fb', bank: '#f3f0ff', cash: '#e1fae3',
+  wechat: '#e8f8ec', alipay: '#e8f1fb', bank_card: '#f3f0ff', bank: '#f3f0ff', cash: '#e1fae3',
   provident_fund: '#eaf3ff', insurance: '#fdeef0',
-  fund: '#fffbeb', stock: '#eef5ff', bond: '#f3f0ff', gold: '#fbf3e0', wealth: '#eafaf1', other: '#eef1f4'
+  fund: '#fffbeb', stock: '#eef5ff', bond: '#f3f0ff', gold: '#fbf3e0', other: '#eef1f4'
 }
 const CHANGE_TYPES = {
   transaction: '记账', adjust: '调账', transfer_in: '转入', transfer_out: '转出',
@@ -222,7 +222,7 @@ const CHANGE_TYPES = {
 function fmt(fen) { return formatFen(fen || 0) }
 function subtypeLabel(a) { const s = subtypeMap[a.account_subtype]; return s ? s.label : a.account_subtype }
 function classLabel(a) { return { daily: '日常账户', special: '专项账户', investment: '投资理财', liability: '负债账户' }[a.account_class] || a.account_class }
-function iconFor(a) { const s = subtypeMap[a.account_subtype]; return s ? s.icon : '💳' }
+function iconFor(a) { const s = subtypeMap[a.account_subtype]; return s ? s.icon : cdn('/app_static/images/icon_other.png') }
 function colorBgFor(a) { return SUBTYPE_BG[a.account_subtype] || '#e1fae3' }
 function assetTypeLabel(t) { const x = ASSET_TYPES.find((i) => i.v === t); return x ? x.label : t }
 function changeTypeLabel(t) { return CHANGE_TYPES[t] || t }
@@ -383,6 +383,7 @@ onMounted(async () => {
 .glass-hero { margin: 16px; padding: 18px; }
 .hero-row { display: flex; align-items: center; gap: 12px; }
 .hero-icon { width: 48px; height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+.hero-icon-img { width: 30px; height: 30px; }
 .hero-info { flex: 1; }
 .hero-name { font-size: 17px; font-weight: 800; color: var(--ink); display: block; }
 .hero-sub { font-size: 12px; color: var(--ink4); }

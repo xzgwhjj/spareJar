@@ -101,3 +101,24 @@ export async function deleteLedgerCover(fileID) {
 
 /** 删除心愿 logo（复用兜底逻辑）。 */
 export const deleteWishLogo = deleteLedgerCover;
+
+/**
+ * 上传本地图片到云存储 asset_img 目录（资产账户自定义图标）。
+ * @param {string} localPath 本地临时文件路径
+ * @returns {Promise<{rel:string, fileID:string}>}
+ */
+export function uploadAssetIcon(localPath) {
+  return new Promise((resolve, reject) => {
+    const cloudPath = `asset_img/${genName(localPath)}`;
+    const onOk = (res) => resolve({ rel: `/${cloudPath}`, fileID: res.fileID });
+    const task = uniCloud.uploadFile({
+      filePath: localPath,
+      cloudPath,
+      success: onOk,
+      fail: reject,
+    });
+    if (task && typeof task.then === 'function') {
+      task.then(onOk).catch(reject);
+    }
+  });
+}

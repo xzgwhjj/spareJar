@@ -185,7 +185,7 @@ const ASSET_ACCOUNT_KEYWORDS = [
   { kw: ['借款', '网贷', '分期'], account_class: 'liability', account_subtype: 'loan' },
   { kw: ['微信', '零钱', 'wechat'], account_class: 'daily', account_subtype: 'wechat' },
   { kw: ['支付宝', '余额', 'alipay'], account_class: 'daily', account_subtype: 'alipay' },
-  { kw: ['银行', '储蓄', '借记', '卡'], account_class: 'daily', account_subtype: 'bankcard' },
+  { kw: ['银行', '储蓄', '借记', '卡'], account_class: 'daily', account_subtype: 'bank_card' },
   { kw: ['现金', '钱包'], account_class: 'daily', account_subtype: 'cash' },
   { kw: ['基金', '理财', '余额宝', '零钱通'], account_class: 'investment', account_subtype: 'fund' },
   { kw: ['股票', '证券', '股份', 'a股', '港股'], account_class: 'investment', account_subtype: 'stock' },
