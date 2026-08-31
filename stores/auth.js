@@ -21,7 +21,7 @@ import { refreshToken, getSurplusPoolLogs } from '@/api/sparejar.js'
 import { loadWishes, loadArchivedWishesAction } from './wish.js'
 import { loadChallengeSummary, evaluateAchievementsAction, loadAchievements } from './challenge.js'
 import { loadAssetAccounts } from './asset.js'
-import { loadStickers, loadHealthProfile, loadDailyHealth, loadWeeklyHealth } from './health.js'
+import { loadStickers, loadHealthProfile, loadDailyHealth, loadWeeklyHealth, loadUserPoints } from './health.js'
 import { loadCategories, invalidateDashboard } from './dashboard.js'
 
 /** 清除本地登录凭证（不影响内存 state，需配合 clearAuthState） */
@@ -335,6 +335,7 @@ export async function bootstrap(profile = {}) {
   try {
     const data = await initUser(profile)
     state.user = data.user || null
+    state.userPoints = (data.user && data.user.points) || 0
     if (data.default_ledger_id) {
       state.defaultLedgerId = data.default_ledger_id
     }
@@ -346,6 +347,7 @@ export async function bootstrap(profile = {}) {
       loadCategories(),
       loadWishes(),
       loadStickers(),
+      loadUserPoints(),
       loadChallengeSummary(),
       evaluateAchievementsAction(),
       loadAchievements(),

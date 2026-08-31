@@ -5,7 +5,7 @@ const { getDocByUser, getDb, upsertByUnique, isDuplicateKeyError } = require('..
 const { formatDateKey, nowTs } = require('../utils/date')
 const money = require('../utils/money')
 const ids = require('../utils/id')
-const { EXPENSE_GROUPS, INCOME_GROUPS, MAX_CUSTOM_CATEGORIES } = require('../core/constants')
+const { MAX_CUSTOM_CATEGORIES } = require('../core/constants')
 
 async function getEffectiveBaseLimit(userId, dateKey) {
   const settings = await getDocByUser('user_settings', userId)
@@ -267,16 +267,19 @@ async function listCategories(userId, opts = {}) {
   return cats.map((c) => ({ ...c, usage_count: usageMap[String(c._id)] || 0 }))
 }
 
-/** 取某 type 的合法二级分组码 */
-
-function validGroupsOf(type) {
-  return (type === 'income' ? INCOME_GROUPS : EXPENSE_GROUPS).map((g) => g.code)
+/** 取某 type 的历史最大排序号（用于平铺排序计算） */
+function maxSortOf(cats, type) {
+  let max = 0
+  for (const c of cats) {
+    if (c.type === type && typeof c.sort_order === 'number' && c.sort_order > max) max = c.sort_order
+  }
+  return max
 }
 
 /**
  * 新建自定义分类。
  * @param {string} userId
- * @param {{ type: 'expense'|'income', name: string, icon?: string, group?: string }} data
+ * @param {{ type: 'expense'|'income', name: string, icon?: string, desc?: string }} data
  */
 
 async function createCategory(userId, data = {}) {
@@ -288,11 +291,10 @@ async function createCategory(userId, data = {}) {
   if (!name) throw new Error('分类名称不能为空')
   if (name.length > 32) throw new Error('分类名称不能超过32字')
 
-  const groups = validGroupsOf(type)
-  let group = typeof data.group === 'string' ? data.group : ''
-  if (!groups.includes(group)) group = groups[0]
-
   const icon = typeof data.icon === 'string' && data.icon ? data.icon.slice(0, 64) : '📦'
+
+  // 简介/备注（可选，最长 100 字）
+  const desc = typeof data.desc === 'string' ? data.desc.trim().slice(0, 100) : ''
 
   // 同 type 下分类名唯一（对应 uk_user_type_name），提前拦截给出可读错误
   const dupRes = await db.collection('categories').where({ user_id: userId, type, name }).limit(1).get()
@@ -304,7 +306,7 @@ async function createCategory(userId, data = {}) {
     throw new Error(`自定义分类已达上限(${MAX_CUSTOM_CATEGORIES})`)
   }
 
-  // 下一个排序号（排在预置之后）
+  // 下一个排序号（排在同类全部分类之后，type 内平铺连续）
   const maxRes = await db.collection('categories').where({ user_id: userId, type }).orderBy('sort_order', 'desc').limit(1).get()
   const maxSort = (maxRes.data && maxRes.data[0] && maxRes.data[0].sort_order) || 0
 
@@ -314,9 +316,9 @@ async function createCategory(userId, data = {}) {
     addRes = await db.collection('categories').add({
       user_id: userId,
       type,
-      group,
       name,
       icon,
+      desc,
       is_system: false,
       is_hidden: false,
       sort_order: maxSort + 1,
@@ -328,16 +330,16 @@ async function createCategory(userId, data = {}) {
     throw err
   }
   return {
-    _id: addRes.id, user_id: userId, type, group, name, icon,
+    _id: addRes.id, user_id: userId, type, name, icon, desc,
     is_system: false, is_hidden: false, sort_order: maxSort + 1, created_at: ts, usage_count: 0
   }
 }
 
 /**
- * 编辑分类：预置分类仅可切换隐藏；自定义可改名称/图标/分组/隐藏/排序。
+ * 编辑分类：预置分类仅可切换隐藏；自定义可改名称/图标/隐藏/排序。
  * @param {string} userId
  * @param {string} categoryId
- * @param {{ name?: string, icon?: string, group?: string, is_hidden?: boolean, sort_order?: number }} data
+ * @param {{ name?: string, icon?: string, is_hidden?: boolean, sort_order?: number }} data
  */
 
 async function updateCategory(userId, categoryId, data = {}) {
@@ -360,9 +362,7 @@ async function updateCategory(userId, categoryId, data = {}) {
       updateDoc.name = name
     }
     if (typeof data.icon === 'string' && data.icon) updateDoc.icon = data.icon.slice(0, 64)
-    if (typeof data.group === 'string') {
-      if (validGroupsOf(cat.type).includes(data.group)) updateDoc.group = data.group
-    }
+    if (typeof data.desc === 'string') updateDoc.desc = data.desc.trim().slice(0, 100)
     if (data.is_hidden !== undefined) updateDoc.is_hidden = !!data.is_hidden
     if (typeof data.sort_order === 'number') updateDoc.sort_order = data.sort_order
   }
@@ -417,21 +417,19 @@ async function deleteCategory(userId, categoryId, mergeToId = null) {
 }
 
 /**
- * 重排某分组内自定义分类顺序。
+ * 重排某 type 内自定义分类顺序（整 type 平铺排序，不再按 group 分组）。
  * @param {string} userId
  * @param {'expense'|'income'} type
- * @param {string} group 二级分组码
- * @param {string[]} orderedIds 该分组内自定义分类的期望顺序（id 列表）
+ * @param {string[]} orderedIds 该 type 内自定义分类的期望顺序（id 列表）
  */
 
-async function reorderCategories(userId, type, group, orderedIds = []) {
+async function reorderCategories(userId, type, orderedIds = []) {
   const db = getDb()
   if (type !== 'expense' && type !== 'income') throw new Error('type 必须为 expense 或 income')
   if (!Array.isArray(orderedIds) || !orderedIds.length) return { ok: true }
-  if (!validGroupsOf(type).includes(group)) throw new Error('非法的分组码')
 
   const validRes = await db.collection('categories').where({
-    user_id: userId, type, group, is_system: false, _id: db.command.in(orderedIds)
+    user_id: userId, type, is_system: false, _id: db.command.in(orderedIds)
   }).get()
   const validIds = new Set((validRes.data || []).map((c) => c._id))
 
@@ -461,7 +459,6 @@ module.exports = {
   updateUserSettings,
   sumDailyLimitExpenses,
   listCategories,
-  validGroupsOf,
   createCategory,
   updateCategory,
   deleteCategory,

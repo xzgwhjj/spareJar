@@ -671,11 +671,7 @@
 
           <!-- 本期 vs 上期 对比条 -->
           <view class="dash-compare">
-            <view
-              v-for="c in dashCompare"
-              :key="c.label"
-              class="dash-cmp-row"
-            >
+            <view v-for="c in dashCompare" :key="c.label" class="dash-cmp-row">
               <text class="dash-cmp-label">{{ c.label }}</text>
               <view class="dash-cmp-track">
                 <view
@@ -730,11 +726,15 @@
             </view>
             <view class="tech-sub">
               <text class="tech-sub-label">投资</text>
-              <text class="tech-sub-val">¥{{ fmt(Math.round(assetInvest.display)) }}</text>
+              <text class="tech-sub-val"
+                >¥{{ fmt(Math.round(assetInvest.display)) }}</text
+              >
             </view>
             <view class="tech-sub">
               <text class="tech-sub-label">负债</text>
-              <text class="tech-sub-val tech-liab">¥{{ fmt(Math.round(assetLiab.display)) }}</text>
+              <text class="tech-sub-val tech-liab"
+                >¥{{ fmt(Math.round(assetLiab.display)) }}</text
+              >
             </view>
           </view>
 
@@ -744,7 +744,10 @@
               v-for="g in accountDist"
               :key="g.key"
               class="tech-dist-item"
-              :class="{ active: assetFocus === g.key, dim: assetFocus !== 'net' && assetFocus !== g.key }"
+              :class="{
+                active: assetFocus === g.key,
+                dim: assetFocus !== 'net' && assetFocus !== g.key,
+              }"
               @click="focusAsset(g.key)"
             >
               <view class="tech-dist-top">
@@ -794,7 +797,6 @@
           </view>
           <view class="tech-bar-area">
             <view class="tech-bar-grid" />
-            <view class="tech-bar-scan" />
             <view class="bar-area">
               <!-- 叠加层：面积 + 折线 + 散点（与柱状图共用同一坐标系） -->
               <svg viewBox="0 0 300 240" class="trend-overlay" aria-hidden="true">
@@ -804,8 +806,8 @@
                     <stop offset="100%" stop-color="#25cc5d" stop-opacity="0.02" />
                   </linearGradient>
                   <linearGradient id="areaExpG" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.28" />
-                    <stop offset="100%" stop-color="#f59e0b" stop-opacity="0.02" />
+                    <stop offset="0%" stop-color="#0ea5e9" stop-opacity="0.28" />
+                    <stop offset="100%" stop-color="#0ea5e9" stop-opacity="0.02" />
                   </linearGradient>
                   <filter id="lineGlow" x="-20%" y="-20%" width="140%" height="140%">
                     <feGaussianBlur stdDeviation="2.2" result="b" />
@@ -816,7 +818,11 @@
                   </filter>
                 </defs>
                 <path :d="trendChart.areaInc" fill="url(#areaIncG)" class="trend-area" />
-                <path :d="trendChart.areaExp" fill="url(#areaExpG)" class="trend-area trend-area-exp" />
+                <path
+                  :d="trendChart.areaExp"
+                  fill="url(#areaExpG)"
+                  class="trend-area trend-area-exp"
+                />
                 <path
                   :d="trendChart.lineInc"
                   fill="none"
@@ -848,7 +854,7 @@
                   :cy="p.yExp"
                   :r="trendDotR(p.i)"
                   fill="#fff"
-                  stroke="#f59e0b"
+                  stroke="#0ea5e9"
                   stroke-width="2"
                   class="trend-dot dot-exp"
                   :style="{ animationDelay: 0.3 + p.i * 0.12 + 's' }"
@@ -878,12 +884,24 @@
                       '--d': i * 0.1 + 's',
                     }"
                   />
-                </view>
-                <!-- 悬停提示 -->
-                <view v-if="hoverMonthIdx === i" class="bar-tip">
-                  <text class="tip-line inc">收入 ¥{{ fmt(s.income) }}</text>
-                  <text class="tip-line exp">支出 ¥{{ fmt(s.expense) }}</text>
-                  <text class="tip-line net">结余 ¥{{ fmt(s.income - s.expense) }}</text>
+                  <!-- 悬停提示：紧贴柱顶，随柱高/窗口实时同步 -->
+                  <view v-if="hoverMonthIdx === i" class="bar-tip">
+                    <view class="tip-row">
+                      <view class="tip-dot inc" />
+                      <text class="tip-label">收入</text>
+                      <text class="tip-val inc">¥{{ fmt(s.income) }}</text>
+                    </view>
+                    <view class="tip-row">
+                      <view class="tip-dot exp" />
+                      <text class="tip-label">支出</text>
+                      <text class="tip-val exp">¥{{ fmt(s.expense) }}</text>
+                    </view>
+                    <view class="tip-row">
+                      <view class="tip-dot net" />
+                      <text class="tip-label">结余</text>
+                      <text class="tip-val net">¥{{ fmt(s.income - s.expense) }}</text>
+                    </view>
+                  </view>
                 </view>
               </view>
             </view>
@@ -922,121 +940,146 @@
         </view>
 
         <!-- 本月支出分类 -->
-        <view class="glass-mid chart-card">
-          <view class="chart-head">
-            <text class="chart-ico">🥧</text>
-            <text class="chart-h-title">本月支出分类</text>
-          </view>
-          <view class="donut-wrap">
-            <svg class="donut" viewBox="0 0 120 120" @click="hoverCatIdx = -1">
-              <defs>
-                <filter id="donutGlow" x="-40%" y="-40%" width="180%" height="180%">
-                  <feGaussianBlur stdDeviation="2.4" result="b" />
-                  <feMerge>
-                    <feMergeNode in="b" />
-                    <feMergeNode in="SourceGraphic" />
-                  </feMerge>
-                </filter>
-              </defs>
-              <g transform="rotate(-90 60 60)">
-                <circle
-                  v-for="(seg, i) in donut.segs"
-                  :key="seg.id"
-                  cx="60"
-                  cy="60"
-                  :r="donut.R"
-                  fill="none"
-                  :stroke="seg.color"
-                  stroke-width="18"
-                  :stroke-dasharray="seg.dash"
-                  :stroke-dashoffset="seg.offset"
-                  class="donut-seg"
-                  :class="{
-                    'seg-hover': hoverCatIdx === i,
-                    'seg-dim': hoverCatIdx !== -1 && hoverCatIdx !== i,
-                  }"
-                  filter="url(#donutGlow)"
-                  @click.stop="onSegTap(i)"
-                />
-              </g>
-            </svg>
-            <view class="donut-center">
-              <text v-if="hoverCatIdx >= 0" class="donut-c-name">{{
-                donut.segs[hoverCatIdx].name
-              }}</text>
-              <text v-else class="donut-c-label">本月支出</text>
-              <text v-if="hoverCatIdx >= 0" class="donut-c-val"
-                >¥{{ fmt(donut.segs[hoverCatIdx].value) }}</text
-              >
-              <text v-else class="donut-c-val">¥{{ fmt(donut.total) }}</text>
-              <text v-if="hoverCatIdx >= 0" class="donut-c-pct"
-                >{{ donut.segs[hoverCatIdx].pct }}%</text
-              >
-            </view>
-          </view>
-          <view
-            v-for="(seg, i) in donut.segs"
-            :key="seg.id"
-            class="cat-row"
-            :class="{ 'cat-row-hover': hoverCatIdx === i }"
-            @click="onSegTap(i)"
-          >
-            <view class="cat-top">
-              <view class="cat-name-wrap">
-                <view class="cat-dot" :style="{ background: seg.color }" />
-                <text class="cat-name">{{ seg.name }}</text>
-              </view>
-              <text class="cat-pct"
-                >{{ seg.pct }}%
-                <text
-                  v-if="seg.mom !== null"
-                  class="cat-mom"
-                  :class="seg.mom >= 0 ? 'up' : 'down'"
-                  >{{ seg.mom >= 0 ? "▲" : "▼" }}{{ Math.abs(seg.mom) }}%</text
-                ></text
-              >
-            </view>
-            <view class="cat-track">
+        <view class="glass-mid chart-card cat-card" @mousemove="onCatCardMove">
+          <view class="cat-bg-grid" />
+          <view class="cat-aurora cat-aurora-a" />
+          <view class="cat-aurora cat-aurora-b" />
+          <!-- 能量标题 -->
+          <view class="cat-head">
+            <view class="cat-eq" aria-hidden="true">
               <view
-                class="cat-fill"
-                :style="{
-                  width: Math.max(4, Math.round((seg.value / catMax) * 100)) + '%',
-                  background: seg.color,
-                }"
+                v-for="n in 5"
+                :key="n"
+                class="cat-eq-bar"
+                :style="{ animationDelay: n * 0.18 + 's' }"
               />
             </view>
+            <view class="cat-head-t">
+              <text class="cat-h-title">本月支出</text>
+              <text class="cat-h-sub">ENERGY RING · {{ donut.segs.length }} 分类</text>
+            </view>
+            <view v-if="catIsMock" class="mock-badge">演示数据</view>
           </view>
-        </view>
 
-        <!-- P2：预算执行率对比（复用 displayLedgers 周期聚合） -->
-        <view class="glass-mid chart-card">
-          <view class="chart-head">
-            <text class="chart-ico">🎯</text>
-            <text class="chart-h-title">预算执行率</text>
-          </view>
-          <view v-for="l in budgetRows" :key="l._id" class="cat-row">
-            <view class="cat-top">
-              <view class="cat-name-wrap">
-                <text class="cat-emoji">{{ l.emoji }}</text>
-                <text class="cat-name">{{ l.name }}</text>
-              </view>
-              <text class="cat-pct" :class="{ 'is-over': l.pct >= 100 }"
-                >{{ l.pct }}%</text
-              >
-            </view>
-            <view class="cat-track">
+          <view class="cat-stage">
+            <!-- 左：动态扇形环（点击旋转、悬停高亮联动） -->
+            <view
+              class="donut-wrap"
+              @click="onRingSpin"
+              @mousemove="onDonutMove"
+              @mouseleave="onDonutLeave"
+            >
+              <view class="donut-halo" :style="haloStyle" />
+              <!-- 指针跟随光晕 -->
               <view
-                class="cat-fill budget-fill"
-                :class="{ 'is-over': l.pct >= 100 }"
+                v-if="pointer.show"
+                class="donut-cursor"
                 :style="{
-                  width: Math.min(100, l.pct) + '%',
-                  background: l.pct >= 100 ? 'var(--red)' : l.colorBg,
+                  left: pointer.x + 'px',
+                  top: pointer.y + 'px',
+                  background: pointer.color,
                 }"
               />
+              <!-- 南丁格尔玫瑰图：canvas 绘制（微信小程序不支持内联 svg，改用 2d canvas） -->
+              <canvas
+                id="roseCanvas"
+                class="donut-canvas"
+                type="2d"
+                @touchstart="onRoseTouch"
+                @touchmove="onRoseTouch"
+                @touchend="onRoseTouchEnd"
+              />
+              <!-- 中心文字（HTML 覆盖层，三端通用） -->
+              <view class="donut-core-glow" />
+              <view class="donut-center">
+                <transition name="fade-up" mode="out-in">
+                  <text
+                    :key="hoverCatIdx >= 0 ? 'n' + hoverCatIdx : 't'"
+                    class="donut-c-name"
+                    v-if="hoverCatIdx >= 0"
+                    >{{ donut.segs[hoverCatIdx].name }}</text
+                  >
+                  <text :key="'t'" class="donut-c-label" v-else>本月支出</text>
+                </transition>
+                <text class="donut-c-val"
+                  >¥{{
+                    fmt(
+                      hoverCatIdx >= 0 ? donut.segs[hoverCatIdx].value : donutUp.display
+                    )
+                  }}</text
+                >
+                <transition name="fade-up" mode="out-in">
+                  <text
+                    :key="hoverCatIdx >= 0 ? 'p' + hoverCatIdx : 'tp'"
+                    class="donut-c-pct"
+                    v-if="hoverCatIdx >= 0"
+                    >{{ donut.segs[hoverCatIdx].pct }}%</text
+                  >
+                  <text :key="'tp'" class="donut-c-pct" v-else
+                    >共 {{ donut.segs.length }} 类</text
+                  >
+                </transition>
+              </view>
             </view>
-            <text class="budget-sub">¥{{ fmt(l.spent) }} / ¥{{ fmt(l.limit) }}</text>
+
+            <!-- 右：呼吸感毛玻璃卡片列表 -->
+            <view class="cat-list">
+              <view
+                v-for="(seg, i) in donut.segs"
+                :key="seg.id"
+                class="cat-g-card"
+                :class="{
+                  active: hoverCatIdx === i,
+                  dim: hoverCatIdx !== -1 && hoverCatIdx !== i,
+                }"
+                :style="{ animationDelay: -i * 0.9 + 's' }"
+                @click="onSegTap(i)"
+                @mouseenter="onSegEnter(i)"
+                @mouseleave="onCatLeave"
+              >
+                <view
+                  class="cat-g-accent"
+                  :style="{ background: seg.color, boxShadow: '0 0 12rpx ' + seg.color }"
+                />
+                <text class="cat-e-idx">{{ seg.idxStr }}</text>
+                <view class="cat-e-body">
+                  <view class="cat-e-top">
+                    <view class="cat-e-name-wrap">
+                      <text class="cat-e-name">{{ seg.name }}</text>
+                    </view>
+                    <text class="cat-e-val">¥{{ fmt(seg.value) }}</text>
+                  </view>
+                  <view class="cat-e-bottom">
+                    <view class="cat-e-track">
+                      <view
+                        class="cat-e-fill"
+                        :style="{
+                          width:
+                            Math.max(4, Math.round((seg.value / catMax) * 100)) + '%',
+                          background:
+                            'linear-gradient(90deg,' +
+                            seg.color +
+                            '66,' +
+                            seg.color +
+                            ')',
+                          boxShadow: '0 0 14rpx ' + seg.color,
+                        }"
+                      />
+                    </view>
+                    <text class="cat-e-pct"
+                      >{{ seg.pct }}%
+                      <text
+                        v-if="seg.mom !== null"
+                        class="cat-e-mom"
+                        :class="seg.mom >= 0 ? 'up' : 'down'"
+                        >{{ seg.mom >= 0 ? "▲" : "▼" }}{{ Math.abs(seg.mom) }}%</text
+                      ></text
+                    >
+                  </view>
+                </view>
+              </view>
+            </view>
           </view>
-          <view v-if="!budgetRows.length" class="rep-empty">当前周期无带预算的账本</view>
         </view>
 
         <!-- 周期选择弹层（复用 calendar-period-picker） -->
@@ -1082,25 +1125,161 @@
 
       <!-- TAB: 贴纸 -->
       <view v-show="pageTab === 'sticker'">
-        <view class="sticker-grid" style="padding: 32rpx">
-          <view
-            v-for="s in STICKERS"
-            :key="s.id"
-            class="sticker-chip glass-thin"
-            style="padding: 24rpx 20rpx; text-align: center"
-          >
-            <text style="font-size: 56rpx; display: block">{{ s.emoji }}</text>
-            <text
-              style="
-                font-size: 20rpx;
-                color: var(--ink2);
-                font-weight: 600;
-                display: block;
-                margin-top: 8rpx;
-              "
-              >{{ s.name }}</text
+        <!-- 贴纸统计条 -->
+        <view class="sticker-stats glass-thin" style="margin: 24rpx 32rpx 0">
+          <view class="sticker-stat">
+            <text class="ss-val">{{ stockCount }}</text>
+            <text class="ss-label">囤货种类</text>
+          </view>
+          <view class="sticker-stat">
+            <text class="ss-val" style="color: var(--g4)">{{
+              stickerConsumeMonth.count
+            }}</text>
+            <text class="ss-label">本月消耗(笔)</text>
+          </view>
+          <view class="sticker-stat">
+            <text class="ss-val" style="color: #f59e0b">{{ lowStockCount }}</text>
+            <text class="ss-label">库存紧张</text>
+          </view>
+        </view>
+
+        <!-- 囤货贴纸卡片：最常用两行（3列×2行=6个） -->
+        <view class="sticker-card-block">
+          <view class="sticker-card-head">
+            <view class="sticker-card-title">
+              <text class="sticker-card-ico">📦</text>
+              <text class="sticker-card-name">囤货贴纸</text>
+              <text class="sticker-card-count">{{ stockCount }}</text>
+            </view>
+            <view class="sticker-card-more" @click="goStickerLib('stock')">
+              <text>更多</text>
+              <text class="sticker-more-arrow">›</text>
+            </view>
+          </view>
+          <view class="sticker-grid">
+            <view
+              v-for="s in stockGrid"
+              :key="s._id"
+              class="sticker-chip sticker-item"
+              :class="{ 'sticker-out': isStickerOut(s) }"
+              :style="stickerBgStyle"
+              @click="onStickerTap(s)"
+              @longpress="onStickerLong(s)"
             >
-            <text style="font-size: 18rpx; color: var(--ink4)">已用 {{ s.used }} 次</text>
+              <image
+                v-if="stickerImg(s)"
+                class="sticker-thumb"
+                :src="stickerImg(s)"
+                mode="aspectFit"
+              />
+              <view v-else class="sticker-thumb sticker-thumb-ph">🏷️</view>
+              <view v-if="isStickerLow(s)" class="sticker-badge low">库存紧张</view>
+              <view v-if="isStickerOut(s)" class="sticker-badge out">需补货</view>
+            </view>
+            <view v-if="stockGrid.length === 0" class="sticker-empty sticker-empty-sm">
+              <image
+                class="sticker-empty-icon"
+                :src="cdn('/app_static/images/icon_no_category_sticker.png')"
+                mode="aspectFit"
+              />
+              <text class="sticker-empty-text">还没有囤货贴纸</text>
+              <view class="sticker-empty-btn" @click="goStickerCreate('stock')"
+                >＋ 新建</view
+              >
+            </view>
+          </view>
+        </view>
+
+        <!-- 分类贴纸卡片：最常用两行 -->
+        <view class="sticker-card-block">
+          <view class="sticker-card-head">
+            <view class="sticker-card-title">
+              <text class="sticker-card-ico">🗂️</text>
+              <text class="sticker-card-name">分类贴纸</text>
+              <text class="sticker-card-count">{{ materialCount }}</text>
+            </view>
+            <view class="sticker-card-more" @click="goStickerLib('material')">
+              <text>更多</text>
+              <text class="sticker-more-arrow">›</text>
+            </view>
+          </view>
+          <view class="sticker-grid">
+            <view
+              v-for="s in materialGrid"
+              :key="s._id"
+              class="sticker-chip sticker-item"
+              :style="stickerBgStyle"
+              @click="s.kind === 'category' ? goStickerLib('material') : onStickerTap(s)"
+              @longpress="s.kind === 'category' ? null : onStickerLong(s)"
+            >
+              <image
+                v-if="stickerImg(s)"
+                class="sticker-thumb"
+                :src="stickerImg(s)"
+                mode="aspectFit"
+              />
+              <view v-else class="sticker-thumb sticker-thumb-ph">{{
+                s.kind === "category" ? s.icon || "🗂️" : "🖼️"
+              }}</view>
+            </view>
+            <view v-if="materialGrid.length === 0" class="sticker-empty sticker-empty-sm">
+              <image
+                class="sticker-empty-icon"
+                :src="cdn('/app_static/images/icon_create_sticker.png')"
+                mode="aspectFit"
+              />
+              <text class="sticker-empty-text">还没有分类贴纸</text>
+              <view class="sticker-empty-btn" @click="goStickerCreate('material')"
+                >＋ 新建</view
+              >
+            </view>
+          </view>
+        </view>
+
+        <!-- 用户上传贴纸卡片：最常用两行（单独拍摄 + AI 组合） -->
+        <view class="sticker-card-block">
+          <view class="sticker-card-head">
+            <view class="sticker-card-title">
+              <text class="sticker-card-ico">⬆️</text>
+              <text class="sticker-card-name">我的上传</text>
+              <text class="sticker-card-count">{{ customCount }}</text>
+            </view>
+            <view class="sticker-card-more" @click="goStickerLib('custom')">
+              <text>更多</text>
+              <text class="sticker-more-arrow">›</text>
+            </view>
+          </view>
+          <view class="sticker-grid">
+            <view
+              v-for="s in customGrid"
+              :key="s._id"
+              class="sticker-chip sticker-item"
+              :style="stickerBgStyle"
+              @click="onStickerTap(s)"
+              @longpress="onStickerLong(s)"
+            >
+              <image
+                v-if="stickerImg(s)"
+                class="sticker-thumb"
+                :src="stickerImg(s)"
+                mode="aspectFit"
+              />
+              <view v-else class="sticker-thumb sticker-thumb-ph">⬆️</view>
+              <view v-if="s.combo_type === 'combo'" class="sticker-badge combo"
+                >AI组合</view
+              >
+            </view>
+            <view v-if="customGrid.length === 0" class="sticker-empty sticker-empty-sm">
+              <image
+                class="sticker-empty-icon"
+                :src="cdn('/app_static/images/icon_no_stock_sticker.png')"
+                mode="aspectFit"
+              />
+              <text class="sticker-empty-text">上传或组合你的贴纸</text>
+              <view class="sticker-empty-btn" @click="goStickerCreate('custom')"
+                >＋ 上传</view
+              >
+            </view>
           </view>
         </view>
       </view>
@@ -1108,6 +1287,51 @@
       <!-- 底部留白：避免列表最后一项被固定 TabBar 遮挡 -->
       <view class="list-bottom-gap" />
     </scroll-view>
+
+    <!-- 贴纸消耗记账弹窗 -->
+    <view v-if="showConsume" class="sheet-overlay" @click="showConsume = false">
+      <view class="sheet-panel" @click.stop>
+        <view class="sheet-handle"><view class="handle-bar" /></view>
+        <text class="sheet-title" style="color: var(--ink); margin-bottom: 20rpx"
+          >消耗记账 · {{ activeSticker && activeSticker.name }}</text
+        >
+        <view v-if="activeSticker" class="consume-preview">
+          <image
+            v-if="stickerImg(activeSticker)"
+            class="cp-img"
+            :src="stickerImg(activeSticker)"
+            mode="aspectFill"
+          />
+          <view v-else class="cp-img cp-img-ph">🏷️</view>
+          <view class="cp-info">
+            <text class="cp-name">{{ activeSticker.name }}</text>
+            <text class="cp-stock">当前库存 {{ activeSticker.stock_qty }} 件</text>
+            <text class="cp-price">单价 ¥{{ fmt(activeSticker.unit_price) }}</text>
+          </view>
+        </view>
+        <view class="qty-row">
+          <text class="qty-label">消耗数量</text>
+          <view class="stepper">
+            <view class="step-btn" @click="decConsumeQty">−</view>
+            <text class="qty-val">{{ consumeQty }}</text>
+            <view class="step-btn" @click="incConsumeQty">＋</view>
+          </view>
+        </view>
+        <view class="amount-line">
+          <text>将记一笔支出</text>
+          <text class="amount-val" style="color: var(--red-soft)"
+            >¥{{ fmt((activeSticker ? activeSticker.unit_price : 0) * consumeQty) }}</text
+          >
+        </view>
+        <view
+          class="consume-submit"
+          :class="{ loading: consuming }"
+          @click="confirmConsume"
+        >
+          <text>{{ consuming ? "记账中…" : "确认消耗并记账" }}</text>
+        </view>
+      </view>
+    </view>
 
     <!-- 多选批量操作栏 -->
     <view v-if="multiSelect" class="batch-bar">
@@ -1731,8 +1955,18 @@ import {
 } from "@/utils/coverColor.js";
 import { formatDateKey, formatMonthKey } from "@/utils/date.js";
 import { onShow } from "@dcloudio/uni-app";
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from "vue";
+import {
+  computed,
+  getCurrentInstance,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  reactive,
+  ref,
+  watch,
+} from "vue";
 
+const instance = getCurrentInstance();
 const PAGE_TABS = [
   { key: "ledger", label: "账本", icon: "📖" },
   { key: "asset", label: "资产", icon: "💰" },
@@ -1747,7 +1981,13 @@ const assetModes = [
 ];
 
 const userStore = useUserStore();
-const { state } = userStore;
+const {
+  state,
+  categoryMap,
+  loadStickers,
+  consumeStickerAction,
+  deleteStickerAction,
+} = userStore;
 
 const pageTab = ref("ledger");
 const sliderIndex = ref(0);
@@ -2754,9 +2994,7 @@ const prevExpenseVal = computed(() =>
 );
 const prevNetVal = computed(() => prevIncomeVal.value - prevExpenseVal.value);
 const prevRateVal = computed(() =>
-  prevIncomeVal.value > 0
-    ? Math.round(((prevNetVal.value) / prevIncomeVal.value) * 100)
-    : 0
+  prevIncomeVal.value > 0 ? Math.round((prevNetVal.value / prevIncomeVal.value) * 100) : 0
 );
 
 // 当前选中指标的现值 / 上期值 / 环比
@@ -2780,15 +3018,12 @@ const dashMom = computed(() => {
 const dashMomText = computed(() => {
   if (dashMom.value === null) return "无对比";
   const s = dashMom.value >= 0 ? "+" : "";
-  return dashMetric.value === "rate"
-    ? `${s}${dashMom.value}pp`
-    : `${s}${dashMom.value}%`;
+  return dashMetric.value === "rate" ? `${s}${dashMom.value}pp` : `${s}${dashMom.value}%`;
 });
 
 // Gauge 达成比例 0~100（结余率直接取值；其余为 本期/上期）
 const dashRatio = computed(() => {
-  if (dashMetric.value === "rate")
-    return Math.min(100, Math.max(0, repSaveRate.value));
+  if (dashMetric.value === "rate") return Math.min(100, Math.max(0, repSaveRate.value));
   const prev = dashPrev.value;
   if (!prev || prev <= 0) return dashCur.value > 0 ? 100 : 0;
   return Math.min(100, Math.max(0, Math.round((dashCur.value / prev) * 100)));
@@ -2796,7 +3031,10 @@ const dashRatio = computed(() => {
 
 // 数值滚动动画（requestAnimationFrame + easeOutCubic）
 const dashDisplay = ref(0);
-const rafTimer = typeof requestAnimationFrame === "function" ? requestAnimationFrame : (cb) => setTimeout(cb, 16);
+const rafTimer =
+  typeof requestAnimationFrame === "function"
+    ? requestAnimationFrame
+    : (cb) => setTimeout(cb, 16);
 function animateValue(from, to, dur = 650) {
   const t0 = Date.now();
   const tick = () => {
@@ -2808,11 +3046,9 @@ function animateValue(from, to, dur = 650) {
   };
   rafTimer(tick);
 }
-watch(
-  [dashCur, dashMetric],
-  ([to]) => animateValue(dashDisplay.value, to),
-  { immediate: true }
-);
+watch([dashCur, dashMetric], ([to]) => animateValue(dashDisplay.value, to), {
+  immediate: true,
+});
 const dashDisplayText = computed(() => {
   const v = Math.round(dashDisplay.value);
   if (dashMetric.value === "rate") return v + "%";
@@ -3306,16 +3542,183 @@ watch(
   { immediate: true }
 );
 
-const STICKERS = [
-  { id: "s1", emoji: "🍜", name: "拉面", used: 28, category: "餐饮" },
-  { id: "s2", emoji: "☕", name: "咖啡", used: 35, category: "餐饮" },
-  { id: "s3", emoji: "🚇", name: "地铁", used: 42, category: "交通" },
-  { id: "s4", emoji: "🛍️", name: "购物", used: 22, category: "购物" },
-  { id: "s5", emoji: "🎮", name: "游戏", used: 11, category: "娱乐" },
-  { id: "s6", emoji: "💊", name: "药品", used: 4, category: "健康" },
-  { id: "s7", emoji: "💰", name: "工资", used: 16, category: "收入" },
-  { id: "s8", emoji: "🎁", name: "红包", used: 5, category: "收入" },
-];
+// ===== 贴纸 Tab：三个卡片（囤货/分类/用户上传），各取最常用两行 =====
+// 排序规则：按使用次数（use_count）降序；无频率数据时按默认顺序（sort_order）展示前两行
+// 贴纸卡片底图（CDN）
+const stickerBgUrl = cdn("/app_static/images/icon_sticker_bg2.png");
+const stickerBgStyle = { "--sticker-bg-img": `url('${stickerBgUrl}')` };
+const STICKER_GRID_ROWS = 2;
+const STICKER_GRID_COLS = 3;
+const STICKER_GRID_LIMIT = STICKER_GRID_ROWS * STICKER_GRID_COLS; // 6
+function sortStickerGrid(list) {
+  return [...(list || [])]
+    .filter((s) => !s.deleted_at)
+    .sort(
+      (a, b) =>
+        (b.use_count || 0) - (a.use_count || 0) ||
+        (a.sort_order || 0) - (b.sort_order || 0) ||
+        String(a.name || "").localeCompare(String(b.name || ""), "zh")
+    )
+    .slice(0, STICKER_GRID_LIMIT);
+}
+// 囤货贴纸（type=stock）
+const stockGrid = computed(() =>
+  sortStickerGrid((state.stickers || []).filter((s) => s.type === "stock"))
+);
+// 分类贴纸（type=material）。无素材贴纸时，回退展示 categories 表中的分类（最多前 10 个）
+const STICKER_CAT_FALLBACK_LIMIT = 10;
+const materialGrid = computed(() => {
+  const stickers = sortStickerGrid(
+    (state.stickers || []).filter((s) => s.type === "material")
+  );
+  if (stickers.length) return stickers;
+  const cats = Array.isArray(state.categories) ? state.categories : [];
+  return cats
+    .filter((c) => !c.deleted_at)
+    .slice(0, STICKER_CAT_FALLBACK_LIMIT)
+    .map((c) => ({
+      _id: c._id,
+      kind: "category",
+      name: c.name,
+      icon: c.icon || "",
+      desc: c.desc || "",
+      use_count: c.use_count || 0,
+      sort_order: c.sort_order || 0,
+    }));
+});
+// 用户上传贴纸（type=custom：单独拍摄 / AI 组合）
+const customGrid = computed(() =>
+  sortStickerGrid((state.stickers || []).filter((s) => s.type === "custom"))
+);
+const stockCount = computed(
+  () => (state.stickers || []).filter((s) => s.type === "stock").length
+);
+const materialCount = computed(() => {
+  const n = (state.stickers || []).filter((s) => s.type === "material").length;
+  if (n) return n;
+  return Array.isArray(state.categories) ? state.categories.length : 0;
+});
+const customCount = computed(
+  () => (state.stickers || []).filter((s) => s.type === "custom").length
+);
+const lowStockCount = computed(
+  () => (state.stickers || []).filter((s) => isStickerLow(s)).length
+);
+// 本月贴纸消耗（来自已加载的 transactions，tags 含 stock_consume）
+const stickerConsumeMonth = computed(() => {
+  const mk = formatMonthKey(new Date());
+  const rows = (transactions.value || []).filter(
+    (t) => t.tags && t.tags.includes("stock_consume") && t.month_key === mk
+  );
+  return { count: rows.length, amount: rows.reduce((s, t) => s + (t.amount || 0), 0) };
+});
+
+function stickerImg(s) {
+  return (s && s.image_url) || "";
+}
+function isStickerLow(s) {
+  if (!s || s.type !== "stock") return false;
+  const threshold = s.low_stock_threshold != null ? s.low_stock_threshold : 1;
+  return s.stock_qty > 0 && s.stock_qty <= threshold;
+}
+function isStickerOut(s) {
+  return s.type === "stock" && s.stock_qty <= 0;
+}
+function stickerSub(s) {
+  if (s.type === "stock") return `库存 ${s.stock_qty} · ¥${fmt(s.unit_price)}/件`;
+  return `已用 ${s.use_count || 0} 次`;
+}
+function stickerCatName(s) {
+  const c = categoryMap.value[String(s.category_id)];
+  return c ? c.name : "";
+}
+
+// 消耗记账弹窗（与完整贴纸库一致：选数量 → 确认 → 自动记支出 + 扣库存）
+const showConsume = ref(false);
+const activeSticker = ref(null);
+const consumeQty = ref(1);
+const consuming = ref(false);
+function onStickerTap(s) {
+  if (!s) return;
+  if (s.type === "stock") {
+    if (isStickerOut(s)) {
+      uni.showToast({ title: "库存为 0，请先补货", icon: "none" });
+      return;
+    }
+    activeSticker.value = s;
+    consumeQty.value = 1;
+    showConsume.value = true;
+  } else {
+    // 素材：点击预览大图
+    uni.previewImage({ urls: [s.image_url], current: s.image_url });
+  }
+}
+function decConsumeQty() {
+  if (consumeQty.value > 1) consumeQty.value--;
+}
+function incConsumeQty() {
+  const max = (activeSticker.value && activeSticker.value.stock_qty) || 1;
+  if (consumeQty.value < max) consumeQty.value++;
+}
+async function confirmConsume() {
+  if (consuming.value || !activeSticker.value) return;
+  consuming.value = true;
+  try {
+    const r = await consumeStickerAction(activeSticker.value._id, consumeQty.value);
+    uni.showToast({ title: "已记一笔支出", icon: "success" });
+    showConsume.value = false;
+    loadData(); // 消耗后刷新交易列表/余额/统计联动
+    if (r && r.new_stock_qty <= 0) {
+      setTimeout(
+        () => uni.showToast({ title: "库存已清空，记得补货", icon: "none" }),
+        600
+      );
+    }
+  } catch (err) {
+    uni.showToast({ title: (err && err.message) || "消耗失败", icon: "none" });
+  } finally {
+    consuming.value = false;
+  }
+}
+// 长按：编辑 / 删除
+function onStickerLong(s) {
+  if (!s) return;
+  uni.showActionSheet({
+    itemList: ["编辑", "删除"],
+    success: (res) => {
+      if (res.tapIndex === 0) {
+        uni.navigateTo({ url: `/pages/sticker-lib/sticker-edit?id=${s._id}` });
+      } else if (res.tapIndex === 1) {
+        confirmDeleteSticker(s);
+      }
+    },
+  });
+}
+function confirmDeleteSticker(s) {
+  uni.showModal({
+    title: "删除贴纸",
+    content: `确定删除「${s.name}」吗？${
+      s.type === "stock" && s.stock_qty > 0 ? "（不会删除已记的消耗记录）" : ""
+    }`,
+    confirmText: "删除",
+    confirmColor: "#ff6b6b",
+    success: async (r) => {
+      if (!r.confirm) return;
+      try {
+        await deleteStickerAction(s._id);
+        state.stickers = (state.stickers || []).filter((x) => x._id !== s._id);
+        uni.showToast({ title: "已删除", icon: "success" });
+      } catch (err) {
+        uni.showToast({ title: (err && err.message) || "删除失败", icon: "none" });
+      }
+    },
+  });
+}
+function goStickerCreate(type) {
+  uni.navigateTo({
+    url: `/pages/sticker-lib/sticker-edit${type ? `?type=${type}` : ""}`,
+  });
+}
 
 // ===== P0：图表数据全部从 transactions 实时聚合（金额单位为分） =====
 function monthKeyOf(offset) {
@@ -3363,9 +3766,27 @@ const trendData = computed(() => {
   }
   return monthlyTrend.value;
 });
+// 演示用模拟分类数据（单位：元），仅当真实分类数据为空时用于直观预览动态效果
+const MOCK_CATS = [
+  { id: "c1", name: "餐饮美食", value: 2380, prev: 1980 },
+  { id: "c2", name: "交通出行", value: 1560, prev: 1720 },
+  { id: "c3", name: "购物消费", value: 3120, prev: 2460 },
+  { id: "c4", name: "居家生活", value: 980, prev: 1100 },
+  { id: "c5", name: "休闲娱乐", value: 1340, prev: 860 },
+  { id: "c6", name: "其他支出", value: 720, prev: 640 },
+];
 // 当前周期支出按分类聚合（取前 6 类），并附上一周期对比用于环比
 const monthExpenseByCat = computed(() => {
   const tx = transactions.value || [];
+  if (tx.length === 0) {
+    return MOCK_CATS.map((c) => ({
+      id: c.id,
+      name: c.name,
+      value: c.value,
+      prev: c.prev,
+      mom: c.prev > 0 ? Math.round(((c.value - c.prev) / c.prev) * 100) : null,
+    })).sort((a, b) => b.value - a.value);
+  }
   const cur = {};
   const prev = {};
   const inPrev = (t) => {
@@ -3394,15 +3815,18 @@ const monthExpenseByCat = computed(() => {
     .sort((a, b) => b.value - a.value)
     .slice(0, 6);
 });
+// 分类数据为空时退化为模拟数据（与趋势图一致）
+const catIsMock = computed(() => (transactions.value || []).length === 0);
 
+// 取自 uni.scss 淡色档（-1/-2/-3 级）：粉/琥珀/紫/绿/天蓝/红/薄荷
 const CAT_PALETTE = [
-  "#ff7a7a",
-  "#ffb347",
-  "#9d7bff",
-  "#4ade80",
-  "#38bdf8",
-  "#f6c453",
-  "#7ee0c4",
+  "#ffc4dd", // $sj-p2-1 粉
+  "#ffe08a", // $sj-y2-1 琥珀
+  "#cbb6ff", // $sj-pu2-1 紫
+  "#acf5b7", // $sj-g3 绿
+  "#bae6fd", // $sj-b2 天蓝
+  "#ffc2c2", // $sj-r4 红
+  "#c6fbce", // $sj-g2-1 薄荷
 ];
 const maxBar = computed(() =>
   Math.max(1, ...trendData.value.flatMap((m) => [m.income, m.expense]))
@@ -3413,8 +3837,7 @@ const TREND_H = 240;
 const trendChart = computed(() => {
   const data = trendData.value;
   const n = data.length;
-  if (!n)
-    return { lineInc: "", lineExp: "", areaInc: "", areaExp: "", points: [] };
+  if (!n) return { lineInc: "", lineExp: "", areaInc: "", areaExp: "", points: [] };
   const max = maxBar.value || 1;
   const X = (i) => 14 + (i / (n - 1)) * (TREND_W - 28);
   const Y = (v) => TREND_H - 22 - (v / max) * (TREND_H - 42);
@@ -3422,10 +3845,16 @@ const trendChart = computed(() => {
   const expPts = data.map((d, i) => [X(i), Y(d.expense)]);
   const toPath = (pts) =>
     pts
-      .map((p, i) => (i ? `L ${p[0].toFixed(1)} ${p[1].toFixed(1)}` : `M ${p[0].toFixed(1)} ${p[1].toFixed(1)}`))
+      .map((p, i) =>
+        i
+          ? `L ${p[0].toFixed(1)} ${p[1].toFixed(1)}`
+          : `M ${p[0].toFixed(1)} ${p[1].toFixed(1)}`
+      )
       .join(" ");
   const toArea = (pts) =>
-    `${toPath(pts)} L ${pts[n - 1][0].toFixed(1)} ${TREND_H} L ${pts[0][0].toFixed(1)} ${TREND_H} Z`;
+    `${toPath(pts)} L ${pts[n - 1][0].toFixed(1)} ${TREND_H} L ${pts[0][0].toFixed(
+      1
+    )} ${TREND_H} Z`;
   return {
     lineInc: toPath(incPts),
     lineExp: toPath(expPts),
@@ -3455,8 +3884,7 @@ const hoverMonthIdx = ref(-1);
 const trendFocusIdx = ref(5); // 默认聚焦最近一个月
 const trendFocus = computed(
   () =>
-    trendData.value[trendFocusIdx.value] ||
-    trendData.value[trendData.value.length - 1]
+    trendData.value[trendFocusIdx.value] || trendData.value[trendData.value.length - 1]
 );
 const trendIncUp = createCountUp();
 const trendExpUp = createCountUp();
@@ -3475,35 +3903,719 @@ function onBarTap(idx) {
   trendFocusIdx.value = idx;
 }
 
-// ===== 环形图（动态 SVG 几何） =====
+// ===== 南丁格尔玫瑰图（动态 SVG 几何：半径映射数值的放射状花瓣） =====
 const donut = computed(() => {
   const items = monthExpenseByCat.value;
   const total = items.reduce((s, c) => s + c.value, 0) || 1;
-  const R = 50; // viewBox 半径
-  const inner = 33;
+  const cx = 60;
+  const cy = 60;
+  const R = 53; // 最大花瓣可达半径（viewBox 半径）
+  const ir = 9; // 内半径（中心留白放文字）
+  const maxVal = Math.max(...items.map((c) => c.value), 1);
+  const n = items.length || 1;
   const circ = 2 * Math.PI * R;
-  let acc = 0;
+  let acc = 0; // 累计占比
   const segs = items.map((c, i) => {
     const frac = c.value / total;
-    const len = frac * circ;
+    // 角度跨度：按占比（贴合数据分布，也兼容顶部停靠逻辑）
+    const a0 = acc * 2 * Math.PI - Math.PI / 2;
+    const a1 = (acc + frac) * 2 * Math.PI - Math.PI / 2;
+    // 半径：按数值大小映射（玫瑰图核心：值越大花瓣越长）
+    const orr = ir + (c.value / maxVal) * (R - ir);
+    const large = a1 - a0 > Math.PI ? 1 : 0;
+    const x0o = (cx + orr * Math.cos(a0)).toFixed(3);
+    const y0o = (cy + orr * Math.sin(a0)).toFixed(3);
+    const x1o = (cx + orr * Math.cos(a1)).toFixed(3);
+    const y1o = (cy + orr * Math.sin(a1)).toFixed(3);
+    const xi0 = (cx + ir * Math.cos(a0)).toFixed(3);
+    const yi0 = (cy + ir * Math.sin(a0)).toFixed(3);
+    const xi1 = (cx + ir * Math.cos(a1)).toFixed(3);
+    const yi1 = (cy + ir * Math.sin(a1)).toFixed(3);
+    // 玫瑰花瓣：从内弧到外弧的楔形（内径 ir -> 外径 orr）
+    const path =
+      `M ${xi0} ${yi0} ` +
+      `L ${x0o} ${y0o} ` +
+      `A ${orr} ${orr} 0 ${large} 1 ${x1o} ${y1o} ` +
+      `L ${xi1} ${yi1} ` +
+      `A ${ir} ${ir} 0 ${large} 0 ${xi0} ${yi0} Z`;
     const seg = {
       id: c.id,
       name: c.name,
       value: c.value,
       pct: Math.round(frac * 100),
       color: CAT_PALETTE[i % CAT_PALETTE.length],
-      dash: `${len} ${circ - len}`,
-      offset: -acc, // 从 12 点方向顺时针
+      path,
+      orr, // 该花瓣外径，用于标签定位
+      ir,
+      circ,
+      // 扇区中心角（度，相对 12 点顺时针），用于标签/停靠定位
+      midDeg: ((acc + frac / 2) * 360) % 360,
+      // 扇区起止角（度，相对 12 点顺时针），canvas 绘制弧线用
+      startDeg: acc * 360,
+      endDeg: (acc + frac) * 360,
+      // 面积过小（占比 < 8%）时标签移到环外，避免压字
+      small: frac < 0.08,
+      idx: i + 1,
+      idxStr: String(i + 1).padStart(2, "0"),
     };
-    acc += len;
+    acc += frac;
     return seg;
   });
-  return { total, R, inner, circ, segs };
+  return { total, R, ir, circ, segs };
 });
 const hoverCatIdx = ref(-1);
+const lockedCatIdx = ref(-1);
+// 当前停在正上方（被突出）的扇形下标
+const currentTop = ref(0);
+// 是否处于用户锁定（点击卡片 / 点击环）状态，锁定后暂停自动轮播
 function onSegTap(i) {
-  hoverCatIdx.value = hoverCatIdx.value === i ? -1 : i;
+  lockedCatIdx.value = lockedCatIdx.value === i ? -1 : i;
+  hoverCatIdx.value = lockedCatIdx.value;
+  if (lockedCatIdx.value !== -1) focusSeg(i);
+  else resumeAuto();
 }
+// 悬停联动（点击锁定优先）
+function onSegEnter(i) {
+  if (lockedCatIdx.value !== i) hoverCatIdx.value = i;
+}
+function onCatEnter(i) {
+  if (lockedCatIdx.value !== i) hoverCatIdx.value = i;
+}
+function onCatLeave() {
+  hoverCatIdx.value = lockedCatIdx.value;
+}
+function onDonutLeave() {
+  pointer.show = false;
+  if (lockedCatIdx.value === -1) hoverCatIdx.value = -1;
+}
+// ===== 饼图持续旋转：每片转到正上方时突出停留片刻，然后继续，依次循环 =====
+const spinDeg = ref(0);
+let animTimer = null; // 单次缓动旋转
+// 兼容环境：小程序无 requestAnimationFrame / performance，用 setTimeout 兜底
+const raf =
+  typeof requestAnimationFrame === "function"
+    ? requestAnimationFrame
+    : (cb) => setTimeout(() => cb(Date.now()), 16);
+const nowFn = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
+// 顶部花瓣“延伸/收回”系数：0=原始半径，1=完全延伸出去
+const popExt = ref(0);
+let extTimer = null;
+function animateExt(to, dur, done) {
+  if (extTimer) clearTimeout(extTimer);
+  const from = popExt.value;
+  const t0 = nowFn();
+  function step() {
+    const t = nowFn();
+    let p = (t - t0) / dur;
+    if (p > 1) p = 1;
+    const e = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2; // easeInOutQuad
+    popExt.value = from + (to - from) * e;
+    if (p < 1) {
+      extTimer = setTimeout(step, 16);
+    } else {
+      popExt.value = to;
+      if (done) done();
+    }
+  }
+  step();
+}
+// 延伸半径增量（120 坐标系）：让顶部花瓣明显“伸出去”，且不超过 viewBox（≤60）
+const EXT_AMT = 7;
+// 计算每片中心相对 12 点方向的顺时针角度（度）
+function segCenters() {
+  const segs = donut.value.segs;
+  const total = donut.value.total || 1;
+  let acc = 0;
+  return segs.map((s) => {
+    const frac = s.value / total;
+    const c = acc + frac / 2;
+    acc += frac;
+    return c * 360; // 度
+  });
+}
+// 缓动旋转到目标角度（角度单调递增，保持连续自转）
+function animateTo(to, dur, done) {
+  if (animTimer) clearTimeout(animTimer);
+  const from = spinDeg.value;
+  const t0 = nowFn();
+  function step() {
+    const t = nowFn();
+    let p = (t - t0) / dur;
+    if (p > 1) p = 1;
+    const e = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2; // easeInOutQuad
+    spinDeg.value = from + (to - from) * e;
+    if (p < 1) animTimer = setTimeout(step, 16);
+    else if (done) done();
+  }
+  step();
+}
+// 让第 idx 片中心转到正上方（12 点，内部 -90°）。需要 spinDeg 使
+// (-90+spinDeg) + center ≡ -90 (mod 360) => spinDeg ≡ -center (mod 360)
+function degForTop(idx) {
+  const centers = segCenters();
+  const target = ((-centers[idx] % 360) + 360) % 360;
+  // 就近顺时针：本圈内目标角大于当前则取本圈（角度差=相邻片夹角，很短），否则下一圈
+  const lap = Math.floor(spinDeg.value / 360) * 360;
+  let to = lap + target;
+  while (to < spinDeg.value + 0.5) to += 360;
+  return to;
+}
+// 自动轮播：逐片停靠式展示，转盘始终顺时针旋转——
+// 展示顺序 = midDeg 从大到小（顺时针过顶顺序），每片顺时针转"相邻差"即可到位，
+// 收回后下一片立刻衔接，无需等一整圈。
+let autoIdx = 0; // 展示顺序索引（对应 showOrder 数组）
+let showing = false; // 是否正处于"旋转到位/延伸/停留/收回"展示流程中
+let autoChain = null; // 展示流程定时器
+let showOrder = []; // 按 midDeg 降序排列的片索引（顺时针到达顶部的顺序）
+const SHOW_MS = { rot: 900, ext: 600, hold: 2000, ret: 600, gap: 150 };
+function rebuildShowOrder() {
+  const segs = donut.value.segs;
+  const n = segs.length;
+  showOrder = [];
+  for (let i = 0; i < n; i++) showOrder.push(i);
+  // midDeg 大的片屏幕角大，顺时针旋转时先过顶 → 降序
+  showOrder.sort((a, b) => segs[b].midDeg - segs[a].midDeg);
+}
+function startAuto() {
+  stopShowChain();
+  autoIdx = 0;
+  showing = false;
+  popExt.value = 0;
+  const segs = donut.value.segs;
+  if (!segs.length) return;
+  rebuildShowOrder();
+  // 对齐首片（midDeg 最大者）到顶部，开局即展示
+  const first = showOrder[0];
+  spinDeg.value = degForTop(first);
+  nextShow();
+}
+function stopShowChain() {
+  if (autoChain) {
+    clearTimeout(autoChain);
+    autoChain = null;
+  }
+  showing = false;
+}
+// 恢复自动轮播：从头开始（转盘保持顺时针）
+function resumeAuto() {
+  if (lockedCatIdx.value === -1) startAuto();
+}
+// 展示下一片：就近转位到顶部（最短距离 ≤180°，顺/逆自动选），然后延伸→停留→收回
+function nextShow() {
+  if (showing) return;
+  if (lockedCatIdx.value !== -1 || hoverCatIdx.value !== -1) return;
+  const segs = donut.value.segs;
+  const n = segs.length;
+  if (!n) return;
+  const idx = showOrder[autoIdx % n];
+  showing = true;
+  currentTop.value = idx;
+  const arrive = () => {
+    // 延伸出去
+    animateExt(1, SHOW_MS.ext, () => {
+      // 停留
+      autoChain = setTimeout(() => {
+        // 收回
+        animateExt(0, SHOW_MS.ret, () => {
+          showing = false;
+          autoIdx++;
+          // 小间隔后立即下一片（顺时针相邻差，转位很短）
+          autoChain = setTimeout(nextShow, SHOW_MS.gap);
+        });
+      }, SHOW_MS.hold);
+    });
+  };
+  const target = degForTop(idx); // 顺时针（角度增大）转到该片到顶
+  if (Math.abs(target - spinDeg.value) < 0.5) arrive();
+  // 已在顶部，直接展示
+  else animateTo(target, SHOW_MS.rot, arrive); // 顺时针转位到顶部
+}
+// 悬停某片：打断展示流程，让该片延伸出去提亮；移开（且未锁定）收回并重新开始
+watch(hoverCatIdx, (nv) => {
+  if (nv !== -1) {
+    stopShowChain();
+    animateExt(1, 400);
+  } else if (lockedCatIdx.value === -1) {
+    animateExt(0, 400);
+    resumeAuto();
+  }
+});
+// 点击卡片/环：对应扇形顺时针转到正上方（degForTop 保证角度增大=顺时针），再延伸突出
+function focusSeg(i) {
+  const segs = donut.value.segs;
+  if (!segs.length) return;
+  currentTop.value = i;
+  const target = degForTop(i);
+  if (Math.abs(target - spinDeg.value) < 0.5) animateExt(1, 500);
+  else
+    animateTo(target, 900, () => {
+      animateExt(1, 500);
+    });
+}
+// 点击环：切换锁定到随机一片（保留命运轮盘趣味）
+function onRingSpin() {
+  const n = donut.value.segs.length;
+  if (!n) return;
+  const target = Math.floor(Math.random() * n);
+  lockedCatIdx.value = target;
+  hoverCatIdx.value = target;
+  focusSeg(target);
+}
+
+// ===== 玫瑰图 canvas 绘制（微信小程序不支持内联 svg，改用 2d canvas）=====
+// 适配小程序/H5：优先用 Canvas 2D 节点，回退到旧接口（仅 H5 兼容保留）
+let roseCtx = null;
+let roseCanvas = null;
+let roseDpr = 1;
+let roseSizeCss = 120; // 逻辑尺寸（与旧 viewBox 一致）
+let roseLeft = 0; // canvas 相对视口左/上（命中测试用）
+let roseTop = 0;
+let roseReady = false;
+
+function initRoseCanvas() {
+  // #ifdef H5
+  const el = document.getElementById("roseCanvas");
+  if (el) {
+    roseDpr = window.devicePixelRatio || 1;
+    const rect = el.getBoundingClientRect();
+    roseSizeCss = rect.width || 120;
+    roseLeft = rect.left;
+    roseTop = rect.top;
+    el.width = roseSizeCss * roseDpr;
+    el.height = roseSizeCss * roseDpr;
+    roseCtx = el.getContext("2d");
+    roseCanvas = el;
+    roseReady = true;
+    drawRose();
+  }
+  // #endif
+  // #ifndef H5
+  uni
+    .createSelectorQuery()
+    .in(instance ? instance.proxy : null)
+    .select("#roseCanvas")
+    .fields({ node: true, size: true, rect: true })
+    .exec((res) => {
+      if (!res || !res[0] || !res[0].node) return;
+      const canvas = res[0].node;
+      roseDpr = uni.getWindowInfo
+        ? uni.getWindowInfo().pixelRatio
+        : uni.getSystemInfoSync().pixelRatio || 1;
+      roseSizeCss = res[0].width || 120;
+      roseLeft = res[0].left || 0;
+      roseTop = res[0].top || 0;
+      canvas.width = roseSizeCss * roseDpr;
+      canvas.height = roseSizeCss * roseDpr;
+      roseCtx = canvas.getContext("2d");
+      roseCanvas = canvas;
+      roseReady = true;
+      drawRose();
+    });
+  // #endif
+}
+
+// 角度换算：12 点方向为 0、顺时针为正 → canvas 角度（3 点方向为 0、顺时针为正）
+function toCanvasAng(deg) {
+  return ((deg - 90) * Math.PI) / 180;
+}
+
+// 颜色 → 半透明 rgba（用于发光/叠层）
+function withAlpha(hex, a) {
+  let h = String(hex || "#7dd3fc").replace("#", "");
+  if (h.length === 3)
+    h = h
+      .split("")
+      .map((c) => c + c)
+      .join("");
+  const n = parseInt(h, 16);
+  if (Number.isNaN(n)) return "rgba(125,211,252," + a + ")";
+  return (
+    "rgba(" + ((n >> 16) & 255) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + a + ")"
+  );
+}
+// 淡色 → 深一档（混入黑色，供白天标签文字/描边保证可读性）
+function darken(hex, t) {
+  let h = String(hex || "#7dd3fc").replace("#", "");
+  if (h.length === 3)
+    h = h
+      .split("")
+      .map((c) => c + c)
+      .join("");
+  const n = parseInt(h, 16);
+  if (Number.isNaN(n)) return "rgb(27,58,41)";
+  const f = Math.max(0, Math.min(1, t));
+  return (
+    "rgb(" +
+    Math.round(((n >> 16) & 255) * (1 - f)) +
+    "," +
+    Math.round(((n >> 8) & 255) * (1 - f)) +
+    "," +
+    Math.round((n & 255) * (1 - f)) +
+    ")"
+  );
+}
+// 圆环上某角度（度，12 点为 0 顺时针）的点坐标
+function ptOnRing(deg, r, cx, cy) {
+  const rad = ((deg - 90) * Math.PI) / 180;
+  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+}
+
+function drawRose() {
+  if (!roseReady || !roseCtx) return;
+  const ctx = roseCtx;
+  const S = roseSizeCss;
+  const k = S / 138; // 138 逻辑坐标系（中心 69，四周留白放标签）→ 实际像素
+  ctx.save();
+  ctx.scale(roseDpr, roseDpr);
+  ctx.clearRect(0, 0, S, S);
+  ctx.scale(k, k); // 之后用 138 单位坐标绘制
+  const cx = 69,
+    cy = 69;
+  const segs = (donut.value && donut.value.segs) || [];
+
+  // ===== 科技感底盘：刻度环 + 内圈细环（始终在花瓣之下）=====
+  drawTechBase(ctx, cx, cy);
+
+  if (!segs.length) {
+    ctx.restore();
+    return;
+  }
+  // 整体旋转
+  ctx.translate(cx, cy);
+  ctx.rotate((spinDeg.value * Math.PI) / 180);
+  ctx.translate(-cx, -cy);
+
+  const popped = computedPopped();
+  const hov = hoverCatIdx.value;
+  segs.forEach((s, i) => {
+    const a0 = toCanvasAng(s.startDeg);
+    const a1 = toCanvasAng(s.endDeg);
+    const isPop = popped && popped.id === s.id;
+    const isHov = hov === i;
+    const dim = hov !== -1 && hov !== i && !isPop;
+    const ir = s.ir || 9;
+    const orr = s.orr || 50;
+    // 当前活动（顶部/悬停/锁定）花瓣延伸出去，呈现“伸出去”动效
+    const orrDraw = orr + (isPop || isHov ? popExt.value * EXT_AMT : 0);
+    const act = isPop || isHov;
+
+    // 发光外晕（活动片更亮）
+    if (act) {
+      ctx.save();
+      ctx.shadowColor = withAlpha(s.color, 0.9);
+      ctx.shadowBlur = 10 * (1 + popExt.value);
+      ctx.beginPath();
+      ctx.arc(cx, cy, ir, a0, a1, false);
+      ctx.arc(cx, cy, orrDraw + 1.5, a1, a0, true);
+      ctx.closePath();
+      ctx.fillStyle = withAlpha(s.color, 0.35);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // 花瓣主体：径向渐变（中心高光 → 彩色）
+    const g = ctx.createRadialGradient(cx, cy, ir, cx, cy, orrDraw);
+    g.addColorStop(0, withAlpha(s.color, 0.95));
+    g.addColorStop(0.55, withAlpha(s.color, 0.78));
+    g.addColorStop(1, withAlpha(s.color, dim ? 0.3 : 0.55));
+    ctx.beginPath();
+    ctx.arc(cx, cy, ir, a0, a1, false);
+    ctx.arc(cx, cy, orrDraw, a1, a0, true);
+    ctx.closePath();
+    ctx.fillStyle = g;
+    ctx.globalAlpha = dim ? 0.45 : 1;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // 科技描边：内亮线 + 外细线
+    ctx.lineWidth = act ? 1.8 : 0.9;
+    ctx.strokeStyle = withAlpha(s.color, act ? 1 : 0.6);
+    ctx.stroke();
+    // 内弧亮线（花瓣高光）
+    ctx.beginPath();
+    ctx.arc(cx, cy, ir, a0, a1, false);
+    ctx.strokeStyle = "rgba(255,255,255,0.5)";
+    ctx.lineWidth = 0.7;
+    ctx.stroke();
+
+    // 顶角小光点（花瓣最外端）
+    const tip = ptOnRing(s.midDeg, orrDraw - 1, cx, cy);
+    ctx.beginPath();
+    ctx.arc(tip.x, tip.y, act ? 1.6 : 0.8, 0, Math.PI * 2);
+    ctx.fillStyle = withAlpha("#ffffff", act ? 1 : 0.55);
+    ctx.fill();
+  });
+  ctx.restore();
+
+  // 顶部指针（发光三角 + 光点），叠加在最上层
+  drawTechPointer(ctx, cx, cy);
+
+  // 突出扇形标签（不随旋转，固定在正确方位）
+  if (popped) {
+    drawRoseTip(popped);
+  }
+}
+
+// 科技感底盘：刻度环 + 细环 + 中心微光
+function drawTechBase(ctx, cx, cy) {
+  // 内圈细环
+  ctx.beginPath();
+  ctx.arc(cx, cy, 9.5, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(15,61,38,0.22)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(cx, cy, 7.5, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(15,61,38,0.1)";
+  ctx.lineWidth = 0.6;
+  ctx.stroke();
+  // 中心微光点
+  const cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, 10);
+  cg.addColorStop(0, "rgba(255,255,255,0.55)");
+  cg.addColorStop(0.6, "rgba(255,255,255,0.08)");
+  cg.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.beginPath();
+  ctx.arc(cx, cy, 10, 0, Math.PI * 2);
+  ctx.fillStyle = cg;
+  ctx.fill();
+}
+
+// 顶部指针：发光三角 + 光点（指向当前顶部）
+function drawTechPointer(ctx, cx, cy) {
+  const tip = ptOnRing(0, 60, cx, cy);
+  // 光点
+  const pg = ctx.createRadialGradient(tip.x, tip.y, 0, tip.x, tip.y, 4);
+  pg.addColorStop(0, "rgba(15,61,38,0.5)");
+  pg.addColorStop(1, "rgba(15,61,38,0)");
+  ctx.beginPath();
+  ctx.arc(tip.x, tip.y, 4, 0, Math.PI * 2);
+  ctx.fillStyle = pg;
+  ctx.fill();
+  // 小三角（向下指向盘面）
+  ctx.beginPath();
+  ctx.moveTo(tip.x - 3, tip.y - 6);
+  ctx.lineTo(tip.x + 3, tip.y - 6);
+  ctx.lineTo(tip.x, tip.y - 1.5);
+  ctx.closePath();
+  ctx.fillStyle = "rgba(15,61,38,0.55)";
+  ctx.fill();
+}
+
+function drawRoseTip(s) {
+  const ctx = roseCtx;
+  const S = roseSizeCss;
+  const k = S / 138;
+  ctx.save();
+  ctx.scale(roseDpr, roseDpr);
+  ctx.scale(k, k);
+  // 标签跟随旋转：以当前屏幕角度（midDeg + 整体旋转）落位，使突出花瓣的标签停在其顶部
+  const mid = s.midDeg + spinDeg.value;
+  const rad = (mid * Math.PI) / 180;
+  const outer = (s.orr || 50) + popExt.value * EXT_AMT;
+  // 整体透明度跟随延伸系数：收回时渐隐、下一片延伸时渐现
+  ctx.globalAlpha = Math.max(0, Math.min(1, popExt.value));
+  // 文字测量
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = "bold 9px sans-serif";
+  const pctW = ctx.measureText(s.pct + "%").width;
+  const nameW = ctx.measureText(s.name).width;
+  const valW = ctx.measureText("¥" + fmt(s.value)).width;
+  const w = Math.max(pctW, nameW, valW) + 12;
+  const h = 22;
+  // 标签中心放在花瓣尖端外侧（+16 留白），并夹紧保证胶囊整体不出画布
+  const halfW = w / 2 + 2;
+  const halfH = h / 2 + 2;
+  let r = Math.max(38, Math.min(58, outer + 16));
+  for (let rr = r; rr >= 36; rr -= 2) {
+    const tx = 69 + rr * Math.sin(rad);
+    const ty = 69 - rr * Math.cos(rad);
+    if (tx - halfW >= 0 && tx + halfW <= 138 && ty - halfH >= 0 && ty + halfH <= 138) {
+      r = rr;
+      break;
+    }
+  }
+  const x = 69 + r * Math.sin(rad);
+  const y = 69 - r * Math.cos(rad);
+  ctx.save();
+  ctx.translate(x, y);
+  // 白色毛玻璃主体：更透（上亮下透）
+  const bg = ctx.createLinearGradient(0, -h / 2, 0, h / 2);
+  bg.addColorStop(0, "rgba(255,255,255,0.38)");
+  bg.addColorStop(0.55, "rgba(255,255,255,0.28)");
+  bg.addColorStop(1, "rgba(255,255,255,0.12)");
+  ctx.beginPath();
+  ctx.roundRect
+    ? ctx.roundRect(-w / 2, -h / 2, w, h, 10)
+    : ctx.rect(-w / 2, -h / 2, w, h);
+  ctx.fillStyle = bg;
+  ctx.fill();
+  // 顶部内高光（毛玻璃反光）
+  ctx.beginPath();
+  ctx.roundRect
+    ? ctx.roundRect(-w / 2 + 1, -h / 2 + 1, w - 2, 5, 9)
+    : ctx.rect(-w / 2 + 1, -h / 2 + 1, w - 2, 5);
+  ctx.fillStyle = "rgba(255,255,255,0.5)";
+  ctx.fill();
+  // 淡色细边框（带轻微辉光）
+  ctx.shadowColor = withAlpha(s.color, 0.8);
+  ctx.shadowBlur = 5;
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = withAlpha(s.color, 0.6);
+  ctx.beginPath();
+  ctx.roundRect
+    ? ctx.roundRect(-w / 2, -h / 2, w, h, 10)
+    : ctx.rect(-w / 2, -h / 2, w, h);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  // 文字（白天墨色，标题用该片深一档淡色）
+  ctx.fillStyle = darken(s.color, 0.35);
+  ctx.font = "bold 9px sans-serif";
+  ctx.fillText(s.pct + "%", 0, -5.5);
+  ctx.fillStyle = "rgba(15,28,20,0.92)";
+  ctx.font = "bold 8px sans-serif";
+  ctx.fillText(s.name, 0, 1.5);
+  ctx.fillStyle = "rgba(15,28,20,0.6)";
+  ctx.font = "bold 8px sans-serif";
+  ctx.fillText("¥" + fmt(s.value), 0, 8.5);
+  ctx.restore();
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+// 取当前“突出”扇区：hover > lock > 自动停靠
+function computedPopped() {
+  const segs = (donut.value && donut.value.segs) || [];
+  if (!segs.length) return null;
+  const i = hoverCatIdx.value !== -1 ? hoverCatIdx.value : lockedCatIdx.value;
+  if (i !== -1 && segs[i]) return segs[i];
+  return segs[currentTop.value] || segs[0];
+}
+
+// 命中测试：把触摸坐标映射到扇区（考虑当前旋转角）
+function onRoseTouch(e) {
+  if (!roseReady || !roseCtx) return;
+  const t =
+    e.touches && e.touches[0] ? e.touches[0] : e.changedTouches && e.changedTouches[0];
+  if (!t) return;
+  // 统一用初始化时记录的 canvas 视口位置 + 当前触摸点（相对页面）
+  // 转成 138 坐标系（与绘制一致）
+  const tx = (t.clientX !== undefined ? t.clientX : t.x) - roseLeft;
+  const ty = (t.clientY !== undefined ? t.clientY : t.y) - roseTop;
+  const px = (tx / roseSizeCss) * 138;
+  const py = (ty / roseSizeCss) * 138;
+  const dx = px - 69,
+    dy = py - 69;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist < 9) {
+    // 点击中心：交给 onRingSpin（命运轮盘）
+    if (e.type === "touchstart" || !e.touches) onRingSpin();
+    return;
+  }
+  // 反算角度（抵消 spinDeg 旋转），得到原始扇区角
+  let ang = (Math.atan2(dx, -dy) * 180) / Math.PI; // 12 点为 0，顺时针
+  if (ang < 0) ang += 360;
+  const localAng = (ang - spinDeg.value) % 360;
+  const segs = donut.value.segs;
+  for (let i = 0; i < segs.length; i++) {
+    let s0 = segs[i].startDeg % 360,
+      s1 = segs[i].endDeg % 360;
+    if (s1 < s0) s1 += 360;
+    let la = localAng;
+    if (la < s0) la += 360;
+    if (la >= s0 && la < s1 && dist <= (segs[i].orr || 50)) {
+      hoverCatIdx.value = i;
+      if (e.type === "touchend" || (e.changedTouches && !e.touches)) onSegTap(i);
+      return;
+    }
+  }
+}
+function onRoseTouchEnd(e) {
+  // 松手后若未锁定，恢复自动轮播的 hover 状态
+  if (lockedCatIdx.value === -1) hoverCatIdx.value = -1;
+}
+
+// 持续渲染循环：每帧重绘（旋转/延伸/收回均由 animateTo/animateExt 状态机驱动）
+let roseLoopRunning = false;
+function startRoseLoop() {
+  if (roseLoopRunning) return;
+  roseLoopRunning = true;
+  const tick = () => {
+    if (!roseLoopRunning) return;
+    drawRose();
+    raf(tick);
+  };
+  raf(tick);
+}
+function stopRoseLoop() {
+  roseLoopRunning = false;
+}
+// 数据/交互变化时立即重绘（循环也会持续重绘，这里确保首屏与切换即时刷新）
+watch(
+  () => [
+    donut.value.total,
+    hoverCatIdx.value,
+    lockedCatIdx.value,
+    currentTop.value,
+    spinDeg.value,
+  ],
+  () => {
+    if (roseReady) drawRose();
+  }
+);
+
+// 环形图中心总额数字滚动
+const donutUp = createCountUp();
+watch(
+  () => donut.value.total,
+  (t) => donutUp.setTo(t),
+  { immediate: true }
+);
+
+// 指针跟随光晕（鼠标/触摸）
+const pointer = reactive({ show: false, x: 0, y: 0, color: "#25cc5d" });
+function onDonutMove(e) {
+  const t = e.touches ? e.touches[0] : e;
+  const info = (e.currentTarget || {}).getBoundingClientRect
+    ? e.currentTarget.getBoundingClientRect()
+    : null;
+  const w = info ? info.width : 240;
+  const h = info ? info.height : 240;
+  pointer.x = ((t.clientX - (info ? info.left : 0)) / w) * 240;
+  pointer.y = ((t.clientY - (info ? info.top : 0)) / h) * 240;
+  // 取指针附近扇区颜色作为光晕色
+  const seg = donut.value.segs[hoverCatIdx.value] || donut.value.segs[0];
+  pointer.color = seg ? seg.color : "#25cc5d";
+  pointer.show = true;
+}
+function onCatCardMove(e) {
+  // 仅维持卡片级光晕，避免频繁重置 donut 指针
+  if (!e.touches && pointer.show === false) return;
+}
+
+// 旋转光环视差：随指针轻微偏移
+const haloStyle = computed(() => {
+  const dx = pointer.show ? (pointer.x - 120) * 0.04 : 0;
+  const dy = pointer.show ? (pointer.y - 120) * 0.04 : 0;
+  return { transform: `translate(${dx}rpx, ${dy}rpx)` };
+});
+// 饼图旋转：完全由 :transform="rotate(spinDeg)" 驱动（spinDeg 每帧平滑更新），
+// 不再用 CSS animation 覆盖 transform（否则会清掉旋转且以错误原点缩放导致图消失）
+const ringSpin = computed(() => ({}));
+// 突出扇形标签定位：朝向该扇区中心，按花瓣半径落位，小扇形外移到环外
+const tipStyle = computed(() => {
+  const s = popped.value;
+  if (!s) return {};
+  const mid = s.midDeg; // 0 = 12 点
+  const rad = (mid * Math.PI) / 180;
+  const inner = s.ir || 9;
+  const outer = s.orr || 50;
+  // 普通花瓣：标签落在花瓣中部偏外；小花瓣：移到最大半径之外
+  const r = s.small ? 72 : inner + (outer - inner) * 0.7;
+  const x = 60 + r * Math.sin(rad);
+  const y = 60 - r * Math.cos(rad);
+  return { transform: `translate(${x}px, ${y}px)` };
+});
 
 const cash = computed(() => (state.assetTotals ? state.assetTotals.disposable : 0));
 const invest = computed(() => (state.assetTotals ? state.assetTotals.investment : 0));
@@ -3655,7 +4767,33 @@ onMounted(() => {
   pagePaddingTop.value = resolveTopPadding();
   if (state.uid) loadData();
   uni.$on("sparejar-session-ready", onSessionReady);
+  // 初始化玫瑰图 canvas，并启动持续渲染（旋转/呼吸/交互都靠它）
+  nextTick(() => {
+    initRoseCanvas();
+    startRoseLoop();
+  });
 });
+
+// 突出显示的扇形（停在正上方 / 被锁定 / 被悬停优先）
+const popped = computed(() => {
+  const segs = donut.value.segs;
+  if (!segs.length) return null;
+  let idx = currentTop.value;
+  if (hoverCatIdx.value !== -1) idx = hoverCatIdx.value;
+  else if (lockedCatIdx.value !== -1) idx = lockedCatIdx.value;
+  return segs[idx] || null;
+});
+
+// 饼图自动轮播（旋转 -> 顶部停留 -> 下一片）
+nextTick(() => {
+  if (donut.value.segs.length) startAuto();
+});
+watch(
+  () => donut.value.segs.length,
+  (n) => {
+    if (n) startAuto();
+  }
+);
 
 onShow(() => {
   // 双保险：即便绕过 TabBar 拦截直接进入账本页，未登录也重定向到登录页
@@ -3666,7 +4804,10 @@ onShow(() => {
     });
     return;
   }
-  if (state.uid) loadData();
+  if (state.uid) {
+    loadData();
+    loadStickers().catch(() => {});
+  }
   // 从贴纸库等页面返回时，滑块复位到当前内容 Tab
   sliderIndex.value = Math.max(
     0,
@@ -3676,6 +4817,8 @@ onShow(() => {
 
 onUnmounted(() => {
   uni.$off("sparejar-session-ready", onSessionReady);
+  stopRoseLoop();
+  stopShowChain();
 });
 
 const openLedgerSheet = (l) => {
@@ -3965,17 +5108,14 @@ async function openMemberMgr() {
 }
 const goAssetDetail = (a) =>
   uni.navigateTo({ url: `/pages/asset-detail/asset-detail?id=${a._id}` });
-const goStickerLib = () => uni.navigateTo({ url: "/pages/sticker-lib/sticker-lib" });
+const goStickerLib = (type) =>
+  uni.navigateTo({ url: `/pages/sticker-lib/sticker-lib${type ? `?type=${type}` : ""}` });
 
-/** 顶部 Tab 切换；贴纸 Tab 跳转到独立贴纸库页（避免内联占位）。 */
+/** 顶部 Tab 切换：全部内容在本页内切换（贴纸不再跳独立页）。 */
 function switchTab(key) {
-  // 先把滑块滑到目标项（含贴纸），再处理跳转或内容切换
+  // 先把滑块滑到目标项，再切换内容
   const idx = PAGE_TABS.findIndex((t) => t.key === key);
   if (idx >= 0) sliderIndex.value = idx;
-  if (key === "sticker") {
-    uni.navigateTo({ url: "/pages/sticker-lib/sticker-lib" });
-    return;
-  }
   pageTab.value = key;
 }
 
@@ -5863,8 +7003,7 @@ onUnmounted(() => {
   display: block;
 }
 .dash-arc {
-  transition: stroke-dasharray 0.8s cubic-bezier(0.22, 1, 0.36, 1),
-    stroke 0.4s ease;
+  transition: stroke-dasharray 0.8s cubic-bezier(0.22, 1, 0.36, 1), stroke 0.4s ease;
 }
 .dash-center {
   position: absolute;
@@ -5987,10 +7126,7 @@ onUnmounted(() => {
 .tech-bg {
   position: absolute;
   inset: 0;
-  background-image: linear-gradient(
-      rgba(37, 204, 93, 0.08) 1rpx,
-      transparent 1rpx
-    ),
+  background-image: linear-gradient(rgba(37, 204, 93, 0.08) 1rpx, transparent 1rpx),
     linear-gradient(90deg, rgba(37, 204, 93, 0.08) 1rpx, transparent 1rpx);
   background-size: 44rpx 44rpx;
   pointer-events: none;
@@ -6450,26 +7586,8 @@ onUnmounted(() => {
   right: 0;
   top: 0;
   height: 260rpx;
-  background-image: linear-gradient(
-    rgba(37, 204, 93, 0.06) 1rpx,
-    transparent 1rpx
-  );
+  background-image: linear-gradient(rgba(37, 204, 93, 0.06) 1rpx, transparent 1rpx);
   background-size: 100% 52rpx;
-  pointer-events: none;
-}
-.tech-bar-scan {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: -120rpx;
-  height: 90rpx;
-  background: linear-gradient(
-    to bottom,
-    transparent,
-    rgba(37, 204, 93, 0.12),
-    transparent
-  );
-  animation: scanMove 5s linear infinite;
   pointer-events: none;
 }
 .trend-sum {
@@ -6479,11 +7597,7 @@ onUnmounted(() => {
   margin-bottom: 18rpx;
   padding: 18rpx 20rpx;
   border-radius: 16rpx;
-  background: linear-gradient(
-    135deg,
-    rgba(37, 204, 93, 0.08),
-    rgba(138, 233, 155, 0.06)
-  );
+  background: linear-gradient(135deg, rgba(37, 204, 93, 0.08), rgba(138, 233, 155, 0.06));
   border: 1rpx solid rgba(37, 204, 93, 0.18);
   overflow: hidden;
   &::before {
@@ -6516,7 +7630,7 @@ onUnmounted(() => {
     color: #16a34a;
   }
   &.exp {
-    color: #d97706;
+    color: #0ea5e9;
   }
   &.net {
     color: #0e923f;
@@ -6565,7 +7679,7 @@ onUnmounted(() => {
     animation: drawLine 1.5s cubic-bezier(0.4, 0, 0.2, 1) 0.2s forwards;
   }
   &.line-exp {
-    stroke: #f59e0b;
+    stroke: #0ea5e9;
     animation: drawLine 1.5s cubic-bezier(0.4, 0, 0.2, 1) 0.45s forwards;
   }
 }
@@ -6617,6 +7731,7 @@ onUnmounted(() => {
   }
 }
 .bar-pair {
+  position: relative;
   display: flex;
   gap: 4rpx;
   align-items: flex-end;
@@ -6624,132 +7739,230 @@ onUnmounted(() => {
   justify-content: center;
 }
 .bar {
+  position: relative;
   flex: 1;
-  max-width: 24rpx;
-  border-radius: 6rpx 6rpx 0 0;
-  // 从无到有生长（错峰弹出）+ 数据变化时平滑过渡
+  max-width: 26rpx;
+  // 胶囊水滴造型：底部平、顶部圆弧
+  border-radius: 999rpx 999rpx 8rpx 8rpx;
+  overflow: hidden;
+  // 数据变化时平滑过渡 + 错峰弹出 + 选中发光自然过渡
   transition: height 0.7s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease,
-    filter 0.3s ease;
-  animation: barRise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
-  animation-delay: var(--d, 0s);
+    filter 0.3s ease, transform 0.3s ease, box-shadow 0.35s ease;
+  animation: barRise 1.3s cubic-bezier(0.37, 0, 0.33, 1) both,
+    barFlow 6.8s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  animation-delay: var(--d, 0s), calc(var(--d, 0s) + 1.3s);
   transform-origin: bottom;
+  // 玻璃质感：内描边 + 外发光
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.55),
+    inset 0 0 8rpx rgba(255, 255, 255, 0.18);
   &.bar-dim {
-    filter: saturate(0.6);
+    filter: saturate(0.55) brightness(0.96);
+    opacity: 0.5;
   }
 }
 @keyframes barRise {
   from {
-    transform: scaleY(0);
+    transform: translateY(40rpx) scaleY(0);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scaleY(1);
+    opacity: 1;
+  }
+}
+// 顶部高光 + 流光扫过（玻璃质感）
+.bar::before {
+  content: "";
+  position: absolute;
+  top: 4rpx;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 8rpx;
+  height: 8rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 12rpx rgba(255, 255, 255, 0.9);
+  animation: barGlow 5.4s ease-in-out infinite;
+}
+.bar::after {
+  content: "";
+  position: absolute;
+  top: -60%;
+  left: 0;
+  width: 40%;
+  height: 60%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  transform: skewX(-20deg);
+  animation: barSheen 5.4s ease-in-out infinite;
+  animation-delay: calc(var(--d, 0s) + 1.6s);
+}
+@keyframes barSheen {
+  0% {
+    left: -40%;
+  }
+  40%,
+  100% {
+    left: 130%;
+  }
+}
+// 柱身竖向能量流：玻璃光带自下而上循环（舒缓 + 循环间停顿）
+@keyframes barFlow {
+  0% {
+    background-position: 0 -120%, 0 0;
+  }
+  60%,
+  100% {
+    background-position: 0 120%, 0 0;
+  }
+}
+// 顶部高光呼吸：柔和脉动，强化立体反光（缓入缓出 + 循环间停顿）
+@keyframes barGlow {
+  0%,
+  100% {
+    opacity: 0.5;
+    box-shadow: 0 0 7rpx rgba(255, 255, 255, 0.55);
+  }
+  35%,
+  65% {
+    opacity: 0.95;
+    box-shadow: 0 0 16rpx rgba(255, 255, 255, 0.95);
   }
 }
 .income-bar {
-  @include sj-brand-gradient(180deg);
-  box-shadow: 0 0 14rpx rgba(77, 217, 116, 0.5);
-  opacity: 0.92;
-  position: relative;
-  &::after {
-    content: "";
-    position: absolute;
-    top: -6rpx;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 10rpx;
-    height: 10rpx;
-    border-radius: 50%;
-    background: #7ee0c4;
-    color: #7ee0c4;
-    box-shadow: 0 0 14rpx rgba(126, 224, 196, 0.95);
-    animation: dotPulse 2.4s ease-in-out infinite;
-    animation-delay: calc(var(--d, 0s) + 0.9s);
-  }
+  // g2~g3 浅绿区间渐变（比 g0~g2 更清晰），顶部落到 g3
+  // 叠加层1：竖向上升的玻璃光带（barFlow 循环）
+  background-image: linear-gradient(
+      0deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.5) 50%,
+      transparent 100%
+    ),
+    linear-gradient(180deg, var(--g2) 0%, var(--g2-1) 55%, var(--g3) 100%);
+  background-size: 100% 220%, 100% 100%;
+  background-position: 0 0, 0 0;
+  border-top: 3rpx solid var(--g3);
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.6), 0 0 16rpx rgba(37, 204, 93, 0.42);
+  opacity: 0.97;
 }
 .expense-bar {
-  background: linear-gradient(180deg, #f9c84a, var(--amber));
-  box-shadow: 0 0 14rpx rgba(249, 200, 74, 0.5);
-  opacity: 0.9;
-  position: relative;
-  &::after {
-    content: "";
-    position: absolute;
-    top: -6rpx;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 10rpx;
-    height: 10rpx;
-    border-radius: 50%;
-    background: #ffcf8a;
-    color: #ffcf8a;
-    box-shadow: 0 0 14rpx rgba(255, 207, 138, 0.95);
-    animation: dotPulse 2.4s ease-in-out infinite;
-    animation-delay: calc(var(--d, 0s) + 0.9s);
-  }
+  // b0~b3 天蓝区间渐变（支出=蓝）+ 竖向上升玻璃光带
+  background-image: linear-gradient(
+      0deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.5) 50%,
+      transparent 100%
+    ),
+    linear-gradient(180deg, var(--b0) 0%, var(--b2) 55%, var(--b3) 100%);
+  background-size: 100% 220%, 100% 100%;
+  background-position: 0 0, 0 0;
+  border-top: 3rpx solid var(--b3);
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.6), 0 0 16rpx rgba(14, 165, 233, 0.42);
+  opacity: 0.97;
 }
-// 柱顶光标呼吸：无人操作时图表持续有动态光效
-@keyframes dotPulse {
-  0%,
-  100% {
-    transform: translateX(-50%) scale(1);
-    box-shadow: 0 0 10rpx currentColor;
-  }
-  50% {
-    transform: translateX(-50%) scale(1.45);
-    box-shadow: 0 0 22rpx currentColor;
-  }
-}
-// 悬停/选中反馈：高亮放大
+// 悬停/选中反馈：柔和上浮放大 + 与柱身同色发光（自然过渡）
 .bar-col {
   &:hover .bar,
   &.bar-col-hover .bar {
-    filter: brightness(1.18) saturate(1.1);
+    filter: brightness(1.08) saturate(1.06);
   }
   &:hover .income-bar,
   &.bar-col-hover .income-bar {
-    transform: scaleY(1.04);
+    transform: translateY(-6rpx) scaleX(1.06);
+    box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.7), 0 0 22rpx rgba(37, 204, 93, 0.55);
   }
   &:hover .expense-bar,
   &.bar-col-hover .expense-bar {
-    transform: scaleY(1.04);
+    transform: translateY(-6rpx) scaleX(1.06);
+    box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.7),
+      0 0 22rpx rgba(14, 165, 233, 0.55);
   }
 }
 // 悬停浮窗
 .bar-tip {
   position: absolute;
-  bottom: 100%;
+  // 紧贴柱顶（bar-pair 高度=柱高），固定小间距
+  bottom: calc(100% + 14rpx);
   left: 50%;
-  transform: translate(-50%, -10rpx);
-  padding: 10rpx 14rpx;
-  border-radius: 14rpx;
-  background: rgba(15, 28, 20, 0.86);
-  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.25);
+  transform: translateX(-50%);
+  padding: 22rpx 26rpx;
+  border-radius: 20rpx;
+  // 白色玻璃质感背景
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(12rpx);
+  -webkit-backdrop-filter: blur(12rpx);
+  border: 1rpx solid rgba(37, 204, 93, 0.35);
+  // 绿色外发光
+  box-shadow: 0 12rpx 34rpx rgba(37, 204, 93, 0.28),
+    0 1rpx 0 rgba(255, 255, 255, 0.9) inset;
   display: flex;
   flex-direction: column;
-  gap: 2rpx;
+  gap: 16rpx;
   white-space: nowrap;
   z-index: 5;
+  &::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 10rpx solid transparent;
+    border-top-color: rgba(255, 255, 255, 0.86);
+  }
   animation: tipPop 0.22s cubic-bezier(0.22, 1, 0.36, 1);
-  .tip-line {
-    font-size: 20rpx;
-    line-height: 1.4;
-    color: #fff;
+  .tip-row {
+    display: flex;
+    align-items: center;
+    gap: 14rpx;
+  }
+  .tip-dot {
+    width: 12rpx;
+    height: 12rpx;
+    border-radius: 50%;
+    flex-shrink: 0;
     &.inc {
-      color: #7ee0c4;
+      background: var(--g5);
+      box-shadow: 0 0 8rpx rgba(37, 204, 93, 0.6);
     }
     &.exp {
-      color: #ffcf8a;
+      background: var(--r5);
+      box-shadow: 0 0 8rpx rgba(255, 164, 164, 0.7);
     }
     &.net {
-      color: #a5f3c4;
+      background: var(--g5);
+      box-shadow: 0 0 8rpx rgba(37, 204, 93, 0.6);
+    }
+  }
+  .tip-label {
+    font-size: 20rpx;
+    letter-spacing: 1rpx;
+    color: #7c9085;
+    min-width: 48rpx;
+  }
+  .tip-val {
+    margin-left: auto;
+    font-size: 25rpx;
+    font-weight: 700;
+    letter-spacing: 0.5rpx;
+    font-variant-numeric: tabular-nums;
+    &.inc {
+      color: var(--g5);
+    }
+    &.exp {
+      color: var(--r5);
+    }
+    &.net {
+      color: var(--g5);
     }
   }
 }
 @keyframes tipPop {
   from {
     opacity: 0;
-    transform: translate(-50%, 0);
+    transform: translate(-50%, 6rpx);
   }
   to {
     opacity: 1;
-    transform: translate(-50%, -10rpx);
+    transform: translate(-50%, 0);
   }
 }
 .bar-months {
@@ -6790,8 +8003,8 @@ onUnmounted(() => {
   box-shadow: 0 0 10rpx rgba(77, 217, 116, 0.5);
 }
 .expense-dot {
-  background: linear-gradient(135deg, #f9c84a, var(--amber));
-  box-shadow: 0 0 10rpx rgba(249, 200, 74, 0.5);
+  background: linear-gradient(135deg, var(--b2), var(--b3));
+  box-shadow: 0 0 10rpx rgba(14, 165, 233, 0.5);
 }
 .trend-dot-legend {
   width: 34rpx;
@@ -6801,7 +8014,7 @@ onUnmounted(() => {
     background: linear-gradient(90deg, #25cc5d, #8ae99b);
   }
   &.exp {
-    background: linear-gradient(90deg, #f59e0b, #f9c84a);
+    background: linear-gradient(90deg, var(--b3), var(--b2));
   }
 }
 .legend-text {
@@ -6810,26 +8023,266 @@ onUnmounted(() => {
 }
 
 /* ===== 环形图 ===== */
+/* 本月支出分类 —— 能量枢纽 · 白天版（薄荷玻璃 / 轨道粒子 / 命运轮盘 / 均衡器） */
+.cat-card {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  /* 白天毛玻璃：半透明白渐变 + 背景模糊 + 内外柔光 */
+  background: linear-gradient(
+    155deg,
+    rgba(255, 255, 255, 0.72) 0%,
+    rgba(248, 252, 249, 0.52) 38%,
+    rgba(242, 250, 246, 0.44) 72%,
+    rgba(247, 251, 252, 0.48) 100%
+  );
+  border: 1rpx solid rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(24rpx) saturate(170%);
+  -webkit-backdrop-filter: blur(24rpx) saturate(170%);
+  box-shadow: 0 14rpx 44rpx rgba(30, 110, 66, 0.1),
+    inset 0 1rpx 0 rgba(255, 255, 255, 0.95), inset 0 0 46rpx rgba(255, 255, 255, 0.3);
+  &::after {
+    content: none;
+  }
+}
+.cat-bg-grid {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+      0deg,
+      rgba(37, 204, 93, 0.05) 0 1rpx,
+      transparent 1rpx 46rpx
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(37, 204, 93, 0.05) 0 1rpx,
+      transparent 1rpx 46rpx
+    );
+  -webkit-mask-image: radial-gradient(circle at 50% 30%, #000 25%, transparent 78%);
+  mask-image: radial-gradient(circle at 50% 30%, #000 25%, transparent 78%);
+  pointer-events: none;
+  z-index: 0;
+}
+.cat-aurora {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(30rpx);
+  pointer-events: none;
+  z-index: 0;
+  &.cat-aurora-a {
+    right: -80rpx;
+    top: -70rpx;
+    width: 280rpx;
+    height: 280rpx;
+    background: conic-gradient(
+      from 0deg,
+      rgba(37, 204, 93, 0.14),
+      rgba(56, 189, 248, 0.1),
+      rgba(157, 123, 255, 0.12),
+      rgba(37, 204, 93, 0.14)
+    );
+    animation: auroraSpin 16s linear infinite;
+  }
+  &.cat-aurora-b {
+    left: -80rpx;
+    bottom: -100rpx;
+    width: 320rpx;
+    height: 320rpx;
+    background: radial-gradient(circle, rgba(56, 189, 248, 0.12), transparent 70%);
+    animation: auroraFloat 9s ease-in-out infinite;
+  }
+}
+@keyframes auroraSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes auroraFloat {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 0.7;
+  }
+  50% {
+    transform: translateY(-22rpx) scale(1.08);
+    opacity: 1;
+  }
+}
+/* 能量标题 */
+.cat-head {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-bottom: 24rpx;
+  position: relative;
+  z-index: 1;
+}
+.cat-eq {
+  display: flex;
+  align-items: flex-end;
+  gap: 5rpx;
+  height: 30rpx;
+  .cat-eq-bar {
+    width: 6rpx;
+    border-radius: 6rpx;
+    background: linear-gradient(180deg, #acf5b7, #25cc5d);
+    box-shadow: 0 0 8rpx rgba(37, 204, 93, 0.45);
+    animation: eqBounce 1.1s ease-in-out infinite;
+    @for $n from 1 through 5 {
+      &:nth-child(#{$n}) {
+        height: 26% * $n;
+      }
+    }
+  }
+}
+@keyframes eqBounce {
+  0%,
+  100% {
+    transform: scaleY(0.5);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scaleY(1.35);
+    opacity: 1;
+  }
+}
+.cat-head-t {
+  display: flex;
+  flex-direction: column;
+}
+.cat-h-title {
+  font-size: 30rpx;
+  font-weight: 900;
+  letter-spacing: 2rpx;
+  background: linear-gradient(90deg, #0e923f 0%, #25cc5d 55%, #0ea5e9 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 20rpx rgba(37, 204, 93, 0.25);
+}
+.cat-h-sub {
+  font-size: 16rpx;
+  letter-spacing: 4rpx;
+  color: rgba(15, 61, 38, 0.5);
+  margin-top: 2rpx;
+}
+.cat-card .mock-badge {
+  margin-left: auto;
+  color: #0e923f;
+  border-color: rgba(37, 204, 93, 0.4);
+  background: rgba(37, 204, 93, 0.12);
+}
+/* 舞台：左环 + 右列表 */
+.cat-stage {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 26rpx;
+  padding: 6rpx 2rpx 0;
+}
 .donut-wrap {
   position: relative;
-  width: 240rpx;
-  height: 240rpx;
-  margin: 8rpx auto 28rpx;
+  flex: 0 0 262rpx;
+  width: 262rpx;
+  height: 262rpx;
+  z-index: 2;
+  cursor: pointer;
 }
-.donut {
+.donut-canvas {
   width: 100%;
   height: 100%;
   display: block;
+  position: relative;
+  z-index: 2;
+  transform-origin: center;
+  animation: donutBreathe 6s ease-in-out infinite;
 }
-.donut-seg {
-  cursor: pointer;
-  transition: stroke-width 0.3s ease, opacity 0.3s ease,
-    stroke-dasharray 0.7s cubic-bezier(0.22, 1, 0.36, 1);
-  &.seg-hover {
-    stroke-width: 24;
+/* 静态轨道底图（svg 文件） */
+.donut-track-bg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+}
+@keyframes donutBreathe {
+  0%,
+  100% {
+    transform: scale(1);
   }
-  &.seg-dim {
-    opacity: 0.35;
+  50% {
+    transform: scale(1.025);
+  }
+}
+/* 旋转光环（视差层） */
+.donut-halo {
+  position: absolute;
+  inset: -22rpx;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(37, 204, 93, 0.22),
+    rgba(56, 189, 248, 0.1),
+    rgba(157, 123, 255, 0.16),
+    rgba(246, 196, 83, 0.12),
+    rgba(37, 204, 93, 0.22)
+  );
+  filter: blur(14rpx);
+  opacity: 0.65;
+  z-index: 0;
+  animation: haloRotate 18s linear infinite;
+  transition: transform 0.4s ease-out;
+}
+@keyframes haloRotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* 指针跟随光晕 */
+.donut-cursor {
+  position: absolute;
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  filter: blur(20rpx);
+  opacity: 0.4;
+  z-index: 1;
+  pointer-events: none;
+  mix-blend-mode: normal;
+  border: 1rpx solid rgba(255, 255, 255, 0.6);
+  transition: background 0.3s ease;
+}
+/* 玫瑰花瓣分组
+   注：玫瑰图已改为 canvas 绘制（微信小程序不支持内联 svg），
+   花瓣高亮/呼吸/描边均在 drawRose() 中通过 canvas API 实现，
+   不再依赖 SVG 样式，故此处移除 .donut-seg-g / .rose-petal 等。 */
+/* 中心核心脉冲 */
+.donut-core-glow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 130rpx;
+  height: 130rpx;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, rgba(37, 204, 93, 0.2), transparent 65%);
+  animation: corePulse 4.5s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+@keyframes corePulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.18);
   }
 }
 .donut-center {
@@ -6841,38 +8294,272 @@ onUnmounted(() => {
   justify-content: center;
   pointer-events: none;
   text-align: center;
+  z-index: 3;
 }
 .donut-c-label {
   font-size: 20rpx;
-  color: var(--ink4);
+  color: rgba(15, 61, 38, 0.55);
+  letter-spacing: 3rpx;
 }
 .donut-c-name {
   font-size: 24rpx;
   font-weight: 700;
-  color: var(--ink);
+  color: #0f3d26;
 }
 .donut-c-val {
   font-size: 32rpx;
   font-weight: 800;
-  color: var(--ink);
   margin-top: 2rpx;
+  background: linear-gradient(90deg, #0e923f, #25cc5d, #0ea5e9);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 18rpx rgba(37, 204, 93, 0.25);
 }
 .donut-c-pct {
   font-size: 20rpx;
-  color: var(--g5);
+  color: #0e923f;
   margin-top: 2rpx;
+  font-weight: 600;
+}
+/* 突出扇形标签（百分比 / 名称 / 金额）现已在 canvas 的 drawRoseTip() 中绘制，
+   故此处不再保留 SVG .seg-tip 样式。 */
+/* 能量列表（呼吸感毛玻璃卡片） */
+.cat-list {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+.cat-g-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  padding: 14rpx 18rpx;
+  border-radius: 22rpx;
+  /* 毛玻璃：更透的白 + 更强模糊 + 内外柔光（白天高级感） */
+  background: rgba(255, 255, 255, 0.38);
+  border: 1rpx solid rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(20rpx) saturate(160%);
+  -webkit-backdrop-filter: blur(20rpx) saturate(160%);
+  box-shadow: 0 8rpx 24rpx rgba(30, 110, 66, 0.08),
+    inset 0 1rpx 1rpx rgba(255, 255, 255, 0.85),
+    inset 0 -8rpx 18rpx rgba(37, 204, 93, 0.06);
+  cursor: pointer;
+  overflow: hidden;
+  /* 缓慢微小的上下浮动 + 通透呼吸，错峰进行 */
+  animation: cardFloat 7s ease-in-out infinite, cardBreath 6.5s ease-in-out infinite;
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1), background 0.35s ease,
+    border-color 0.35s ease, box-shadow 0.4s ease, opacity 0.35s ease;
+  /* 错峰呼吸与浮动，避免整齐划一（模板上另有 -i*0.9s 延迟兜底） */
+  &:nth-child(1) {
+    animation-delay: 0s, 0s;
+  }
+  &:nth-child(2) {
+    animation-delay: -1.1s, -1.1s;
+  }
+  &:nth-child(3) {
+    animation-delay: -2.2s, -2.2s;
+  }
+  &:nth-child(4) {
+    animation-delay: -3.3s, -3.3s;
+  }
+  &:nth-child(5) {
+    animation-delay: -4.4s, -4.4s;
+  }
+  &:nth-child(6) {
+    animation-delay: -5.5s, -5.5s;
+  }
+  &.active {
+    background: rgba(255, 255, 255, 0.82);
+    border-color: rgba(255, 255, 255, 0.95);
+    transform: translateX(8rpx) scale(1.015);
+    box-shadow: 0 16rpx 40rpx rgba(37, 204, 93, 0.16), 0 0 0 1rpx rgba(255, 255, 255, 0.6),
+      inset 0 1rpx 2rpx rgba(255, 255, 255, 0.9),
+      inset 0 -8rpx 18rpx rgba(37, 204, 93, 0.1);
+    .cat-g-accent {
+      width: 8rpx;
+      opacity: 1;
+    }
+  }
+  &.dim {
+    opacity: 0.45;
+  }
+}
+@keyframes cardBreath {
+  0%,
+  100% {
+    /* 轻微缩放 + 阴影涨落，营造通透呼吸感 */
+    box-shadow: 0 6rpx 20rpx rgba(30, 110, 66, 0.06),
+      inset 0 1rpx 1rpx rgba(255, 255, 255, 0.7),
+      inset 0 -6rpx 14rpx rgba(37, 204, 93, 0.05);
+  }
+  50% {
+    box-shadow: 0 10rpx 30rpx rgba(30, 110, 66, 0.12),
+      inset 0 1rpx 2rpx rgba(255, 255, 255, 0.85),
+      inset 0 -8rpx 20rpx rgba(37, 204, 93, 0.1);
+  }
+}
+/* 缓慢微小的上下浮动 */
+@keyframes cardFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-7rpx);
+  }
+}
+.cat-g-accent {
+  position: absolute;
+  left: 0;
+  top: 18%;
+  bottom: 18%;
+  width: 4rpx;
+  border-radius: 4rpx;
+  opacity: 0.65;
+  transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.35s ease;
+}
+.cat-e-idx {
+  font-size: 22rpx;
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: 1rpx;
+  color: rgba(15, 61, 38, 0.32);
+  min-width: 36rpx;
+  flex-shrink: 0;
+}
+.cat-e-body {
+  flex: 1;
+  min-width: 0;
+}
+.cat-e-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10rpx;
+}
+.cat-e-name-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  min-width: 0;
+}
+.cat-e-name {
+  font-size: 22rpx;
+  color: #1b3a29;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cat-e-val {
+  font-size: 24rpx;
+  font-weight: 800;
+  color: #0f3d26;
+  letter-spacing: 0.5rpx;
+  text-shadow: 0 0 12rpx rgba(37, 204, 93, 0.2);
+  flex-shrink: 0;
+}
+.cat-e-bottom {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-top: 8rpx;
+}
+.cat-e-track {
+  flex: 1;
+  height: 8rpx;
+  border-radius: 8rpx;
+  background: rgba(15, 61, 38, 0.08);
+  overflow: hidden;
+  position: relative;
+}
+.cat-e-fill {
+  height: 100%;
+  border-radius: 8rpx;
+  position: relative;
+  overflow: hidden;
+  transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1), filter 0.3s ease;
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.35) 0 6rpx,
+      transparent 6rpx 12rpx
+    );
+    background-size: 200% 100%;
+    animation: stripeFlow 1.4s linear infinite;
+  }
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.6),
+      transparent
+    );
+    transform: translateX(-100%);
+    animation: catEFillShine 2.6s ease-in-out infinite;
+  }
+}
+.cat-g-card.active .cat-e-fill {
+  filter: brightness(1.15);
+}
+@keyframes stripeFlow {
+  to {
+    background-position: 200% 0;
+  }
+}
+@keyframes catEFillShine {
+  0% {
+    transform: translateX(-100%);
+  }
+  55%,
+  100% {
+    transform: translateX(220%);
+  }
+}
+.cat-e-pct {
+  font-size: 18rpx;
+  color: rgba(15, 61, 38, 0.6);
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.cat-e-mom {
+  &.up {
+    color: #e05656;
+  }
+  &.down {
+    color: #0e923f;
+  }
 }
 
 /* 本月支出分类 */
 .cat-row {
   margin-bottom: 20rpx;
-  padding: 6rpx 10rpx;
+  padding: 12rpx 16rpx;
   border-radius: 16rpx;
   cursor: pointer;
-  transition: background 0.25s ease, transform 0.25s ease;
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(4rpx);
+  border: 1rpx solid rgba(255, 255, 255, 0.08);
+  transition: background 0.3s ease, transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.3s ease, border-color 0.3s ease;
   &.cat-row-hover {
-    background: rgba(77, 217, 116, 0.08);
-    transform: translateX(4rpx);
+    background: rgba(77, 217, 116, 0.1);
+    transform: translateX(8rpx);
+    border-color: rgba(37, 204, 93, 0.35);
+    box-shadow: 0 8rpx 24rpx rgba(37, 204, 93, 0.14);
   }
   &:last-child {
     margin-bottom: 0;
@@ -6893,7 +8580,6 @@ onUnmounted(() => {
   width: 16rpx;
   height: 16rpx;
   border-radius: 50%;
-  box-shadow: 0 0 8rpx currentColor;
 }
 .cat-name {
   font-size: 24rpx;
@@ -6909,24 +8595,341 @@ onUnmounted(() => {
   border-radius: 12rpx;
   background: rgba(15, 28, 20, 0.07);
   overflow: hidden;
+  position: relative;
 }
 .cat-fill {
   height: 100%;
   border-radius: 12rpx;
-  box-shadow: 0 0 10rpx currentColor;
-  transition: width 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  position: relative;
+  transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.55),
+      transparent
+    );
+    transform: translateX(-100%);
+    animation: fillShine 2.8s ease-in-out infinite;
+  }
+}
+@keyframes fillShine {
+  0% {
+    transform: translateX(-100%);
+  }
+  55%,
+  100% {
+    transform: translateX(220%);
+  }
+}
+/* 中心文字过渡 */
+.fade-up-enter-active,
+.fade-up-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+.fade-up-enter-from {
+  opacity: 0;
+  transform: translateY(8rpx);
+}
+.fade-up-leave-to {
+  opacity: 0;
+  transform: translateY(-8rpx);
+}
+
+/* 贴纸卡片模块 */
+.sticker-card-block {
+  margin: 8rpx 32rpx 0;
+}
+.sticker-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16rpx 8rpx 14rpx;
+}
+.sticker-card-title {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: var(--ink1, #1c1c1e);
+}
+.sticker-card-ico {
+  font-size: 30rpx;
+  line-height: 1;
+}
+.sticker-card-count {
+  font-size: 20rpx;
+  font-weight: 600;
+  color: var(--ink3, #999);
+  background: rgba(127, 127, 127, 0.1);
+  border-radius: 999rpx;
+  padding: 2rpx 14rpx;
+}
+.sticker-card-more {
+  display: flex;
+  align-items: center;
+  gap: 4rpx;
+  font-size: 24rpx;
+  color: var(--ink2);
+  font-weight: 600;
+  padding: 8rpx 14rpx;
+  border-radius: 999rpx;
+  background: rgba(124, 92, 255, 0.08);
+  cursor: pointer;
+}
+.sticker-card-more:active {
+  opacity: 0.7;
+}
+.sticker-more-arrow {
+  font-size: 30rpx;
+  line-height: 1;
+  transform: translateY(-1rpx);
 }
 
 .sticker-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 20rpx;
+  padding: 4rpx 8rpx 20rpx;
 }
 
 .sticker-chip {
   width: calc(33.33% - 14rpx);
   border-radius: 28rpx;
   cursor: pointer;
+  /* 贴纸底图：由 JS 通过 --sticker-bg-img 注入 CDN 地址 */
+  background-image: var(--sticker-bg-img, none);
+  /* contain：保持原始宽高比完整显示，不被拉伸变形 */
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+  &.sticker-active {
+    background: rgba(255, 255, 255, 0.9);
+    border-color: rgba(37, 204, 93, 0.55);
+    box-shadow: 0 8rpx 24rpx rgba(37, 204, 93, 0.18),
+      inset 0 1rpx 0 rgba(255, 255, 255, 0.9);
+    transform: scale(1.04);
+  }
+}
+
+/* 贴纸统计条 */
+.sticker-stats {
+  display: flex;
+  border-radius: 24rpx;
+  padding: 20rpx 0;
+  .sticker-stat {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4rpx;
+    .ss-val {
+      font-size: 34rpx;
+      font-weight: 800;
+      color: var(--ink);
+    }
+    .ss-label {
+      font-size: 20rpx;
+      color: var(--ink4);
+    }
+  }
+}
+
+/* 贴纸卡片（仅图片 + 库存/组合角标） */
+.sticker-item {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16rpx;
+  overflow: hidden;
+  &.sticker-out {
+    opacity: 0.55;
+  }
+}
+/* 贴纸图居中且略小于格子，露出 CDN 底图 */
+.sticker-thumb {
+  width: 72%;
+  height: 72%;
+}
+.sticker-thumb-ph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 44rpx;
+  background: rgba(37, 204, 93, 0.08);
+}
+.sticker-badge {
+  position: absolute;
+  top: 8rpx;
+  right: 8rpx;
+  font-size: 16rpx;
+  padding: 2rpx 10rpx;
+  border-radius: 999rpx;
+  color: #fff;
+  &.low {
+    background: #f59e0b;
+  }
+  &.out {
+    background: #ff6b6b;
+  }
+  &.combo {
+    background: linear-gradient(135deg, #7c5cff, #4facfe);
+  }
+}
+
+/* 贴纸空状态 */
+.sticker-empty {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12rpx;
+  padding: 48rpx 0;
+  .sticker-empty-icon {
+    width: 120rpx;
+    height: 120rpx;
+  }
+  .sticker-empty-text {
+    font-size: 22rpx;
+    color: var(--ink4);
+  }
+  .sticker-empty-btn {
+    margin-top: 8rpx;
+    padding: 14rpx 36rpx;
+    border-radius: 999rpx;
+    background: $sj-g5;
+    color: #fff;
+    font-size: 24rpx;
+    font-weight: 600;
+  }
+}
+
+/* 卡片内紧凑空状态（三卡片复用，不撑高） */
+.sticker-empty-sm {
+  padding: 32rpx 0;
+  .sticker-empty-icon {
+    font-size: 48rpx;
+  }
+  .sticker-empty-btn {
+    padding: 12rpx 30rpx;
+    font-size: 22rpx;
+  }
+}
+
+/* 消耗记账弹窗 */
+.consume-preview {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  background: rgba(37, 204, 93, 0.06);
+  border-radius: 20rpx;
+  padding: 20rpx;
+  margin-bottom: 24rpx;
+  .cp-img {
+    width: 96rpx;
+    height: 96rpx;
+    border-radius: 20rpx;
+  }
+  .cp-img-ph {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 44rpx;
+    background: rgba(37, 204, 93, 0.1);
+  }
+  .cp-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4rpx;
+  }
+  .cp-name {
+    font-size: 28rpx;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .cp-stock {
+    font-size: 20rpx;
+    color: var(--ink4);
+  }
+  .cp-price {
+    font-size: 22rpx;
+    color: $sj-g5;
+    font-weight: 700;
+  }
+}
+.qty-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
+  .qty-label {
+    font-size: 26rpx;
+    color: var(--ink2);
+  }
+  .stepper {
+    display: flex;
+    align-items: center;
+    gap: 24rpx;
+    background: rgba(15, 61, 38, 0.06);
+    border-radius: 999rpx;
+    padding: 8rpx 20rpx;
+    .step-btn {
+      width: 48rpx;
+      height: 48rpx;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 2rpx 8rpx rgba(15, 61, 38, 0.1);
+      font-size: 32rpx;
+      color: var(--ink2);
+      font-weight: 700;
+    }
+    .qty-val {
+      min-width: 40rpx;
+      text-align: center;
+      font-size: 30rpx;
+      font-weight: 800;
+      color: var(--ink);
+    }
+  }
+}
+.amount-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(15, 61, 38, 0.05);
+  border-radius: 16rpx;
+  padding: 18rpx 20rpx;
+  font-size: 24rpx;
+  color: var(--ink3);
+  margin-bottom: 28rpx;
+  .amount-val {
+    font-size: 32rpx;
+    font-weight: 800;
+  }
+}
+.consume-submit {
+  height: 88rpx;
+  border-radius: 24rpx;
+  background: linear-gradient(135deg, $sj-g5, $sj-g7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 700;
+  &.loading {
+    opacity: 0.6;
+  }
 }
 
 /* Sheet */

@@ -19,45 +19,35 @@
     <scroll-view class="page-scroll" scroll-y enhanced :show-scrollbar="false">
       <view v-if="loading" class="empty-tip"><text>加载中…</text></view>
 
-      <view v-else-if="!grouped.length" class="empty-tip"><text>暂无分类</text></view>
+      <view v-else-if="!visibleCats.length" class="empty-tip"><text>暂无分类</text></view>
 
-      <view v-for="g in grouped" :key="g.code" class="group-block">
-        <view class="group-head">
-          <text class="group-icon">{{ g.icon }}</text>
-          <text class="group-name">{{ g.name }}</text>
+      <view
+        v-for="(cat, idx) in visibleCats"
+        :key="cat._id"
+        class="cat-row"
+        :class="{ hidden: cat.is_hidden }"
+      >
+        <text class="cat-icon">{{ cat.icon }}</text>
+        <view class="cat-info">
+          <text class="cat-name">{{ cat.name }}</text>
+          <view class="cat-tags">
+            <text v-if="cat.is_system" class="tag tag-sys">系统</text>
+            <text v-else class="tag tag-custom">自定义</text>
+            <text v-if="cat.is_hidden" class="tag tag-hidden">已隐藏</text>
+            <text v-if="cat.usage_count > 0" class="tag tag-usage">{{ cat.usage_count }} 笔账目</text>
+          </view>
         </view>
 
-        <view
-          v-for="(cat, idx) in g.cats"
-          :key="cat._id"
-          class="cat-row"
-          :class="{ hidden: cat.is_hidden }"
-        >
-          <text class="cat-icon">{{ cat.icon }}</text>
-          <view class="cat-info">
-            <text class="cat-name">{{ cat.name }}</text>
-            <view class="cat-tags">
-              <text v-if="cat.is_system" class="tag tag-sys">系统</text>
-              <text v-else class="tag tag-custom">自定义</text>
-              <text v-if="cat.is_hidden" class="tag tag-hidden">已隐藏</text>
-              <text v-if="cat.usage_count > 0" class="tag tag-usage">{{ cat.usage_count }} 笔账目</text>
-            </view>
-          </view>
-
-          <view class="cat-actions">
-            <!-- 排序：仅自定义，组内上下移 -->
-            <template v-if="!cat.is_system">
-              <view class="act-btn" :class="{ disabled: isFirstInGroup(g, idx) }" @click="move(g, idx, -1)"><text>↑</text></view>
-              <view class="act-btn" :class="{ disabled: isLastInGroup(g, idx) }" @click="move(g, idx, 1)"><text>↓</text></view>
-              <view class="act-btn" @click="openEdit(cat)"><text>✏️</text></view>
-              <view class="act-btn act-danger" @click="openDelete(cat)"><text>🗑</text>    
-    <!-- 全局数字键盘（单例）：由 main.js 全局注册 -->
-    <amount-keyboard />
-</view>
-            </template>
-            <view class="act-btn" @click="toggleHide(cat)">
-              <text>{{ cat.is_hidden ? '👁' : '🚫' }}</text>
-            </view>
+        <view class="cat-actions">
+          <!-- 排序：仅自定义，整 type 内上下移 -->
+          <template v-if="!cat.is_system">
+            <view class="act-btn" :class="{ disabled: isFirst(idx) }" @click="move(idx, -1)"><text>↑</text></view>
+            <view class="act-btn" :class="{ disabled: isLast(idx) }" @click="move(idx, 1)"><text>↓</text></view>
+            <view class="act-btn" @click="openEdit(cat)"><text>✏️</text></view>
+            <view class="act-btn act-danger" @click="openDelete(cat)"><text>🗑</text></view>
+          </template>
+          <view class="act-btn" @click="toggleHide(cat)">
+            <text>{{ cat.is_hidden ? '👁' : '🚫' }}</text>
           </view>
         </view>
       </view>
@@ -74,6 +64,15 @@
         <text class="form-label">名称</text>
         <input class="sheet-input" v-model="form.name" maxlength="32" placeholder="如：奶茶、打车" />
 
+        <text class="form-label" style="margin-top:14px;">简介 / 备注（可选）</text>
+        <textarea
+          class="sheet-input desc-input"
+          v-model="form.desc"
+          maxlength="100"
+          placeholder="补充这个分类的说明，可在贴纸详情中查看"
+          auto-height
+        />
+
         <text class="form-label" style="margin-top:14px;">图标</text>
         <view class="emoji-grid">
           <view
@@ -83,17 +82,6 @@
             :class="{ active: form.icon === em }"
             @click="form.icon = em"
           ><text>{{ em }}</text></view>
-        </view>
-
-        <text class="form-label" style="margin-top:14px;">所属分组</text>
-        <view class="seg-group">
-          <view
-            v-for="gp in groups"
-            :key="gp.code"
-            class="seg-btn"
-            :class="{ active: form.group === gp.code }"
-            @click="form.group = gp.code"
-          >{{ gp.name }}</view>
         </view>
 
         <view class="save-btn" @click="saveEdit"><text>{{ editingCat ? '保存' : '创建' }}</text></view>
@@ -144,7 +132,6 @@ import {
   deleteCategory,
   reorderCategories
 } from '@/api/sparejar.js'
-import { getGroupsByType } from '@/constants/categoryGroups.js'
 
 const userStore = useUserStore()
 
@@ -152,18 +139,12 @@ const currentType = ref('expense')
 const cats = ref([])
 const loading = ref(false)
 
-const groups = computed(() => getGroupsByType(currentType.value))
-
-/** 按二级分组折叠，仅含当前 type */
-const grouped = computed(() => {
-  return groups.value
-    .map((g) => ({
-      code: g.code,
-      name: g.name,
-      icon: g.icon,
-      cats: cats.value.filter((c) => c.type === currentType.value && c.group === g.code)
-    }))
-    .filter((g) => g.cats.length)
+/** 当前 type 下所有分类，按 sort_order 平铺（不再按 group 折叠） */
+const visibleCats = computed(() => {
+  return cats.value
+    .filter((c) => c.type === currentType.value)
+    .slice()
+    .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
 })
 
 /** 删除时的合并目标：同 type、非自身、未隐藏 */
@@ -179,7 +160,7 @@ const mergeTargets = computed(() => {
 const editSheetOpen = ref(false)
 const deleteSheetOpen = ref(false)
 const editingCat = ref(null)
-const form = ref({ name: '', icon: '📦', group: '' })
+const form = ref({ name: '', desc: '', icon: '📦' })
 
 const EMOJIS = [
   '🍜', '🥡', '🧋', '🛒', '🏪', '🚌', '🚕', '⛽', '🅿️', '📞',
@@ -218,13 +199,13 @@ function goBack() {
 
 function openCreate() {
   editingCat.value = null
-  form.value = { name: '', icon: '📦', group: groups.value[0].code }
+  form.value = { name: '', desc: '', icon: '📦' }
   editSheetOpen.value = true
 }
 
 function openEdit(cat) {
   editingCat.value = cat
-  form.value = { name: cat.name, icon: cat.icon, group: cat.group }
+  form.value = { name: cat.name, desc: cat.desc || '', icon: cat.icon }
   editSheetOpen.value = true
 }
 
@@ -238,15 +219,15 @@ async function saveEdit() {
     if (editingCat.value) {
       await updateCategory(editingCat.value._id, {
         name,
-        icon: form.value.icon,
-        group: form.value.group
+        desc: (form.value.desc || '').trim(),
+        icon: form.value.icon
       })
     } else {
       await createCategory({
         type: currentType.value,
         name,
-        icon: form.value.icon,
-        group: form.value.group
+        desc: (form.value.desc || '').trim(),
+        icon: form.value.icon
       })
     }
     editSheetOpen.value = false
@@ -266,23 +247,23 @@ async function toggleHide(cat) {
   }
 }
 
-function isFirstInGroup(g, idx) {
+function isFirst(idx) {
   return idx === 0
 }
-function isLastInGroup(g, idx) {
-  return idx === g.cats.length - 1
+function isLast(idx) {
+  return idx === visibleCats.value.length - 1
 }
 
-async function move(g, idx, dir) {
+async function move(idx, dir) {
   if (dir < 0 && idx === 0) return
-  if (dir > 0 && idx === g.cats.length - 1) return
-  const list = g.cats.slice()
+  if (dir > 0 && idx === visibleCats.value.length - 1) return
+  const list = visibleCats.value.slice()
   const tmp = list[idx]
   list[idx] = list[idx + dir]
   list[idx + dir] = tmp
   const orderedIds = list.map((c) => c._id)
   try {
-    await reorderCategories(currentType.value, g.code, orderedIds)
+    await reorderCategories(currentType.value, orderedIds)
     await load()
   } catch (err) {
     uni.showToast({ title: (err && err.message) || '排序失败', icon: 'none' })
@@ -329,11 +310,6 @@ onMounted(load)
 .page-scroll { flex: 1; padding: 0 16px; }
 .empty-tip { text-align: center; color: #9bb8a8; font-size: 13px; padding: 40px 0; }
 
-.group-block { margin-bottom: 14px; }
-.group-head { display: flex; align-items: center; gap: 8px; padding: 8px 4px; }
-.group-icon { font-size: 16px; }
-.group-name { font-size: 13px; font-weight: 700; color: #6b8c7a; }
-
 .cat-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin-bottom: 8px; border-radius: 16px; background: rgba(255,255,255,0.7); border: 1px solid #e3f5e6; }
 .cat-row.hidden { opacity: 0.55; }
 .cat-icon { font-size: 24px; width: 32px; text-align: center; }
@@ -359,6 +335,7 @@ onMounted(load)
 .sheet-title { font-size: 17px; font-weight: 700; color: #0f1c14; display: block; margin-bottom: 12px; }
 .form-label { font-size: 12px; color: #6b8c7a; font-weight: 600; display: block; margin-bottom: 8px; }
 .sheet-input { width: 100%; box-sizing: border-box; padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,0.6); border: 1px solid #c2f2c8; font-size: 15px; color: #0f1c14; }
+.sheet-input.desc-input { min-height: 72px; line-height: 1.5; }
 
 .emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
 .emoji-cell { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 20px; border-radius: 10px; background: rgba(255,255,255,0.6); border: 1px solid #e3f5e6; cursor: pointer; }

@@ -17,27 +17,84 @@
         </view>
         <view class="type-opt" :class="{ active: form.type === 'material', disabled: isEdit }" @click="setType('material')">
           <text class="to-icon">🖼️</text>
-          <text class="to-name">普通素材</text>
-          <text class="to-desc">仅作装饰</text>
+          <text class="to-name">分类素材</text>
+          <text class="to-desc">按分类展示</text>
+        </view>
+        <view class="type-opt" :class="{ active: form.type === 'custom', disabled: isEdit }" @click="setType('custom')">
+          <text class="to-icon">⬆️</text>
+          <text class="to-name">我的上传</text>
+          <text class="to-desc">拍摄 / AI组合</text>
         </view>
       </view>
 
-      <!-- 图片 -->
-      <view class="section-label">商品图片</view>
-      <view class="img-row">
-        <view v-if="form.image_url" class="img-preview">
-          <image :src="form.image_url" mode="aspectFill" class="img-preview-img" />
-          <view class="img-remove" @click="form.image_url = ''">×</view>
+      <!-- 用户上传：单独拍摄 / AI 组合 -->
+      <template v-if="form.type === 'custom'">
+        <view class="section-label">上传方式</view>
+        <view class="combo-mode-row">
+          <view class="combo-mode" :class="{ active: form.subType === 'single' }" @click="form.subType = 'single'">
+            <text class="cm-icon">📷</text>
+            <text class="cm-name">单独拍摄</text>
+            <text class="cm-desc">单张图片直接作为贴纸</text>
+          </view>
+          <view class="combo-mode" :class="{ active: form.subType === 'combo' }" @click="form.subType = 'combo'">
+            <text class="cm-icon">✨</text>
+            <text class="cm-name">AI 组合</text>
+            <text class="cm-desc">多图合成一张 · {{ comboCost }} 积分</text>
+          </view>
         </view>
-        <view v-else class="img-add" @click="chooseImage">
-          <text class="img-add-plus">＋</text>
-          <text class="img-add-text">{{ uploading ? '上传中' : '拍照/选图' }}</text>
+      </template>
+
+      <!-- 图片：单张（囤货/分类/单独拍摄） -->
+      <template v-if="form.type !== 'custom' || form.subType === 'single'">
+        <view class="section-label">{{ form.type === 'custom' ? '贴纸图片' : '商品图片' }}</view>
+        <view class="img-row">
+          <view v-if="form.image_url" class="img-preview">
+            <image :src="form.image_url" mode="aspectFill" class="img-preview-img" />
+            <view class="img-remove" @click="form.image_url = ''">×</view>
+          </view>
+          <view v-else class="img-add" @click="chooseImage">
+            <text class="img-add-plus">＋</text>
+            <text class="img-add-text">{{ uploading ? '上传中' : '拍照/选图' }}</text>
+          </view>
         </view>
-      </view>
+      </template>
+
+      <!-- 图片：多张（AI 组合） -->
+      <template v-if="form.type === 'custom' && form.subType === 'combo'">
+        <view class="section-label">素材图片（{{ form.sourceImages.length }}/9，至少 2 张）</view>
+        <view class="combo-img-row">
+          <view v-for="(u, i) in form.sourceImages" :key="u" class="combo-img">
+            <image :src="u" mode="aspectFill" class="combo-img-item" />
+            <view class="combo-img-del" @click="form.sourceImages.splice(i, 1)">×</view>
+          </view>
+          <view v-if="form.sourceImages.length < 9" class="combo-img-add" @click="chooseImages">
+            <text class="img-add-plus">{{ uploading ? '…' : '＋' }}</text>
+          </view>
+        </view>
+
+        <!-- 积分状态 + 签到 -->
+        <view class="points-bar">
+          <view class="points-info">
+            <text class="points-icon">🪙</text>
+            <text class="points-text">当前 {{ userStore.state.userPoints }} 分 · 组合消耗 {{ comboCost }} 分</text>
+          </view>
+          <view class="points-checkin" @click="doCheckIn">签到领积分</view>
+        </view>
+      </template>
 
       <!-- 名称 -->
       <view class="section-label">名称</view>
       <input class="text-input" v-model="form.name" placeholder="如：抽纸、咖啡豆" maxlength="20" />
+
+      <!-- 简介/备注 -->
+      <view class="section-label">简介 / 备注（可选）</view>
+      <textarea
+        class="text-input desc-input"
+        v-model="form.desc"
+        placeholder="补充这张贴纸的用途、来源等，可在详情弹窗中查看"
+        maxlength="100"
+        auto-height
+      />
 
       <!-- 囤货专属 -->
       <template v-if="form.type === 'stock'">
@@ -120,10 +177,16 @@ const editId = ref('')
 const saving = ref(false)
 const uploading = ref(false)
 
+/** AI 组合一次消耗的积分（与后端 COMBO_COST_POINTS 保持一致） */
+const comboCost = 10
+
 const form = reactive({
   type: 'stock',
+  subType: 'single', // custom 子类型：single=单独拍摄 / combo=AI组合
   name: '',
+  desc: '',
   image_url: '',
+  sourceImages: [],
   priceYuan: '',
   stockQty: '',
   lowThreshold: '1',
@@ -143,6 +206,10 @@ const catOptions = computed(() => {
 function setType(t) {
   if (isEdit.value) return
   form.type = t
+  if (t === 'custom') {
+    form.subType = 'single'
+    form.sourceImages = []
+  }
 }
 
 function goBack() {
@@ -192,8 +259,11 @@ async function loadForEdit(id) {
   const s = (userStore.state.stickers || []).find((x) => x._id === id)
   if (!s) return
   form.type = s.type
+  form.subType = s.combo_type === 'combo' ? 'combo' : 'single'
   form.name = s.name
+  form.desc = s.desc || ''
   form.image_url = s.image_url
+  form.sourceImages = Array.isArray(s.source_images) ? [...s.source_images] : []
   form.priceYuan = s.unit_price ? fenToYuanString(s.unit_price) : ''
   form.stockQty = s.stock_qty != null ? String(s.stock_qty) : ''
   form.lowThreshold = s.low_stock_threshold != null ? String(s.low_stock_threshold) : '1'
@@ -201,16 +271,71 @@ async function loadForEdit(id) {
   form.ledgerId = s.ledger_id || ''
 }
 
+/** 多图上传（AI 组合素材），最多 9 张 */
+async function chooseImages() {
+  if (uploading.value) return
+  const remain = 9 - form.sourceImages.length
+  if (remain <= 0) return
+  uni.chooseImage({
+    count: remain,
+    sizeType: ['compressed'],
+    success: async (res) => {
+      const paths = res.tempFilePaths || []
+      if (!paths.length) return
+      uploading.value = true
+      try {
+        for (const p of paths) {
+          const ext = (p.split('.').pop() || 'png').split('?')[0].toLowerCase()
+          const cloudPath = `stickers/${userStore.state.uid}/combo/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
+          const up = await uniCloud.uploadFile({ filePath: p, cloudPath })
+          const url = (up && (up.url || up.fileID)) || ''
+          if (url && !form.sourceImages.includes(url)) form.sourceImages.push(url)
+        }
+      } catch (err) {
+        console.error('[sticker-edit] combo upload failed', err)
+        uni.showToast({ title: '图片上传失败', icon: 'none' })
+      } finally {
+        uploading.value = false
+      }
+    }
+  })
+}
+
+/** 每日签到领积分（组合贴纸积分来源） */
+async function doCheckIn() {
+  try {
+    const res = await userStore.checkInAction()
+    if (res && res.already) {
+      uni.showToast({ title: '今日已签到', icon: 'none' })
+    } else {
+      uni.showToast({ title: `签到成功 +${(res && res.gained) || comboCost} 积分`, icon: 'success' })
+    }
+  } catch (err) {
+    uni.showToast({ title: (err && err.message) || '签到失败', icon: 'none' })
+  }
+}
+
 onMounted(async () => {
   const pages = getCurrentPages()
   const cur = pages[pages.length - 1]
-  editId.value = cur && cur.options ? cur.options.id : ''
+  const opts = (cur && cur.options) || {}
+  editId.value = opts.id || ''
   isEdit.value = !!editId.value
+  // 从账本页三卡片「新建」跳转：?type=stock|material|custom 预选类型
+  if (!isEdit.value && (opts.type === 'stock' || opts.type === 'material' || opts.type === 'custom')) {
+    form.type = opts.type
+    if (opts.type === 'custom') form.subType = 'single'
+  }
+  // 从贴纸库点击某个分类进入：?categoryId=xxx 预选该分类
+  const presetCatId = opts.categoryId || ''
   if (!userStore.state.uid) {
     uni.showToast({ title: '请先登录', icon: 'none' })
     return
   }
   await loadMeta()
+  if (presetCatId && allCats.value.some((c) => c._id === presetCatId)) {
+    form.categoryId = presetCatId
+  }
   if (isEdit.value) await loadForEdit(editId.value)
 })
 
@@ -220,19 +345,60 @@ async function save() {
     uni.showToast({ title: '请输入名称', icon: 'none' })
     return
   }
-  if (!form.image_url) {
+
+  // 用户上传-组合：多图 + 积分，走组合接口
+  if (form.type === 'custom' && form.subType === 'combo' && !isEdit.value) {
+    if (form.sourceImages.length < 2) {
+      uni.showToast({ title: '组合贴纸至少需要 2 张图片', icon: 'none' })
+      return
+    }
+    if ((userStore.state.userPoints || 0) < comboCost) {
+      uni.showToast({ title: `积分不足（需 ${comboCost} 分），先去签到`, icon: 'none' })
+      return
+    }
+    saving.value = true
+    try {
+      await userStore.combineStickerAction({
+        name: form.name.trim(),
+        desc: form.desc.trim(),
+        source_images: form.sourceImages,
+        category_id: form.categoryId || null
+      })
+      uni.showToast({ title: '组合成功', icon: 'success' })
+      await userStore.loadStickers()
+      setTimeout(() => uni.navigateBack(), 500)
+    } catch (err) {
+      uni.showToast({ title: (err && err.message) || '组合失败', icon: 'none' })
+    } finally {
+      saving.value = false
+    }
+    return
+  }
+
+  if (form.type !== 'custom' && !form.image_url) {
+    uni.showToast({ title: '请上传图片', icon: 'none' })
+    return
+  }
+  if (form.type === 'custom' && form.subType === 'single' && !form.image_url) {
     uni.showToast({ title: '请上传图片', icon: 'none' })
     return
   }
   const payload = {
     type: form.type,
     name: form.name.trim(),
+    desc: form.desc.trim(),
     image_url: form.image_url,
     category_id: form.categoryId || null,
     ledger_id: form.ledgerId || null
   }
 
-  if (form.type === 'stock') {
+  if (form.type === 'custom') {
+    // 用户上传-单独拍摄：单张图片直接作为贴纸
+    payload.combo_type = 'single'
+    if (form.priceYuan) {
+      try { payload.unit_price = yuanToFen(form.priceYuan) } catch (e) { /* 忽略 */ }
+    }
+  } else if (form.type === 'stock') {
     let priceFen = 0
     if (form.priceYuan) {
       try { priceFen = yuanToFen(form.priceYuan) } catch (e) { uni.showToast({ title: '单价格式有误', icon: 'none' }); return }
@@ -376,6 +542,102 @@ async function save() {
     color: var(--ink3);
     .img-add-plus { font-size: 48rpx; line-height: 1; }
     .img-add-text { font-size: 22rpx; }
+  }
+
+  /* 用户上传：单独拍摄 / AI 组合 */
+  .combo-mode-row {
+    margin: 0 32rpx;
+    display: flex;
+    gap: 20rpx;
+  }
+  .combo-mode {
+    flex: 1;
+    padding: 24rpx 20rpx;
+    border-radius: 24rpx;
+    background: rgba(255, 255, 255, 0.55);
+    border: 3rpx solid rgba(194, 242, 200, 0.5);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6rpx;
+    cursor: pointer;
+    &.active {
+      border-color: var(--g5);
+      background: rgba(37, 204, 93, 0.08);
+      box-shadow: 0 6rpx 18rpx rgba(37, 204, 93, 0.12);
+    }
+    .cm-icon { font-size: 40rpx; line-height: 1; }
+    .cm-name { font-size: 26rpx; font-weight: 700; color: var(--ink); }
+    .cm-desc { font-size: 20rpx; color: var(--ink3); text-align: center; }
+  }
+
+  /* 组合素材多图 */
+  .combo-img-row {
+    margin: 0 32rpx;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20rpx;
+  }
+  .combo-img {
+    width: 160rpx;
+    height: 160rpx;
+    border-radius: 20rpx;
+    position: relative;
+    .combo-img-item { width: 100%; height: 100%; border-radius: 20rpx; }
+    .combo-img-del {
+      position: absolute;
+      top: 4rpx;
+      right: 4rpx;
+      width: 36rpx;
+      height: 36rpx;
+      border-radius: 50%;
+      background: rgba(15, 28, 20, 0.6);
+      color: #fff;
+      font-size: 24rpx;
+      line-height: 36rpx;
+      text-align: center;
+      cursor: pointer;
+    }
+  }
+  .combo-img-add {
+    width: 160rpx;
+    height: 160rpx;
+    border-radius: 20rpx;
+    border: 3rpx dashed rgba(124, 92, 255, 0.5);
+    background: rgba(255, 255, 255, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ink3);
+  }
+
+  /* 积分状态条 + 签到 */
+  .points-bar {
+    margin: 24rpx 32rpx 0;
+    padding: 20rpx 24rpx;
+    border-radius: 20rpx;
+    background: linear-gradient(135deg, rgba(124, 92, 255, 0.1), rgba(79, 172, 254, 0.1));
+    border: 2rpx solid rgba(124, 92, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    .points-info {
+      display: flex;
+      align-items: center;
+      gap: 10rpx;
+      .points-icon { font-size: 30rpx; }
+      .points-text { font-size: 22rpx; color: var(--ink2); }
+    }
+    .points-checkin {
+      padding: 10rpx 22rpx;
+      border-radius: 999rpx;
+      background: linear-gradient(135deg, #7c5cff, #4facfe);
+      color: #fff;
+      font-size: 22rpx;
+      font-weight: 600;
+      cursor: pointer;
+      &:active { opacity: 0.8; }
+    }
   }
 
   .text-input {

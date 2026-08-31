@@ -9,6 +9,9 @@ import {
   updateSticker,
   deleteSticker,
   consumeSticker,
+  combineSticker,
+  checkIn,
+  getUserPoints,
   recognizeReceipt,
   getHealthProfile,
   upsertHealthProfile,
@@ -166,6 +169,39 @@ export async function consumeStickerAction(stickerId) {
   ENSURE_LOGGED_IN()
   const res = await consumeSticker(stickerId)
   await loadStickers()
+  return res
+}
+
+// ---- 积分体系（签到 / 组合贴纸） ----
+/** 加载积分余额到 state.userPoints */
+export async function loadUserPoints() {
+  if (!state.uid) {
+    state.userPoints = 0
+    return 0
+  }
+  try {
+    const res = await getUserPoints()
+    state.userPoints = (res && res.points) || 0
+  } catch (err) {
+    console.error('[store] 加载积分失败', err)
+    state.userPoints = state.userPoints || 0
+  }
+  return state.userPoints
+}
+
+/** 每日签到：+10 积分。返回 { ok, already, points, gained } */
+export async function checkInAction() {
+  ENSURE_LOGGED_IN()
+  const res = await checkIn()
+  await loadUserPoints()
+  return res
+}
+
+/** 组合贴纸：多图 AI 合成（消耗积分）。payload: { name, source_images, category_id? } */
+export async function combineStickerAction(payload) {
+  ENSURE_LOGGED_IN()
+  const res = await combineSticker(payload)
+  await Promise.all([loadStickers(), loadUserPoints()])
   return res
 }
 

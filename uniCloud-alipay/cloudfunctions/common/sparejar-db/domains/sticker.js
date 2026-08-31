@@ -6,6 +6,41 @@ const money = require('../utils/money')
 const ids = require('../utils/id')
 const transaction = require('./transaction')
 
+/** 组合贴纸一次消耗的积分数（可通过签到/后续会员权益获取） */
+const COMBO_COST_POINTS = 10
+/** 每日签到奖励积分数 */
+const CHECK_IN_POINTS = 10
+
+/** 查询用户积分（兼容老用户无字段）。 */
+async function getUserPoints(userId) {
+  const db = getDb()
+  const res = await db.collection('users').where({ user_id: userId }).limit(1).get()
+  const u = res.data && res.data[0]
+  return { user: u || null, points: (u && u.points) || 0 }
+}
+
+/** 积分变更 + 流水（points_logs）。 */
+async function changeUserPoints(userId, change, reason, note) {
+  const db = getDb()
+  const { user, points } = await getUserPoints(userId)
+  if (!user) throw new Error('user not found')
+  const balance = Math.max(0, points + change)
+  await db.collection('users').doc(user._id).update({
+    points: balance,
+    updated_at: nowTs()
+  })
+  await db.collection('points_logs').add({
+    user_id: userId,
+    change,
+    balance,
+    reason: reason || 'unknown',
+    note: note || '',
+    date_key: formatDateKey(new Date()),
+    created_at: nowTs()
+  })
+  return balance
+}
+
 async function getStickerById(userId, stickerId) {
   const db = getDb()
   const res = await db.collection('stickers').doc(stickerId).get()
@@ -17,16 +52,17 @@ async function getStickerById(userId, stickerId) {
 /**
  * 新建贴纸。
  * @param {string} userId
- * @param {object} data { type:'stock'|'material', name, image_url, thumbnail_url?, category_id?, ledger_id?, unit_price?, stock_qty?, low_stock_threshold?, sort_order?, with_purchase? }
+ * @param {object} data { type:'stock'|'material'|'custom', name, image_url, thumbnail_url?, category_id?, ledger_id?, unit_price?, stock_qty?, low_stock_threshold?, sort_order?, with_purchase?, combo_type?, source_images? }
  *   - stock 类型：unit_price≥1、stock_qty≥0 必填；with_purchase=true 时同步记一笔采购支出（单价×库存，打 stock_purchase 标签）。
  *   - material 类型：单价/库存不参与逻辑，可选绑定默认分类。
+ *   - custom 类型：用户上传贴纸。combo_type='single'（单独拍摄）或 'combo'（多图 AI 组合）；combo 时 source_images 记录原图数组。
  */
 
 async function createSticker(userId, data) {
   const db = getDb()
   const ts = nowTs()
   const type = data.type
-  if (type !== 'stock' && type !== 'material') throw new Error('invalid sticker type')
+  if (type !== 'stock' && type !== 'material' && type !== 'custom') throw new Error('invalid sticker type')
 
   const name = (data.name || '').trim()
   const imageUrl = data.image_url || ''
@@ -39,8 +75,11 @@ async function createSticker(userId, data) {
     name,
     image_url: imageUrl,
     thumbnail_url: data.thumbnail_url || imageUrl,
+    desc: typeof data.desc === 'string' ? data.desc.trim().slice(0, 100) : '',
     category_id: data.category_id || null,
     ledger_id: data.ledger_id || null,
+    combo_type: null,
+    source_images: null,
     unit_price: null,
     stock_qty: null,
     initial_stock_qty: null,
@@ -52,6 +91,11 @@ async function createSticker(userId, data) {
     deleted_at: null,
     created_at: ts,
     updated_at: ts
+  }
+
+  if (type === 'custom') {
+    doc.combo_type = data.combo_type === 'combo' ? 'combo' : 'single'
+    doc.source_images = Array.isArray(data.source_images) ? data.source_images.slice(0, 9) : null
   }
 
   if (type === 'stock') {
@@ -95,7 +139,7 @@ async function updateSticker(userId, stickerId, data) {
   const db = getDb()
   const sticker = await getStickerById(userId, stickerId)
   const patch = { updated_at: nowTs() }
-  const strFields = ['name', 'image_url', 'thumbnail_url', 'category_id', 'ledger_id']
+  const strFields = ['name', 'image_url', 'thumbnail_url', 'desc', 'category_id', 'ledger_id']
   for (const f of strFields) {
     if (data[f] !== undefined) patch[f] = typeof data[f] === 'string' ? data[f].trim() : data[f]
   }
@@ -183,6 +227,105 @@ async function consumeSticker(userId, stickerId, qty) {
 }
 
 
+/**
+ * 每日签到：每天 +CHECK_IN_POINTS 积分（自然日，幂等）。
+ * @param {string} userId
+ */
+async function checkIn(userId) {
+  const db = getDb()
+  const today = formatDateKey(new Date())
+  const res = await db.collection('users').where({ user_id: userId }).limit(1).get()
+  const user = res.data && res.data[0]
+  if (!user) throw new Error('user not found')
+  if (user.last_check_in === today) {
+    return { ok: false, already: true, points: user.points || 0, message: '今日已签到' }
+  }
+  const balance = await changeUserPoints(userId, CHECK_IN_POINTS, 'daily_check_in', '每日签到')
+  await db.collection('users').doc(user._id).update({
+    last_check_in: today,
+    updated_at: nowTs()
+  })
+  return { ok: true, already: false, points: balance, gained: CHECK_IN_POINTS }
+}
+
+/**
+ * 组合贴纸（用户上传-组合类型）：多张图片合成一张贴纸。
+ * 消耗 COMBO_COST_POINTS 积分（不足则报错）。
+ * AI 合成：优先调用环境变量配置的 AI_COMBO_ENDPOINT（POST，Authorization: AI_COMBO_TOKEN，
+ * body: { images: [url], prompt? }，返回 { url }）；
+ * 未配置时降级：直接以第一张原图作为组合结果，并在返回中标记 ai_skipped。
+ * @param {string} userId
+ * @param {object} data { name, source_images: string[], category_id? }
+ */
+async function combineSticker(userId, data) {
+  const db = getDb()
+  const ts = nowTs()
+  const name = (data.name || '').trim()
+  const images = Array.isArray(data.source_images) ? data.source_images.filter(Boolean).slice(0, 9) : []
+  if (!name) throw new Error('组合贴纸需要名称')
+  if (images.length < 2) throw new Error('组合贴纸至少需要 2 张图片')
+
+  const { points } = await getUserPoints(userId)
+  if (points < COMBO_COST_POINTS) {
+    throw new Error(`组合贴纸需要 ${COMBO_COST_POINTS} 积分，当前 ${points} 分，先去签到获取吧`)
+  }
+
+  let imageUrl = images[0]
+  let aiSkipped = false
+  const endpoint = process.env.AI_COMBO_ENDPOINT
+  const token = process.env.AI_COMBO_TOKEN
+  if (endpoint) {
+    try {
+      const res = await uniCloud.httpclient.request(endpoint, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        dataType: 'json',
+        data: { images, prompt: name }
+      })
+      const body = res.data
+      if (body && body.url) {
+        imageUrl = body.url
+      } else {
+        aiSkipped = true
+      }
+    } catch (err) {
+      console.error('[sticker] AI 组合调用失败，降级为第一张原图', err)
+      aiSkipped = true
+    }
+  } else {
+    aiSkipped = true
+  }
+
+  // 扣积分（先创建后扣或先扣后建均可，此处先扣，失败可重试）
+  const balance = await changeUserPoints(userId, -COMBO_COST_POINTS, 'sticker_combo', '组合贴纸·' + name)
+
+  const doc = {
+    user_id: userId,
+    type: 'custom',
+    combo_type: 'combo',
+    name,
+    image_url: imageUrl,
+    thumbnail_url: imageUrl,
+    desc: typeof data.desc === 'string' ? data.desc.trim().slice(0, 100) : '',
+    category_id: data.category_id || null,
+    ledger_id: data.ledger_id || null,
+    source_images: images,
+    unit_price: null,
+    stock_qty: null,
+    initial_stock_qty: null,
+    low_stock_threshold: null,
+    purchase_transaction_id: null,
+    use_count: 0,
+    last_used_at: null,
+    sort_order: 0,
+    deleted_at: null,
+    created_at: ts,
+    updated_at: ts
+  }
+  const addRes = await db.collection('stickers').add(doc)
+  return { sticker_id: addRes.id, points: balance, cost: COMBO_COST_POINTS, ai_skipped: aiSkipped, ...doc }
+}
+
 module.exports = {
   getStickerById,
   createSticker,
@@ -190,4 +333,10 @@ module.exports = {
   deleteSticker,
   getStickers,
   consumeSticker,
+  combineSticker,
+  checkIn,
+  changeUserPoints,
+  getUserPoints,
+  COMBO_COST_POINTS,
+  CHECK_IN_POINTS,
 }

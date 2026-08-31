@@ -119,7 +119,7 @@ async function recommendCategoryId(userId, merchant, text) {
     const db = getDb()
     const cats = await db.collection('categories')
       .where({ user_id: userId, type: 'expense', is_hidden: false })
-      .field({ _id: true, name: true, group: true })
+      .field({ _id: true, name: true })
       .get()
     const list = (cats && cats.data) || []
     if (!list.length) return null

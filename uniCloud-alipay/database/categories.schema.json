@@ -30,11 +30,6 @@
       ],
       "description": "一级大类：支出/收入"
     },
-    "group": {
-      "bsonType": "string",
-      "description": "二级分组码(中层)，按 type 隔离，如 fixed/variable 或 active/passive",
-      "maxLength": 32
-    },
     "name": {
       "bsonType": "string",
       "description": "分类名",
@@ -45,6 +40,12 @@
       "description": "图标",
       "maxLength": 64,
       "defaultValue": "📦"
+    },
+    "desc": {
+      "bsonType": "string",
+      "description": "分类简介/备注",
+      "maxLength": 100,
+      "defaultValue": ""
     },
     "is_system": {
       "bsonType": "bool",

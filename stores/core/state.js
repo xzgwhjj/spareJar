@@ -54,6 +54,7 @@ function createInitialState() {
     defaultLedgerId: '',
     categories: [],
     stickers: [],
+    userPoints: 0,
     assets: [],
     assetTotals: null,
     healthProfile: null,

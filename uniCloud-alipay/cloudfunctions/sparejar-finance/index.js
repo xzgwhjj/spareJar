@@ -110,10 +110,10 @@ exports.main = async (event, context) => {
         return ok(await dbApi.deleteCategory(userId, data.category_id, data.merge_to_id || null))
 
       case 'reorderCategories':
-        if (!data.type || !data.group || !Array.isArray(data.ordered_ids)) {
-          return fail('type, group and ordered_ids are required')
+        if (!data.type || !Array.isArray(data.ordered_ids)) {
+          return fail('type and ordered_ids are required')
         }
-        return ok(await dbApi.reorderCategories(userId, data.type, data.group, data.ordered_ids))
+        return ok(await dbApi.reorderCategories(userId, data.type, data.ordered_ids))
 
       case 'updateSettings':
         if (!data || typeof data !== 'object') return fail('patch is required')
@@ -216,6 +216,19 @@ exports.main = async (event, context) => {
       case 'consumeSticker':
         if (!data.sticker_id) return fail('sticker_id is required')
         return ok(await dbApi.consumeSticker(userId, data.sticker_id, data.qty))
+
+      // ===== 积分体系（签到/组合贴纸，阶段 9） =====
+      case 'combineSticker':
+        return ok(await dbApi.combineSticker(userId, data))
+        break
+
+      case 'checkIn':
+        return ok(await dbApi.checkIn(userId))
+        break
+
+      case 'getUserPoints':
+        return ok(await dbApi.getUserPoints(userId))
+        break
 
       case 'recalculateSettlement':
         if (!data.date_key) return fail('date_key is required')

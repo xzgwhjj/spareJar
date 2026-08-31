@@ -231,31 +231,17 @@
     <view v-if="quickPopup === 'category'" class="sheet-mask" @click="closeQuickPopup">
       <view class="sheet" @click.stop>
         <view class="sheet-title">选择账本分类</view>
-        <scroll-view scroll-x enhanced :show-scrollbar="false" class="group-tabs-scroll">
-          <view class="group-tabs">
-            <view
-              v-for="(g, gi) in groupedCats"
-              :key="g.code"
-              class="group-tab"
-              :class="{ active: activeGroup === gi }"
-              @click="activeGroup = gi"
-            >
-              <text class="group-tab-icon">{{ g.icon }}</text>
-              <text class="group-tab-name">{{ g.name }}</text>
-            </view>
-          </view>
-        </scroll-view>
         <swiper
           class="cat-swiper"
-          :current="activeGroup"
-          @change="onGroupChange"
+          :current="activePage"
+          @change="onPageChange"
           :duration="250"
         >
-          <swiper-item v-for="g in groupedCats" :key="g.code">
+          <swiper-item v-for="(page, pi) in pagedCats" :key="pi">
             <scroll-view scroll-y enhanced :show-scrollbar="false" class="cat-scroll">
               <view class="cat-grid">
                 <view
-                  v-for="c in g.cats"
+                  v-for="c in page.cats"
                   :key="c._id"
                   class="cat-chip"
                   :class="{ active: draft.categoryId === c._id }"
@@ -271,7 +257,16 @@
             </scroll-view>
           </swiper-item>
         </swiper>
-        <view v-if="!groupedCats.length" class="empty-hint">暂无分类</view>
+        <view class="page-dots">
+          <view
+            v-for="(page, pi) in pagedCats"
+            :key="pi"
+            class="dot"
+            :class="{ active: activePage === pi }"
+            @click="activePage = pi"
+          />
+        </view>
+        <view v-if="!pagedCats.length" class="empty-hint">暂无分类</view>
         <view class="sheet-cancel" @click="closeQuickPopup">取消</view>
       </view>
     </view>
@@ -637,7 +632,6 @@ import {
   getLedgerDetail,
   listCategories,
 } from "@/api/sparejar.js";
-import { getGroupsByType } from "@/constants/categoryGroups.js";
 import { yuanToFen, fenToYuanString } from "@/utils/money.js";
 import { yuanToChinese } from "@/utils/chineseAmount.js";
 import { cdn, resolveCover, getCloudTempUrl, getCloudTempUrls } from "@/utils/cdn.js";
@@ -709,7 +703,7 @@ const quickEntries = ref([
 // 快捷入口点击 -> 弹出对应选择框（分类/付款账户/消耗囤货/餐次与热量/还款）
 const quickPopup = ref(""); // '' | 'category' | 'account' | 'stock' | 'meal' | 'repay'
 function openQuickEntry(type) {
-  if (type === "category" && !groupedCats.value.length) {
+  if (type === "category" && !pagedCats.value.length) {
     uni.showToast({ title: "暂无分类", icon: "none" });
     return;
   }
@@ -819,8 +813,8 @@ function onAmountKeyInput(val) {
 }
 const saving = ref(false);
 const uploading = ref(false);
-// 当前选中的分类分组（swiper 页索引）
-const activeGroup = ref(0);
+// 当前选中的分类分页（swiper 页索引）
+const activePage = ref(0);
 // 关联原支出：原交易对象 + 选择器弹层 + 候选列表
 const originalTx = ref(null);
 const showOriginalPicker = ref(false);
@@ -1023,17 +1017,18 @@ const originalAmountYuan = computed(() => {
   return amt ? fenToYuanString(amt) : "0.00";
 });
 
-// 按二级分组折叠：顺序遵循 constants/categoryGroups.js 的展示顺序
-const groupedCats = computed(() => {
-  const groups = getGroupsByType(draft.type);
-  return groups
-    .map((g) => ({
-      code: g.code,
-      name: g.name,
-      icon: g.icon,
-      cats: allCats.value.filter((c) => c.type === draft.type && c.group === g.code),
-    }))
-    .filter((g) => g.cats.length);
+// 分类按固定每页分页（去掉二级 group，整 type 平铺）
+const PAGE_SIZE = 12;
+const pagedCats = computed(() => {
+  const list = allCats.value
+    .filter((c) => c.type === draft.type)
+    .slice()
+    .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+  const pages = [];
+  for (let i = 0; i < list.length; i += PAGE_SIZE) {
+    pages.push({ cats: list.slice(i, i + PAGE_SIZE) });
+  }
+  return pages;
 });
 
 function setType(t) {
@@ -1041,7 +1036,7 @@ function setType(t) {
   if (draft.type === t) return;
   draft.type = t;
   draft.categoryId = ""; // 切换类型清空已选分类（分类按 type 隔离）
-  activeGroup.value = 0; // 回到第一个分组
+  activePage.value = 0; // 回到第一页
   if (t !== "refund") {
     // 离开退款类型时清除关联（分类由普通分组重新选择）
     draft.relatedId = "";
@@ -1049,15 +1044,18 @@ function setType(t) {
   }
 }
 
-function onGroupChange(e) {
-  activeGroup.value = e.detail.current;
+function onPageChange(e) {
+  activePage.value = e.detail.current;
 }
 
-/** 找到包含指定分类的分组索引（用于编辑预填时定位 swiper） */
-function findGroupIndexByCategory(catId) {
+/** 根据分类 id 找到所属分页（用于编辑预填时定位 swiper） */
+function findPageIndexByCategory(catId) {
   if (!catId) return 0;
-  const idx = groupedCats.value.findIndex((g) => g.cats.some((c) => c._id === catId));
-  return idx >= 0 ? idx : 0;
+  const list = pagedCats.value;
+  for (let pi = 0; pi < list.length; pi++) {
+    if (list[pi].cats.some((c) => c._id === catId)) return pi;
+  }
+  return 0;
 }
 
 async function loadTransactionForEdit(id) {
@@ -1091,7 +1089,7 @@ async function loadTransactionForEdit(id) {
       draft.relatedId = tx.related_transaction_id;
       await loadRelatedOriginal(tx.related_transaction_id);
     } else {
-      activeGroup.value = findGroupIndexByCategory(draft.categoryId);
+      activePage.value = findPageIndexByCategory(draft.categoryId);
     }
   } catch (err) {
     console.error("[add-record] load transaction for edit failed", err);
@@ -1128,7 +1126,7 @@ async function loadMealForEdit(id) {
       sticker_id: f.sticker_id || "",
       sticker_image_url: f.sticker_image_url || "",
     }));
-    activeGroup.value = findGroupIndexByCategory(draft.categoryId);
+    activePage.value = findPageIndexByCategory(draft.categoryId);
   } catch (err) {
     console.error("[add-record] load meal for edit failed", err);
   }
@@ -1333,7 +1331,6 @@ async function loadCategories() {
     allCats.value = (list || []).map((c) => ({
       _id: c._id,
       type: c.type,
-      group: c.group,
       name: c.name,
       icon: c.icon,
     }));
@@ -2385,39 +2382,6 @@ function goBack() {
     color: var(--ink4);
     font-weight: 700;
     padding: 16rpx 36rpx 8rpx;
-  }
-
-  .group-tabs-scroll {
-    white-space: nowrap;
-    padding: 4rpx 24rpx 0;
-  }
-
-  .group-tabs {
-    display: inline-flex;
-    gap: 12rpx;
-  }
-
-  .group-tab {
-    flex: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 6rpx;
-    padding: 10rpx 22rpx;
-    border-radius: 32rpx;
-    background: rgba(255, 255, 255, 0.6);
-    font-size: 22rpx;
-    font-weight: 600;
-    color: var(--ink3);
-    cursor: pointer;
-
-    &.active {
-      background: linear-gradient(135deg, #4fd974, #25cc5d);
-      color: #fff;
-    }
-  }
-
-  .group-tab-icon {
-    font-size: 24rpx;
   }
 
   .cat-swiper {

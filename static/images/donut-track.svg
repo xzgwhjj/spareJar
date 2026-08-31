@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <defs>
+    <radialGradient id="donutCoreBg" cx="50%" cy="42%" r="70%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="72%" stop-color="#f2fbf6"/>
+      <stop offset="100%" stop-color="#e6f6ed"/>
+    </radialGradient>
+  </defs>
+  <!-- 外圈刻度点环 -->
+  <circle cx="60" cy="60" r="59" fill="none" stroke="#25cc5d" stroke-opacity="0.42" stroke-width="2" stroke-dasharray="0.6 29.4" stroke-linecap="round"/>
+  <!-- 扇区轨道底色环（与动态环同半径 r=50，宽 18） -->
+  <circle cx="60" cy="60" r="50" fill="none" stroke="#25cc5d" stroke-opacity="0.1" stroke-width="18"/>
+  <!-- 内圈细环 -->
+  <circle cx="60" cy="60" r="40.5" fill="none" stroke="#25cc5d" stroke-opacity="0.16" stroke-width="1"/>
+  <!-- 中心白色底座 -->
+  <circle cx="60" cy="60" r="29" fill="url(#donutCoreBg)" stroke="#25cc5d" stroke-opacity="0.2" stroke-width="1"/>
+</svg>

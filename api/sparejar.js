@@ -149,6 +149,9 @@ export const ACTIONS = Object.freeze({
   UPDATE_STICKER: 'updateSticker',
   DELETE_STICKER: 'deleteSticker',
   CONSUME_STICKER: 'consumeSticker',
+  COMBINE_STICKER: 'combineSticker',
+  CHECK_IN: 'checkIn',
+  GET_USER_POINTS: 'getUserPoints',
   RECOGNIZE_RECEIPT: 'recognizeReceipt',
   RECOGNIZE_ASSET: 'recognizeAsset',
   CREATE_ASSET_ACCOUNT: 'createAssetAccount',
@@ -504,7 +507,7 @@ export function listCategories(opts = {}) {
 }
 
 /**
- * @param {{ type: 'expense'|'income', name: string, icon?: string, group?: string }} payload
+ * @param {{ type: 'expense'|'income', name: string, icon?: string, desc?: string }} payload
  */
 export function createCategory(payload) {
   return callSparejar(ACTIONS.CREATE_CATEGORY, payload)
@@ -512,7 +515,7 @@ export function createCategory(payload) {
 
 /**
  * @param {string} categoryId
- * @param {{ name?: string, icon?: string, group?: string, is_hidden?: boolean, sort_order?: number }} payload
+ * @param {{ name?: string, icon?: string, desc?: string, is_hidden?: boolean, sort_order?: number }} payload
  */
 export function updateCategory(categoryId, payload) {
   return callSparejar(ACTIONS.UPDATE_CATEGORY, { category_id: categoryId, ...payload })
@@ -528,11 +531,10 @@ export function deleteCategory(categoryId, mergeToId = null) {
 
 /**
  * @param {'expense'|'income'} type
- * @param {string} group 二级分组码
- * @param {string[]} orderedIds 该分组内自定义分类的期望顺序
+ * @param {string[]} orderedIds 该 type 内自定义分类的期望顺序（整 type 平铺排序）
  */
-export function reorderCategories(type, group, orderedIds) {
-  return callSparejar(ACTIONS.REORDER_CATEGORIES, { type, group, ordered_ids: orderedIds })
+export function reorderCategories(type, orderedIds) {
+  return callSparejar(ACTIONS.REORDER_CATEGORIES, { type, ordered_ids: orderedIds })
 }
 
 /**
@@ -698,6 +700,23 @@ export function deleteSticker(stickerId) {
 /** 囤货消耗记账。qty 默认 1。 */
 export function consumeSticker(stickerId, qty) {
   return callSparejar(ACTIONS.CONSUME_STICKER, { sticker_id: stickerId, qty })
+}
+
+// ===== 积分体系（签到 / 组合贴纸，阶段 9） =====
+
+/** 组合贴纸：多图合成一张（消耗积分）。data 含 name、source_images、category_id?。 */
+export function combineSticker(data) {
+  return callSparejar(ACTIONS.COMBINE_STICKER, data)
+}
+
+/** 每日签到：+10 积分（自然日幂等）。 */
+export function checkIn() {
+  return callSparejar(ACTIONS.CHECK_IN, {})
+}
+
+/** 查询当前积分余额。 */
+export function getUserPoints() {
+  return callSparejar(ACTIONS.GET_USER_POINTS, {})
 }
 
 // ===== 拍照 OCR 识别记账（阶段 9） =====

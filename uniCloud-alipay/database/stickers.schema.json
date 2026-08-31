@@ -28,9 +28,24 @@
       "bsonType": "string",
       "enum": [
         "stock",
-        "material"
+        "material",
+        "custom"
       ],
-      "description": "贴纸类型"
+      "description": "贴纸类型：stock=囤货 / material=分类素材 / custom=用户上传"
+    },
+    "combo_type": {
+      "bsonType": "string",
+      "enum": [
+        "single",
+        "combo"
+      ],
+      "description": "用户上传贴纸子类型：single=单独拍摄 / combo=多图AI组合"
+    },
+    "source_images": {
+      "bsonType": "array",
+      "arrayType": "string",
+      "maxItems": 9,
+      "description": "组合贴纸的原图 URL 数组"
     },
     "name": {
       "bsonType": "string",
@@ -46,6 +61,12 @@
       "bsonType": "string",
       "description": "缩略图",
       "maxLength": 512
+    },
+    "desc": {
+      "bsonType": "string",
+      "description": "贴纸简介/备注",
+      "maxLength": 100,
+      "defaultValue": ""
     },
     "category_id": {
       "bsonType": "string",

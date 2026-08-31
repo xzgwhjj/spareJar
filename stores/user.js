@@ -283,6 +283,9 @@ export function useUserStore() {
     deleteStickerAction: health.deleteStickerAction,
     consumeStickerAction: health.consumeStickerAction,
     recognizeReceiptAction: health.recognizeReceiptAction,
+    loadUserPoints: health.loadUserPoints,
+    checkInAction: health.checkInAction,
+    combineStickerAction: health.combineStickerAction,
 
     // 聚合 computed（本模块内定义，本地绑定可用）
     surplusPoolBalanceFen,

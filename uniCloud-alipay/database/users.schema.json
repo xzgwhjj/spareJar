@@ -97,6 +97,17 @@
       "description": "更新时间",
       "maxLength": 19
     },
+    "points": {
+      "bsonType": "int",
+      "description": "积分余额（签到奖励/组合贴纸消耗）",
+      "minimum": 0,
+      "defaultValue": 0
+    },
+    "last_check_in": {
+      "bsonType": "string",
+      "description": "最近签到日 YYYY-MM-DD",
+      "maxLength": 10
+    },
     "deleted_at": {
       "bsonType": "string",
       "description": "软删时间",

@@ -7,7 +7,6 @@ const money = require('../utils/money')
 const ids = require('../utils/id')
 const ledger = require('./ledger')
 const {
-  PRESET_CATEGORY_GROUP,
   PRESET_EXPENSE_CATEGORIES,
   PRESET_INCOME_CATEGORIES
 } = require('../core/constants')
@@ -145,6 +144,8 @@ async function initUser(userId, profile = {}) {
       zodiac: profile.zodiac || null,
       constellation: profile.constellation || null,
       birthday: profile.birthday || null,
+      points: 0,
+      last_check_in: null,
       created_at: ts,
       updated_at: ts,
       deleted_at: null
@@ -160,6 +161,13 @@ async function initUser(userId, profile = {}) {
       if (!raced) throw err
       userDoc = raced
     }
+  }
+
+  // 迁移：group 字段已废弃，清理该用户全部分类的残留 group（幂等，重复执行无害）
+  try {
+    await getDb().collection('categories').where({ user_id: userId, group: db.command.exists(true) }).update({ group: db.command.remove() })
+  } catch (e) {
+    console.warn('[ensureUserExists] cleanup group failed', e)
   }
 
   // 以下各实体独立幂等创建，任意一步中途失败都不影响其余，重试可补齐
@@ -237,33 +245,24 @@ async function initUser(userId, profile = {}) {
   // 预置分类：按 type+name 去重，重复登录不会插入重复分类
   const existingCats = await getDb().collection('categories')
     .where({ user_id: userId })
-    .field({ name: true, type: true, group: true, is_system: true, _id: true })
+    .field({ name: true, type: true, is_system: true, _id: true })
     .get()
   const have = new Set()
-  const backfillUpdates = []
   for (const c of (existingCats.data || [])) {
     have.add(`${c.type}:${c.name}`)
-    // 老数据回填：系统预置分类若缺 group，按 name→group 查表补上
-    if (c.is_system && !c.group) {
-      const g = PRESET_CATEGORY_GROUP[`${c.type}:${c.name}`]
-      if (g) backfillUpdates.push({ _id: c._id, group: g })
-    }
-  }
-  for (const u of backfillUpdates) {
-    await getDb().collection('categories').doc(u._id).update({ group: u.group })
   }
   const categoryDocs = []
   for (const c of PRESET_EXPENSE_CATEGORIES) {
     if (have.has(`expense:${c.name}`)) continue
     categoryDocs.push({
-      user_id: userId, type: 'expense', group: c.group, name: c.name, icon: c.icon,
+      user_id: userId, type: 'expense', name: c.name, icon: c.icon, desc: '',
       is_system: true, is_hidden: false, sort_order: c.sort_order, merged_to_id: null, created_at: ts
     })
   }
   for (const c of PRESET_INCOME_CATEGORIES) {
     if (have.has(`income:${c.name}`)) continue
     categoryDocs.push({
-      user_id: userId, type: 'income', group: c.group, name: c.name, icon: c.icon,
+      user_id: userId, type: 'income', name: c.name, icon: c.icon, desc: '',
       is_system: true, is_hidden: false, sort_order: c.sort_order, merged_to_id: null, created_at: ts
     })
   }
@@ -276,6 +275,9 @@ async function initUser(userId, profile = {}) {
     }
   }
 
+  // 老用户兼容：积分/签到字段缺省补 0/null
+  if (!userDoc.points) userDoc.points = 0
+  if (!userDoc.last_check_in) userDoc.last_check_in = null
   return { created: isNew, user: userDoc, default_ledger_id: masterLedger._id }
 }
 
