@@ -29,11 +29,24 @@
         </view>
         <view v-for="(f, i) in meal.food_items" :key="i" class="food-row">
           <view class="food-sticker">
-            <image v-if="f.sticker_image_url" :src="f.sticker_image_url" mode="aspectFill" class="food-sticker-img" />
+            <image v-if="f.sticker_image_url" :src="cloud.display(f.sticker_image_url)" mode="aspectFill" class="food-sticker-img" />
             <text v-else class="food-sticker-emoji">🍴</text>
           </view>
-          <text class="food-name">{{ f.name || '未命名' }}</text>
-          <text class="food-kcal">{{ f.calories || 0 }} kcal</text>
+          <view class="food-info">
+            <view class="food-line">
+              <text class="food-name">{{ f.name || '未命名' }}</text>
+              <text v-if="f.qty > 1" class="food-qty">×{{ f.qty }}</text>
+              <text class="food-source" :class="'src-' + (f.source || 'upload')">{{ sourceLabel(f.source) }}</text>
+            </view>
+            <text class="food-kcal">{{ f.calories || 0 }} kcal</text>
+            <view v-if="f.combo_items && f.combo_items.length" class="combo-detail">
+              <view v-for="(c, ci) in f.combo_items" :key="ci" class="combo-sub">
+                <text class="combo-sub-name">{{ c.name || '子项' }}</text>
+                <text class="combo-sub-src" :class="'src-' + (c.source || 'upload')">{{ sourceLabel(c.source) }}</text>
+                <text class="combo-sub-cal">{{ c.calories || 0 }} kcal</text>
+              </view>
+            </view>
+          </view>
         </view>
         <view v-if="meal.calorie_mode === 'itemized'" class="food-sum">分项合计：{{ itemizedSum }} kcal</view>
       </view>
@@ -55,10 +68,24 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue';
+import { onShow as uniOnShow } from '@dcloudio/uni-app';
 import { useUserStore } from '@/stores/user.js';
+import { requireLogin } from '@/utils/guard.js';
 import { formatFen } from '@/utils/money.js';
+import { createCloudImageResolver } from '@/utils/cdn.js';
 
 const { state, getMealAction, deleteMealAction, loadDailyHealth } = useUserStore();
+// cloud:// 需解析成临时 URL 才能被 <image> 渲染
+const cloud = createCloudImageResolver();
+function resolveMealImages() {
+  const ids = [
+    meal.image_url,
+    ...(meal.food_items || []).map((f) => f.sticker_image_url),
+    ...(meal.food_items || []).flatMap((f) => (f.combo_items || []).map((c) => c.sticker_image_url)),
+  ].filter(Boolean);
+  cloud.resolve(ids);
+}
+uniOnShow(resolveMealImages);
 
 const mealId = ref('');
 const meal = reactive({ meal_type: 'lunch', calorie_mode: 'itemized', confirmed_calories: 0, food_items: [] });
@@ -67,7 +94,19 @@ const amountFen = computed(() => (meal.transaction && meal.transaction.amount) |
 const itemizedSum = computed(() => (meal.food_items || []).reduce((s, f) => s + (f.calories || 0), 0));
 
 function mealTypeLabel(t) {
-  return { breakfast: '🌅 早餐', lunch: '☀️ 午餐', dinner: '🌙 晚餐', snack: '🍎 加餐' }[t] || '餐饮'
+  return {
+    breakfast: '🌅 早餐',
+    lunch: '☀️ 午餐',
+    dinner: '🌙 晚餐',
+    morning_snack: '🥐 早加餐',
+    afternoon_tea: '🍰 下午茶',
+    evening_snack: '🌛 晚加餐',
+    night_snack: '🍜 夜宵',
+    snack: '🍎 加餐',
+  }[t] || '餐饮'
+}
+function sourceLabel(s) {
+  return { stock: '囤货', upload: '普通', material: '素材', combo: '组合' }[s] || '普通'
 }
 function modeLabel(m) {
   return { whole: '整餐', itemized: '分项', partial: '部分分项' }[m] || m
@@ -88,6 +127,7 @@ async function load() {
       meal.confirmed_calories = r.confirmed_calories || 0;
       meal.food_items = r.food_items || [];
       meal.transaction = r.transaction || null;
+      resolveMealImages(); // 解析餐食图片（cloud:// → 临时 URL）
     }
   } catch (err) {
     uni.showToast({ title: (err && err.message) || '加载失败', icon: 'none' });
@@ -121,6 +161,7 @@ async function del() {
 }
 
 onMounted(() => {
+  if (!requireLogin('/pages/meal-detail/meal-detail')) return
   mealId.value = getOpt('id');
   if (mealId.value) load();
 });
@@ -154,6 +195,19 @@ onMounted(() => {
 .food-name { flex: 1; font-size: 26rpx; color: var(--ink); font-weight: 600; }
 .food-kcal { font-size: 24rpx; color: var(--g5); font-weight: 700; }
 .food-sum { margin-top: 12rpx; font-size: 22rpx; color: var(--ink4); }
+.food-info { flex: 1; min-width: 0; }
+.food-line { display: flex; align-items: center; gap: 10rpx; }
+.food-qty { font-size: 22rpx; color: var(--ink3); }
+.food-source { font-size: 18rpx; padding: 2rpx 10rpx; border-radius: 10rpx; color: #fff; }
+.src-stock { background: #f0a23b; }
+.src-upload { background: #8a9bb0; }
+.src-material { background: #4f9be0; }
+.src-combo { background: #a368e0; }
+.combo-detail { margin-top: 8rpx; padding: 8rpx; background: #f6f0ff; border-radius: 12rpx; }
+.combo-sub { display: flex; align-items: center; gap: 8rpx; margin-bottom: 4rpx; }
+.combo-sub-name { flex: 1; font-size: 22rpx; color: var(--ink2); }
+.combo-sub-src { font-size: 16rpx; padding: 2rpx 8rpx; border-radius: 8rpx; color: #fff; }
+.combo-sub-cal { font-size: 20rpx; color: var(--ink3); }
 
 .disclaimer { margin: 24rpx 32rpx 0; font-size: 18rpx; color: #9a6b1f; background: rgba(255,244,224,0.7); border: 2rpx solid #ffe2b0; border-radius: 16rpx; padding: 16rpx 20rpx; line-height: 1.5; }
 

@@ -358,6 +358,7 @@ writeSchema('transactions', {
     tags: { bsonType: 'array', arrayType: 'string', description: '标签', defaultValue: [] },
     related_transaction_id: { ...strField(0, '关联流水'), ...fk('transactions') },
     stock_consume_qty: { ...intField('囤货消耗数量'), minimum: 1 },
+    sticker_qty: { ...intField('商品贴纸数量'), minimum: 1 },
     include_in_daily_limit: { ...boolField('计日限额'), defaultValue: true },
     include_in_challenge: { ...boolField('计挑战'), defaultValue: true },
     ocr_meta: {

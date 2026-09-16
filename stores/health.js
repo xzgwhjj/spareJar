@@ -9,6 +9,7 @@ import {
   updateSticker,
   deleteSticker,
   consumeSticker,
+  decrementStickerStock,
   combineSticker,
   checkIn,
   getUserPoints,
@@ -168,6 +169,14 @@ export async function deleteStickerAction(stickerId) {
 export async function consumeStickerAction(stickerId) {
   ENSURE_LOGGED_IN()
   const res = await consumeSticker(stickerId)
+  await loadStickers()
+  return res
+}
+
+/** 仅扣减囤货库存（不生成支出），用于餐次保存时并入本餐。 */
+export async function decrementStickerStockAction(stickerId, qty) {
+  ENSURE_LOGGED_IN()
+  const res = await decrementStickerStock(stickerId, qty)
   await loadStickers()
   return res
 }

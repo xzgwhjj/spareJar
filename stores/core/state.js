@@ -17,6 +17,14 @@ export const AUTH_STORAGE_KEYS = [
   'uid'
 ]
 
+/**
+ * 注销账号时一并清空的本地 UI 偏好键（非财务数据，但随账号消失应一并清掉）。
+ * 注：本项目游客模式不把财务数据落本地 storage，真实数据删除由后端 deleteAccount 完成。
+ */
+export const LOCAL_UI_STORAGE_KEYS = ['sj_drops_level']
+/** 账本收藏标记本地键前缀（sparejar_fav_<ledgerId>） */
+export const FAV_KEY_PREFIX = 'sparejar_fav_'
+
 /** 看板缓存有效期（毫秒） */
 export const DASHBOARD_CACHE_TTL_MS = 30_000
 
@@ -53,6 +61,8 @@ function createInitialState() {
     achievements: [],
     defaultLedgerId: '',
     categories: [],
+    /** 含隐藏/已删除分类的全量列表，仅用于历史账目回显分类名（不参与分类选择） */
+    allCategories: [],
     stickers: [],
     userPoints: 0,
     assets: [],

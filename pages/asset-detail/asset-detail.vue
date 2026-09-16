@@ -172,6 +172,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user.js'
+import { requireLogin } from '@/utils/guard.js';
 import { listAccountBalanceLogs } from '@/api/sparejar.js'
 import { formatFen, safeYuanToFen } from '@/utils/money.js'
 import { cdn } from '@/utils/cdn.js'
@@ -365,6 +366,7 @@ function resolveTopPadding() {
 const pagePaddingTop = ref(resolveTopPadding())
 
 onMounted(async () => {
+  if (!requireLogin('/pages/asset-detail/asset-detail')) return
   pagePaddingTop.value = resolveTopPadding()
   const pages = getCurrentPages()
   const cur = pages[pages.length - 1]

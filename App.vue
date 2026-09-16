@@ -31,6 +31,8 @@ export default {
   onShow: function () {
     console.log('[余钱罐] App Show');
     // 跨日补偿已在 onLaunch 完成；onShow 不再重复触发，避免与首页看板刷新抢跑
+    // 广播“切回前台”事件，供无页面级 onShow 的组件（如 MemberManager）刷新云存储临时链接
+    uni.$emit('app-show');
   },
   onHide: function () {
     console.log('[余钱罐] App Hide');

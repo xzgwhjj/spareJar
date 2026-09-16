@@ -107,7 +107,12 @@ exports.main = async (event, context) => {
 
       case 'deleteCategory':
         if (!data.category_id) return fail('category_id is required')
-        return ok(await dbApi.deleteCategory(userId, data.category_id, data.merge_to_id || null))
+        return ok(await dbApi.deleteCategory(
+          userId,
+          data.category_id,
+          data.merge_to_id || null,
+          { mode: data.mode === 'keep' || data.mode === 'purge' ? data.mode : 'merge' }
+        ))
 
       case 'reorderCategories':
         if (!data.type || !Array.isArray(data.ordered_ids)) {
@@ -220,6 +225,11 @@ exports.main = async (event, context) => {
       // ===== 积分体系（签到/组合贴纸，阶段 9） =====
       case 'combineSticker':
         return ok(await dbApi.combineSticker(userId, data))
+        break
+
+      case 'decrementStock':
+        if (!data.sticker_id) return fail('sticker_id is required')
+        return ok(await dbApi.decrementStock(userId, data.sticker_id, data.qty))
         break
 
       case 'checkIn':
@@ -430,6 +440,15 @@ exports.main = async (event, context) => {
             results.push({ user_id: u.user_id, error: e.message })
           }
         }
+        // 注销冷静期满自动硬删（按计划删除时间到期的 deleting 用户）
+        try {
+          const purge = await dbApi.purgeScheduledDeletions()
+          if (purge && purge.purged && purge.purged.length) {
+            results.push({ __purgeScheduledDeletions: purge })
+          }
+        } catch (e) {
+          results.push({ __purgeScheduledDeletions: { error: e.message } })
+        }
         return ok({ date_key: dateKey, results })
       }
 
@@ -488,6 +507,22 @@ exports.main = async (event, context) => {
       case 'getDoc':
         if (!data.collection) return fail('collection is required')
         return ok(await dbApi.getDoc(data.collection, userId))
+
+      // 注销账号：硬删该用户全部个人数据（个保法合规）。仅本人 token 可触发（userId 取自校验后的 token）。
+      case 'deleteAccount':
+        return ok(await dbApi.deleteAccount(userId))
+
+      // 申请注销（7 天冷静期，可撤销）：标记 deleting + 计划删除时间，暂不删数据
+      case 'scheduleDeleteAccount':
+        return ok(await dbApi.scheduleDeleteAccount(userId))
+
+      // 撤销注销：冷静期内恢复账号
+      case 'cancelDeleteAccount':
+        return ok(await dbApi.cancelDeleteAccount(userId))
+
+      // 导出用户全量数据（个保法第 45 条可携带权）
+      case 'exportUserData':
+        return ok(await dbApi.exportUserData(userId))
 
       // 删除用户上传的临时封面（客户端删除可能受权限/环境限制，服务端兜底）
       case 'deleteCover':

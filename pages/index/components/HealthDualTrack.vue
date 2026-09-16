@@ -83,7 +83,7 @@
               :key="i"
               class="collage-item"
             >
-              <image v-if="f.sticker_image_url" :src="f.sticker_image_url" mode="aspectFill" class="collage-img" />
+              <image v-if="f.sticker_image_url" :src="cloud.display(f.sticker_image_url)" mode="aspectFill" class="collage-img" />
               <text v-else class="collage-emoji">{{ f.emoji || '🍴' }}</text>
             </view>
             <view v-if="m.food_items && m.food_items.length > 4" class="collage-more">+{{ m.food_items.length - 4 }}</view>
@@ -134,17 +134,49 @@
         </view>
       </view>
     </view>
+
+    <!-- 开启餐饮轻记录面板：首页一键开启，避免误跳「我的」页 -->
+    <view v-if="showEnable" class="health-overlay" @click="showEnable = false">
+      <view class="health-panel" @click.stop>
+        <view class="panel-handle-wrap"><view class="panel-handle" /></view>
+        <view class="panel-header">
+          <view class="panel-title-group">
+            <view class="panel-title-bar" />
+            <text class="panel-title-text">开启餐饮轻记录</text>
+          </view>
+          <view class="panel-close" @click="showEnable = false"><text class="panel-close-icon">✕</text></view>
+        </view>
+        <view class="panel-tip">
+          <text>开启后可记录餐次与热量，钱与热量双线追踪。开启后首页将展示今日餐饮与热量摄入。</text>
+        </view>
+        <view class="panel-footer">
+          <view class="confirm-btn" @click="confirmEnable"><text class="confirm-text">开启</text></view>
+        </view>
+      </view>
+    </view>
       
 </view>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue';
+import { onShow as uniOnShow } from '@dcloudio/uni-app';
 import { useUserStore } from '@/stores/user.js';
 import { formatFen } from '@/utils/money.js';
 import { todayDateKey } from '@/utils/date.js';
+import { createCloudImageResolver } from '@/utils/cdn.js';
 
-const { state, loadMealsByDate, loadDailyHealth } = useUserStore();
+const { state, loadMealsByDate, loadDailyHealth, updateSettings, loadSettings, checkLoggedIn } = useUserStore();
+// cloud:// 需解析成临时 URL 才能被 <image> 渲染
+const cloud = createCloudImageResolver();
+function resolveMealImages() {
+  const ids = [];
+  (meals.value || []).forEach((m) =>
+    (m.food_items || []).forEach((f) => f.sticker_image_url && ids.push(f.sticker_image_url))
+  );
+  cloud.resolve(ids);
+}
+uniOnShow(resolveMealImages);
 
 const showPanel = ref(false);
 const meals = ref([]);
@@ -204,10 +236,33 @@ async function refreshMeals() {
   try {
     const r = await loadMealsByDate(todayDateKey());
     meals.value = (r && r.meals) || [];
+    resolveMealImages(); // 解析餐食拼图图片（cloud:// → 临时 URL）
   } catch (_e) { meals.value = []; }
 }
 
-const goEnable = () => uni.navigateTo({ url: '/pages/profile/profile' });
+// 点击「餐饮轻记录」引导卡：未登录先引导登录；已登录则首页弹面板一键开启，不跳「我的」页
+const showEnable = ref(false);
+const goEnable = () => {
+  if (!checkLoggedIn()) {
+    uni.navigateTo({
+      url:
+        "/pages/login/login?redirect=" +
+        encodeURIComponent("/pages/index/index"),
+    });
+    return;
+  }
+  showEnable.value = true;
+};
+async function confirmEnable() {
+  try {
+    await updateSettings({ meal_tracking_enabled: true });
+    await loadSettings();
+    showEnable.value = false;
+    uni.showToast({ title: "已开启餐饮轻记录", icon: "none" });
+  } catch (err) {
+    uni.showToast({ title: (err && err.message) || "开启失败", icon: "none" });
+  }
+}
 const goHealthSettings = () => uni.navigateTo({ url: '/pages/health-settings/health-settings' });
 const openMeal = (m) => uni.navigateTo({ url: `/pages/meal-detail/meal-detail?id=${m._id}` });
 

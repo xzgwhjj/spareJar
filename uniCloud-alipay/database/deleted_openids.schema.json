@@ -1,0 +1,28 @@
+{
+  "bsonType": "object",
+  "required": [
+    "openid"
+  ],
+  "permission": {
+    "read": false,
+    "create": false,
+    "update": false,
+    "delete": false
+  },
+  "properties": {
+    "_id": {
+      "description": "PK"
+    },
+    "openid": {
+      "bsonType": "string",
+      "description": "已注销账号的微信 openid（审计留痕，不作拦截；允许同 openid 后续重新注册）",
+      "maxLength": 64,
+      "unique": true
+    },
+    "deleted_at": {
+      "bsonType": "string",
+      "description": "注销完成时间（YYYY-MM-DD HH:mm:ss）",
+      "maxLength": 23
+    }
+  }
+}

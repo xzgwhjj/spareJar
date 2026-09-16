@@ -1,0 +1,750 @@
+/* 新建/编辑账本弹窗共享样式（从 ledger.vue 抽出，供 NewLedgerDialog / EditLedgerDialog 复用） */
+
+.sheet-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 300;
+  @include sj-flex-center;
+  align-items: flex-end;
+}
+
+.sheet-panel {
+  width: 750rpx;
+  max-height: 86vh;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 40rpx 40rpx 60rpx;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 1));
+  border-radius: 48rpx 48rpx 0 0;
+}
+
+.sheet-handle {
+  @include sj-flex-center;
+  margin-bottom: 32rpx;
+}
+
+.handle-bar {
+  width: 100rpx;
+  height: 16rpx;
+  border-radius: 12rpx;
+  background: linear-gradient(180deg, var(--g4) 0%, var(--g3) 40%, #ffffff 100%);
+}
+
+.sheet-title {
+  font-size: 32rpx;
+  font-weight: 800;
+  color: var(--ink);
+  display: block;
+  margin-bottom: 28rpx;
+}
+
+/* 通用渐变：薄荷色 -> 白色，输入框与封面框共用 */
+$coverGrad: linear-gradient(135deg, rgba(242, 252, 242, 0.4) 0%, #ffffff 50%);
+
+.sheet-input {
+  width: 100%;
+  height: 88rpx;
+  box-sizing: border-box;
+  border-radius: 28rpx;
+  background: $coverGrad;
+  border: 2rpx solid rgba(194, 242, 200, 0.4);
+  padding: 0 28rpx;
+  font-size: 28rpx;
+  margin-bottom: 32rpx;
+  outline: none;
+  /* 仅过渡颜色与阴影，避免 border 宽度变化触发布局重排导致抖动 */
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+  &.focused {
+    border-color: rgba(37, 204, 93, 0.9);
+    box-shadow: 0 0 0 4rpx rgba(37, 204, 93, 0.12);
+  }
+}
+
+/* 表单分区标签 */
+.form-label {
+  font-size: 26rpx;
+  font-weight: 700;
+  color: var(--ink2);
+  margin: 12rpx 0 16rpx;
+}
+
+/* 主题色（自定义取色） */
+.color-opts {
+  display: flex;
+  gap: 20rpx;
+  margin-bottom: 8rpx;
+}
+
+.color-opt {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10rpx;
+  padding: 16rpx 0;
+  border-radius: 16rpx;
+  background: rgba(255, 255, 255, 0.55);
+  border: 3rpx solid rgba(255, 255, 255, 1);
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.color-opt.active {
+  border-color: var(--g5);
+  background: var(--g1);
+}
+
+.color-opt-ico {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  @include sj-flex-center;
+  overflow: hidden;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.12);
+}
+
+.color-opt-img {
+  width: 100%;
+  height: 100%;
+}
+
+.color-opt-auto {
+  font-size: 28rpx;
+  font-weight: 800;
+  color: #fff;
+  background: var(--g5);
+  width: 100%;
+  height: 100%;
+  @include sj-flex-center;
+}
+
+.color-opt-plus {
+  font-size: 40rpx;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1;
+}
+
+.color-opt-label {
+  font-size: 22rpx;
+  color: var(--ink3);
+  font-weight: 600;
+}
+
+/* 自动取色色板：提取出的代表色卡，点选可微调主题色 */
+.auto-palette {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 12rpx;
+  margin: 14rpx 0 4rpx;
+}
+.auto-swatch {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 12rpx;
+  box-shadow: 0 2rpx 6rpx rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+  border: 3rpx solid transparent;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.auto-swatch.active {
+  border-color: var(--ink);
+  transform: scale(1.08);
+}
+
+/* 封面 + 系统默认图：左右横向布局 */
+.cover-icon-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 24rpx;
+  margin-bottom: 8rpx;
+}
+
+.cover-col {
+  flex: 0 0 240rpx;
+  min-width: 0;
+}
+
+.icon-col {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 封面：图片上传 + 预览（3:4 比例，左列展示） */
+.cover-upload {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border-radius: 28rpx;
+  background: $coverGrad;
+  border: 2rpx dashed rgba(194, 242, 200, 0.7);
+  @include sj-flex-center;
+  overflow: hidden;
+  margin-bottom: 0;
+  cursor: pointer;
+  /* 点击/按下动效：过渡曲线与时长与输入框一致 */
+  transition: all 0.1s cubic-bezier(0.19, 1, 0.22, 1);
+
+  &.pressed {
+    transform: scale(0.95);
+    border: 2rpx solid rgba(194, 242, 200, 1);
+  }
+}
+
+.cover-img {
+  width: 100%;
+  height: 100%;
+}
+
+.cover-placeholder {
+  @include sj-flex-center;
+  flex-direction: column;
+  gap: 8rpx;
+  position: relative;
+  z-index: 1;
+}
+
+.cover-plus {
+  font-size: 56rpx;
+  color: var(--g4);
+  line-height: 1;
+}
+
+.cover-tip {
+  font-size: 24rpx;
+  color: var(--g5);
+}
+
+.cover-remove {
+  position: absolute;
+  top: 12rpx;
+  right: 12rpx;
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 36rpx;
+  line-height: 48rpx;
+  text-align: center;
+  z-index: 2;
+}
+
+/* 简介：多行文本 */
+.sheet-textarea {
+  width: 100%;
+  height: 160rpx;
+  border-radius: 28rpx;
+  background: $coverGrad;
+  border: 2rpx solid rgba(194, 242, 200, 0.4);
+  padding: 20rpx 28rpx;
+  font-size: 28rpx;
+  margin-bottom: 32rpx;
+  box-sizing: border-box;
+  outline: none;
+  /* 仅过渡颜色与阴影，避免 border 宽度变化触发布局重排导致抖动 */
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+  &.focused {
+    border-color: rgba(37, 204, 93, 0.9);
+    box-shadow: 0 0 0 4rpx rgba(37, 204, 93, 0.12);
+  }
+}
+
+/* 图片裁剪弹窗 */
+.crop-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 400;
+  @include sj-flex-center;
+  padding: 40rpx;
+  box-sizing: border-box;
+}
+
+.crop-panel {
+  width: 100%;
+  max-width: 680rpx;
+  background: #fff;
+  border-radius: 28rpx;
+  padding: 32rpx;
+  box-sizing: border-box;
+}
+
+.crop-head {
+  font-size: 30rpx;
+  font-weight: 800;
+  color: var(--ink);
+  text-align: center;
+  margin-bottom: 24rpx;
+}
+
+.crop-stage {
+  position: relative;
+  overflow: hidden;
+  // background: #111;
+  margin: 0 auto;
+  border-radius: 12rpx;
+  touch-action: none;
+}
+
+.crop-img {
+  position: absolute;
+}
+
+.crop-box {
+  position: absolute;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
+  border: 2rpx solid #fff;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.crop-grid {
+  width: calc(100% - 24rpx);
+  height: calc(100% - 24rpx);
+  /* 九宫格参考线：在 1/3、2/3 处显式绘制，不依赖平铺，保证严格居中对称 */
+  background-image: linear-gradient(
+      90deg,
+      transparent 33.33%,
+      rgba(255, 255, 255, 0.45) 33.33%,
+      rgba(255, 255, 255, 0.45) 34%,
+      transparent 34%
+    ),
+    linear-gradient(
+      90deg,
+      transparent 66.66%,
+      rgba(255, 255, 255, 0.45) 66.66%,
+      rgba(255, 255, 255, 0.45) 67.33%,
+      transparent 67.33%
+    ),
+    linear-gradient(
+      180deg,
+      transparent 33.33%,
+      rgba(255, 255, 255, 0.45) 33.33%,
+      rgba(255, 255, 255, 0.45) 34%,
+      transparent 34%
+    ),
+    linear-gradient(
+      180deg,
+      transparent 66.66%,
+      rgba(255, 255, 255, 0.45) 66.66%,
+      rgba(255, 255, 255, 0.45) 67.33%,
+      transparent 67.33%
+    );
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+
+.crop-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-bottom: 20rpx;
+}
+
+.crop-row-label {
+  font-size: 26rpx;
+  color: var(--ink2);
+  flex: 0 0 auto;
+  width: 72rpx;
+}
+
+/* 比例选择弹窗 */
+.ratio-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.ratio-panel {
+  width: 600rpx;
+  max-width: 92vw;
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 32rpx;
+  box-sizing: border-box;
+}
+.ratio-row {
+  display: flex;
+  gap: 28rpx;
+  margin: 28rpx 0;
+}
+.ratio-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12rpx;
+  padding: 20rpx 0;
+  border-radius: 16rpx;
+  // background: var(--g0);
+  transition: transform 0.12s ease;
+}
+.ratio-card:active {
+  transform: scale(0.96);
+}
+.ratio-thumb {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 12rpx;
+  background: #eef6f0;
+}
+/* 两种比例缩略图容器：3:4 与 4:3，统一宽度、按高度差异呈现形态差异 */
+/* 两种比例缩略图：用 aspect-ratio 保证视觉比例正确（3:4 竖长、4:3 横扁） */
+.ratio-34 {
+  aspect-ratio: 3 / 4;
+  height: auto;
+}
+.ratio-43 {
+  aspect-ratio: 4 / 3;
+  height: auto;
+}
+.ratio-thumb-img {
+  width: 100%;
+  height: 100%;
+}
+.ratio-label {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: var(--ink2);
+}
+.ratio-done {
+  position: absolute;
+  right: 8rpx;
+  bottom: 8rpx;
+  width: 36rpx;
+  height: 36rpx;
+  border-radius: 50%;
+  background: var(--g5);
+  color: #fff;
+  font-size: 24rpx;
+  line-height: 36rpx;
+  text-align: center;
+  box-shadow: 0 1rpx 4rpx rgba(0, 0, 0, 0.2);
+}
+.ratio-tip {
+  text-align: center;
+  font-size: 24rpx;
+  color: var(--ink3);
+  margin-bottom: 8rpx;
+}
+.crop-btn.disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* 裁剪框四角手柄（手势在 stage 层按落点 proximity 识别，此处仅视觉） */
+.crop-handle {
+  position: absolute;
+  width: 28rpx;
+  height: 28rpx;
+  border-radius: 50%;
+  background: #fff;
+  border: 3rpx solid var(--g5);
+  box-shadow: 0 1rpx 4rpx rgba(0, 0, 0, 0.25);
+}
+.crop-handle.tl {
+  left: -14rpx;
+  top: -14rpx;
+}
+.crop-handle.tr {
+  right: -14rpx;
+  top: -14rpx;
+}
+.crop-handle.bl {
+  left: -14rpx;
+  bottom: -14rpx;
+}
+.crop-handle.br {
+  right: -14rpx;
+  bottom: -14rpx;
+}
+
+.crop-prev {
+  width: 96px;
+  height: 128px;
+  border-radius: 8rpx;
+  overflow: hidden;
+  // background: #eee;
+  border: 2rpx solid var(--g2);
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.crop-prev-img {
+  position: absolute;
+}
+
+.crop-actions {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 8rpx;
+}
+
+.crop-btn {
+  flex: 1;
+  text-align: center;
+  padding: 24rpx;
+  border-radius: 16rpx;
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.crop-cancel {
+  background: var(--g0);
+  color: var(--ink3);
+}
+
+.crop-ok {
+  @include sj-brand-gradient;
+  color: #fff;
+}
+
+.crop-export-canvas {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 600px;
+  height: 800px;
+}
+
+.sheet-btn {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 28rpx;
+  border-radius: 28rpx;
+  /* 未填写时：透明背景 + 品牌绿边框，仅显示边框颜色 */
+  background: transparent;
+  border: 2rpx solid var(--g4);
+  font-size: 28rpx;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.4s ease;
+
+  /* 底层：品牌绿文字，始终可见（透明底上清晰） */
+  &__base {
+    position: relative;
+    z-index: 1;
+    color: var(--g5);
+  }
+
+  /* 顶层白字层：覆盖整个按钮，文字绝对居中、位置固定不参与动画；
+     仅用 clip-path 斜切窗口"揭示"白字，窗口随 --fill 移动，文字本身不动。 */
+  &__fill {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    -webkit-clip-path: polygon(
+      0 0,
+      calc(var(--fill, 0) * 100%) 0,
+      calc(var(--fill, 0) * 100% - 40rpx * (1 - var(--fill, 0))) 100%,
+      0 100%
+    );
+    clip-path: polygon(
+      0 0,
+      calc(var(--fill, 0) * 100%) 0,
+      calc(var(--fill, 0) * 100% - 40rpx * (1 - var(--fill, 0))) 100%,
+      0 100%
+    );
+    transition: clip-path 0.6s cubic-bezier(0.19, 1, 0.22, 1);
+
+    &-txt {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+    }
+  }
+
+  /* 进度填充：斜切纯色，与白字窗口形状完全一致，宽度跟随 --fill；
+     只移动斜切窗口（背景），文字层不动。 */
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--g5);
+    -webkit-clip-path: polygon(
+      0 0,
+      calc(var(--fill, 0) * 100%) 0,
+      calc(var(--fill, 0) * 100% - 40rpx * (1 - var(--fill, 0))) 100%,
+      0 100%
+    );
+    clip-path: polygon(
+      0 0,
+      calc(var(--fill, 0) * 100%) 0,
+      calc(var(--fill, 0) * 100% - 40rpx * (1 - var(--fill, 0))) 100%,
+      0 100%
+    );
+    z-index: 0;
+    transition: clip-path 0.6s cubic-bezier(0.19, 1, 0.22, 1);
+  }
+
+  &:active {
+    transform: scale(0.97);
+  }
+
+  /* 完全填满（fill=1）：去掉右下角斜切尾，整块铺满不留缺口。
+     完整矩形与斜切多边形顶点数一致，clip-path 可平滑过渡。 */
+  &.is-full {
+    &::before,
+    &__fill {
+      -webkit-clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+      clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+    }
+  }
+}
+
+/* 编辑弹窗"保存"按钮：浮雕液态填充（未填充 / 部分 / 完全 三阶段） */
+.sheet-btn--emboss {
+  /* 重置继承自 .sheet-btn 的斜切填充伪元素，避免干扰浮雕效果 */
+  &::before {
+    display: none;
+    content: none;
+  }
+  /* 基底：浅薄荷渐变 + 品牌绿边框，作浮雕底衬（覆盖 .sheet-btn 的透明底） */
+  background: linear-gradient(135deg, rgba(242, 252, 242, 0.6) 0%, #ffffff 60%);
+  border-color: var(--g4);
+  min-height: 84rpx;
+  overflow: hidden;
+
+  /* 浮雕基底层：双向内凹阴影 + 点状纹理，未填充时清晰突出于表面 */
+  .emboss-base {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background-image: radial-gradient(
+      circle,
+      rgba(37, 204, 93, 0.22) 1.5rpx,
+      transparent 2rpx
+    );
+    background-size: 18rpx 18rpx;
+    background-position: 0 0;
+    box-shadow: inset 3rpx 3rpx 7rpx rgba(255, 255, 255, 0.95),
+      inset -3rpx -3rpx 7rpx rgba(160, 224, 178, 0.85);
+  }
+
+  /* 液体填充层：高度随 --fill 从底部升起，淹没浮雕；完全填充时铺满、表面平滑 */
+  .emboss-liquid {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: calc(var(--fill, 0) * 100%);
+    z-index: 1;
+    background: linear-gradient(
+      180deg,
+      var(--g5),
+      color-mix(in sRGB, var(--g5) 78%, #0a86a0)
+    );
+    /* 仅底部加暗内阴影给液体体积感，避免顶部白边（满填时会顶到按钮上边，否则显"没填满"） */
+    box-shadow: inset 0 -10rpx 18rpx rgba(0, 0, 0, 0.12);
+    transition: height 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+
+    /* 液面高光：模拟液体上表面反光，随填充升起；满填时(表面到顶)淡出，去除顶部白边 */
+    &::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 10rpx;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.6), transparent);
+      opacity: calc(1 - var(--fill, 0));
+      transition: opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+  }
+
+  /* 文字层：两层叠放，按 --fill 互补裁切，实现深绿↔白字平滑切换 */
+  .emboss-text {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28rpx;
+    font-weight: 700;
+    pointer-events: none;
+  }
+
+  /* 深绿字：仅未淹没区（顶部）可见，随填充被裁掉 */
+  .emboss-text--base {
+    z-index: 2;
+    color: var(--g5);
+    -webkit-clip-path: polygon(
+      0 0,
+      100% 0,
+      100% calc((1 - var(--fill, 0)) * 100%),
+      0 calc((1 - var(--fill, 0)) * 100%)
+    );
+    clip-path: polygon(
+      0 0,
+      100% 0,
+      100% calc((1 - var(--fill, 0)) * 100%),
+      0 calc((1 - var(--fill, 0)) * 100%)
+    );
+    transition: clip-path 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* 白字：仅淹没区（底部）可见，随填充显出 */
+  .emboss-text--top {
+    z-index: 3;
+    color: #fff;
+    -webkit-clip-path: polygon(
+      0 calc((1 - var(--fill, 0)) * 100%),
+      100% calc((1 - var(--fill, 0)) * 100%),
+      100% 100%,
+      0 100%
+    );
+    clip-path: polygon(
+      0 calc((1 - var(--fill, 0)) * 100%),
+      100% calc((1 - var(--fill, 0)) * 100%),
+      100% 100%,
+      0 100%
+    );
+    transition: clip-path 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+}
+
+.icon-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  margin-bottom: 32rpx;
+}
+
+.icon-cell {
+  width: 110rpx;
+  aspect-ratio: 3 / 4;
+  border-radius: 24rpx;
+  background: rgba(242, 252, 242, 0.8);
+  border: 2rpx solid rgba(194, 242, 200, 0.4);
+  @include sj-flex-center;
+  overflow: hidden;
+  cursor: pointer;
+
+  .icon-img {
+    width: 100%;
+    height: 100%;
+  }
+
+  &.active {
+    border-color: var(--g5);
+    background: rgba(37, 204, 93, 0.12);
+  }
+}

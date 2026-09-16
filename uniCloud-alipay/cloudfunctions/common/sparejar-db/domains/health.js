@@ -123,6 +123,32 @@ async function recomputeDailyHealth(userId, dateKey) {
   return { user_id: userId, date_key: dateKey, ...payload }
 }
 
+/** 仅扣减某囤货贴纸库存（供餐次保存时并入本餐，不另记支出）。库存不足抛错。 */
+async function decrementStockQty(userId, stickerId, n) {
+  const db = getDb()
+  const s = await db.collection('stickers').doc(stickerId).get()
+  const sticker = s.data && s.data[0]
+  if (!sticker || sticker.user_id !== userId || sticker.type !== 'stock') return
+  const cur = sticker.stock_qty == null ? 0 : sticker.stock_qty
+  if (cur < n) throw new Error('库存不足：' + (sticker.name || '贴纸'))
+  await db.collection('stickers').doc(stickerId).update({
+    stock_qty: cur - n,
+    use_count: (sticker.use_count || 0) + 1,
+    last_used_at: nowTs(),
+    updated_at: nowTs()
+  })
+}
+
+/** 编辑餐次时把减少的囤货数量补回库存。 */
+async function restockQty(userId, stickerId, n) {
+  const db = getDb()
+  const s = await db.collection('stickers').doc(stickerId).get()
+  const sticker = s.data && s.data[0]
+  if (!sticker || sticker.user_id !== userId || sticker.type !== 'stock') return
+  const cur = sticker.stock_qty == null ? 0 : sticker.stock_qty
+  await db.collection('stickers').doc(stickerId).update({ stock_qty: cur + n, updated_at: nowTs() })
+}
+
 /** 新建餐次（同时创建餐饮支出交易 + 餐次 + 食物项，§3.10.2/3/4）。 */
 
 async function createMeal(userId, data) {
@@ -140,7 +166,8 @@ async function createMeal(userId, data) {
     transaction_at: data.transaction_at ? toStoredTime(data.transaction_at) : ts,
     image_urls: data.image_urls,
     sticker_id: data.sticker_id,
-    sticker_image_url: data.sticker_image_url
+    sticker_image_url: data.sticker_image_url,
+    sticker_qty: data.sticker_qty || 1
   })
   const foodItems = Array.isArray(data.food_items) ? data.food_items : []
   const itemizedSum = foodItems.reduce((s, f) => s + (Math.round(Number(f.calories) || 0)), 0)
@@ -159,16 +186,23 @@ async function createMeal(userId, data) {
   const mealId = mealRes.id
   for (let i = 0; i < foodItems.length; i++) {
     const f = foodItems[i]
+    const source = f.source === 'stock' || f.source === 'material' || f.source === 'combo' ? f.source : 'upload'
+    const qty = Math.max(1, Math.round(Number(f.qty) || 1))
     await db.collection('meal_food_items').add({
       meal_id: mealId,
       user_id: userId,
       name: String(f.name || '').trim() || '食物',
       sticker_id: f.sticker_id || null,
       sticker_image_url: f.sticker_image_url || null,
+      source,
+      qty,
+      calorie_auto: !!f.calorie_auto,
+      combo_items: Array.isArray(f.combo_items) ? f.combo_items : null,
       calories: Math.round(Number(f.calories) || 0),
       sort_order: i,
       created_at: ts
     })
+    if (source === 'stock' && f.sticker_id) await decrementStockQty(userId, f.sticker_id, qty)
   }
   await db.collection('transactions').doc(tx.transaction_id).update({ meal_id: mealId, updated_at: ts })
   await recomputeDailyHealth(userId, dateKey)
@@ -197,24 +231,50 @@ async function updateMeal(userId, mealId, data) {
     transaction_at: data.transaction_at !== undefined ? toStoredTime(data.transaction_at) : data.transaction_at,
     image_urls: data.image_urls,
     sticker_id: data.sticker_id,
-    sticker_image_url: data.sticker_image_url
+    sticker_image_url: data.sticker_image_url,
+    sticker_qty: data.sticker_qty || 1
   })
 
+  // 统计旧库存消耗，便于编辑时做差值（避免重复扣 / 漏补）
+  const oldFood = await db.collection('meal_food_items').where({ meal_id: mealId }).get()
+  const oldStockMap = {}
+  for (const f of (oldFood.data || [])) {
+    if (f.source === 'stock' && f.sticker_id) {
+      oldStockMap[f.sticker_id] = (oldStockMap[f.sticker_id] || 0) + (f.qty || 1)
+    }
+  }
   await db.collection('meal_food_items').where({ meal_id: mealId }).remove()
   const foodItems = Array.isArray(data.food_items) ? data.food_items : []
   const itemizedSum = foodItems.reduce((s, f) => s + (Math.round(Number(f.calories) || 0)), 0)
+  const newStockMap = {}
   for (let i = 0; i < foodItems.length; i++) {
     const f = foodItems[i]
+    const source = f.source === 'stock' || f.source === 'material' || f.source === 'combo' ? f.source : 'upload'
+    const qty = Math.max(1, Math.round(Number(f.qty) || 1))
     await db.collection('meal_food_items').add({
       meal_id: mealId,
       user_id: userId,
       name: String(f.name || '').trim() || '食物',
       sticker_id: f.sticker_id || null,
       sticker_image_url: f.sticker_image_url || null,
+      source,
+      qty,
+      calorie_auto: !!f.calorie_auto,
+      combo_items: Array.isArray(f.combo_items) ? f.combo_items : null,
       calories: Math.round(Number(f.calories) || 0),
       sort_order: i,
       created_at: ts
     })
+    if (source === 'stock' && f.sticker_id) {
+      newStockMap[f.sticker_id] = (newStockMap[f.sticker_id] || 0) + qty
+    }
+  }
+  // 库存差值：新增的扣减，减少的补回
+  const allIds = new Set([...Object.keys(oldStockMap), ...Object.keys(newStockMap)])
+  for (const id of allIds) {
+    const delta = (newStockMap[id] || 0) - (oldStockMap[id] || 0)
+    if (delta > 0) await decrementStockQty(userId, id, delta)
+    else if (delta < 0) await restockQty(userId, id, -delta)
   }
   await db.collection('meals').doc(mealId).update({
     meal_type: data.meal_type || meal.meal_type,

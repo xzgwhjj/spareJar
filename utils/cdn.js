@@ -11,6 +11,39 @@ export const CDN_BASE = 'https://env-00jy6jupik80-static.normal.cloudstatic.cn';
  */
 export const cdn = (path) => `${CDN_BASE}${path.startsWith('/') ? '' : '/'}${path}`;
 
+import { reactive } from 'vue';
+
+/**
+ * 云存储图片解析器：<image> 不能直接渲染 cloud:// fileID，必须先解析成临时 URL；
+ * 临时链接有有效期，因此可在 onShow（切回前台）重新解析以撑过切后台后过期。
+ * 用法（Options / Composition 通用）：
+ *   const cloud = createCloudImageResolver();
+ *   cloud.resolve([fileID]);              // 解析并写入 map（可重复调用刷新）
+ *   const src = cloud.display(form.url); // cloud:// → 临时 URL；非 cloud:// 原样返回
+ * @returns {{ map: object, resolve: Function, display: Function }}
+ */
+export function createCloudImageResolver() {
+  const map = reactive({});
+  async function resolve(ids) {
+    const list = Array.isArray(ids) ? ids : [ids];
+    const cloudIds = (list || []).filter((x) => x && String(x).startsWith('cloud://'));
+    if (!cloudIds.length) return;
+    try {
+      const m = await getCloudTempUrls(cloudIds);
+      for (const k in m) if (m[k]) map[k] = m[k];
+    } catch (e) {
+      console.warn('[cdn] 解析云存储图片失败:', e);
+    }
+  }
+  function display(src) {
+    if (!src) return '';
+    src = String(src);
+    if (src.startsWith('cloud://')) return map[src] || '';
+    return src; // 本地路径 / 普通 URL 直接显示
+  }
+  return { map, resolve, display };
+}
+
 /**
  * 封面存储值 → 可显示 URL 的统一解析。
  * 数据库里封面可能存：

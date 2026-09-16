@@ -8,6 +8,8 @@ import {
   UNI_ID_TOKEN_KEY,
   UNI_ID_TOKEN_EXPIRED_KEY,
   AUTH_STORAGE_KEYS,
+  LOCAL_UI_STORAGE_KEYS,
+  FAV_KEY_PREFIX,
   UserStoreError
 } from './core/state.js'
 export { isUserStoreError } from './core/state.js'
@@ -15,6 +17,10 @@ import {
   initUser,
   getDoc,
   listLedgers,
+  deleteAccount as apiDeleteAccount,
+  scheduleDeleteAccount as apiScheduleDeleteAccount,
+  cancelDeleteAccount as apiCancelDeleteAccount,
+  exportUserData as apiExportUserData,
   isSparejarApiError
 } from './core/api.js'
 import { refreshToken, getSurplusPoolLogs } from '@/api/sparejar.js'
@@ -240,7 +246,10 @@ export async function loginAndBootstrap(profile = {}) {
   // #ifdef MP-WEIXIN
   await loginWithWeixin()
   await bootstrap(profile)
-  uni.$emit('sparejar-auth-changed', { isLoggedIn: true, uid: state.uid })
+  // 仅当仍在登录态时广播登录成功
+  if (state.isLoggedIn) {
+    uni.$emit('sparejar-auth-changed', { isLoggedIn: true, uid: state.uid })
+  }
   return { uid: state.uid, mode: 'login' }
   // #endif
 
@@ -267,6 +276,109 @@ export function logout() {
   clearAuthStorage()
   clearAuthState()
   uni.$emit('sparejar-auth-changed', { isLoggedIn: false })
+}
+
+// （方案 C）不再使用本地「待注销」标记：横幅读取云端 state.user.account_status，
+// 申请注销后保留登录态，期内可撤销/导出；冷静期由后端 cron 自动硬删。
+
+/**
+ * 注销时清空本地「用户相关」UI 偏好缓存（非财务数据，但随账号消失应一并清掉）。
+ * - 已登记的固定 UI 键（LOCAL_UI_STORAGE_KEYS，如存钱罐动画等级）
+ * - 账本收藏标记（sparejar_fav_<ledgerId> 前缀，按前缀枚举本地存储键清除）
+ * 注：本项目游客模式不把财务数据落本地 storage，真实数据删除由后端 deleteAccount 完成。
+ */
+function clearLocalDataForDelete() {
+  LOCAL_UI_STORAGE_KEYS.forEach((key) => {
+    try {
+      uni.removeStorageSync(key)
+    } catch (_e) {
+      // 忽略不存在的 key
+    }
+  })
+  try {
+    const info = uni.getStorageInfoSync()
+    ;(info.keys || []).forEach((k) => {
+      if (typeof k === 'string' && k.startsWith(FAV_KEY_PREFIX)) {
+        try {
+          uni.removeStorageSync(k)
+        } catch (_e) {
+          // 忽略
+        }
+      }
+    })
+  } catch (_e) {
+    // 读取失败也不阻塞注销主流程
+  }
+}
+
+/**
+ * 注销账号：永久删除账号及全部个人数据（个保法合规）。
+ * 流程：
+ *   ① 调后端 deleteAccount 硬删云端全部业务数据（按 user_id/openid）；
+ *   ② 后端成功后清本地登录态 + 用户相关 UI 偏好；
+ *   ③ 广播登出，页面自动回落游客态。
+ * 后端未实现或失败时抛错，绝不清除本地，避免「云端没删、本地先没」的数据不一致。
+ * 用于冷静期内「立即注销」：用户主动放弃 7 天冷静期，立即永久删除全部数据并登出；
+ * 之后同微信登录即开新号（后端 initUser 按 openid 重建）。
+ */
+export async function deleteAccount() {
+  if (!state.uid) {
+    throw new UserStoreError('未登录，无法注销', 'NOT_LOGGED_IN')
+  }
+  // ① 后端硬删（失败则抛出，不继续清本地）
+  await apiDeleteAccount()
+  // ② 本地清除：用户相关 UI 偏好 + 登录态
+  clearLocalDataForDelete()
+  clearAuthStorage()
+  clearAuthState()
+  uni.$emit('sparejar-auth-changed', { isLoggedIn: false })
+}
+
+/**
+ * 申请注销（7 天冷静期 + 可恢复）：
+ * 请求后端标记 account_status='deleting' 并写入计划删除时间，保留本地登录态，
+ * 期内可随时调用 cancelDeleteAccount 撤销并恢复数据。到期由服务端 cron 自动硬删。
+ * @param {number} [days] 冷静期天数，默认 7
+ * @returns {Promise<{ delete_scheduled_at: string, delete_scheduled_at_ts: number }>}
+ */
+export async function requestDeleteAccount(days = 7) {
+  if (!state.uid) {
+    throw new UserStoreError('未登录，无法注销', 'NOT_LOGGED_IN')
+  }
+  const res = await apiScheduleDeleteAccount(days)
+  // 方案 C：保留登录态，仅标记 account_status='deleting'；
+  // 横幅读取云端 state.user.delete_scheduled_at，期内可撤销/导出。
+  // 冷静期内如需立即彻底注销，调用 deleteAccount()（立即硬删并登出）。
+  if (state.user) {
+    state.user.account_status = 'deleting'
+    state.user.delete_scheduled_at = res.delete_scheduled_at
+  }
+  return res
+}
+
+/**
+ * 撤销注销：恢复账号为 active，清空计划删除时间。
+ */
+export async function cancelDeleteAccount() {
+  if (!state.uid) {
+    throw new UserStoreError('未登录', 'NOT_LOGGED_IN')
+  }
+  await apiCancelDeleteAccount()
+  if (state.user) {
+    state.user.account_status = 'active'
+    state.user.delete_scheduled_at = ''
+  }
+}
+
+/**
+ * 导出用户全量数据（前端据此下载/分享 JSON）。
+ * @returns {Promise<object>}
+ */
+export async function exportUserData() {
+  if (!state.uid) {
+    throw new UserStoreError('未登录', 'NOT_LOGGED_IN')
+  }
+  return await apiExportUserData()
 }
 
 /** 加载 user_settings */
@@ -336,6 +448,10 @@ export async function bootstrap(profile = {}) {
     const data = await initUser(profile)
     state.user = data.user || null
     state.userPoints = (data.user && data.user.points) || 0
+    // 由注销态重新登录：后端已清空旧数据并建新号
+    if (data.wasDeleting) {
+      uni.showToast({ title: '原账号已注销，已为您创建新账号', icon: 'none' })
+    }
     if (data.default_ledger_id) {
       state.defaultLedgerId = data.default_ledger_id
     }

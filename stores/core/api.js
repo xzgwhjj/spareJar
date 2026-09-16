@@ -42,6 +42,7 @@ export {
   updateSticker,
   deleteSticker,
   consumeSticker,
+  decrementStickerStock,
   combineSticker,
   checkIn,
   getUserPoints,
@@ -71,5 +72,9 @@ export {
   getDashboard,
   getDoc,
   confirmSurplusRollover,
+  deleteAccount,
+  scheduleDeleteAccount,
+  cancelDeleteAccount,
+  exportUserData,
   isSparejarApiError
 } from '@/api/sparejar.js'

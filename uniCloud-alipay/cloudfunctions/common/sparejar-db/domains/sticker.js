@@ -226,6 +226,29 @@ async function consumeSticker(userId, stickerId, qty) {
   return { transaction_id: tx.transaction_id, new_stock_qty: newStock, amount }
 }
 
+/**
+ * 仅扣减囤货库存（不生成支出，金额并入调用方业务，如餐次）。§8.4 变体。
+ * @param {string} userId
+ * @param {string} stickerId
+ * @param {number} [qty=1]
+ */
+async function decrementStock(userId, stickerId, qty) {
+  const db = getDb()
+  const sticker = await getStickerById(userId, stickerId)
+  if (sticker.type !== 'stock') throw new Error('only stock sticker can be decremented')
+  const n = qty || 1
+  if (n < 1) throw new Error('qty must be >= 1')
+  if (sticker.stock_qty == null || sticker.stock_qty < n) throw new Error('库存不足：' + (sticker.name || '贴纸'))
+  const newStock = sticker.stock_qty - n
+  await db.collection('stickers').doc(stickerId).update({
+    stock_qty: newStock,
+    use_count: (sticker.use_count || 0) + 1,
+    last_used_at: nowTs(),
+    updated_at: nowTs()
+  })
+  return { new_stock_qty: newStock }
+}
+
 
 /**
  * 每日签到：每天 +CHECK_IN_POINTS 积分（自然日，幂等）。
@@ -310,6 +333,7 @@ async function combineSticker(userId, data) {
     category_id: data.category_id || null,
     ledger_id: data.ledger_id || null,
     source_images: images,
+    combo_items: Array.isArray(data.combo_items) ? data.combo_items : null,
     unit_price: null,
     stock_qty: null,
     initial_stock_qty: null,
@@ -333,6 +357,7 @@ module.exports = {
   deleteSticker,
   getStickers,
   consumeSticker,
+  decrementStock,
   combineSticker,
   checkIn,
   changeUserPoints,

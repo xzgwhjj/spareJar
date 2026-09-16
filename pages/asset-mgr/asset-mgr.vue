@@ -293,6 +293,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from "vue";
 import { useUserStore } from "@/stores/user.js";
+import { requireLogin } from '@/utils/guard.js';
 import { formatFen, safeYuanToFen, fenToYuanString } from "@/utils/money.js";
 import { useNumberKeyboard } from "@/stores/numberKeyboard.js";
 import { recognizeAsset as apiRecognizeAsset } from "@/api/sparejar.js";
@@ -739,6 +740,7 @@ const top = resolveTop();
 const pagePaddingTop = ref(top.padTop);
 
 onLoad((q) => {
+  if (!requireLogin('/pages/asset-mgr/asset-mgr')) return
   if (q && q.action === "add") {
     nextTick(() => openAdd());
   }

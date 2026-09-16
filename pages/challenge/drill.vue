@@ -213,6 +213,7 @@
 import { ref, computed } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
 import { useUserStore } from "@/stores/user.js";
+import { requireLogin } from '@/utils/guard.js';
 import { formatFen } from "@/utils/money.js";
 import { formatYearKey, formatMonthKey } from "@/utils/date.js";
 
@@ -257,6 +258,7 @@ function isExpanded(monthKey) {
 }
 
 onLoad((opts) => {
+  if (!requireLogin('/pages/challenge/drill')) return
   if (opts && opts.key) yearKey.value = opts.key;
   const t = resolveTop();
   pagePaddingTop.value = t.padTop;

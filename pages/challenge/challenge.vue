@@ -540,6 +540,7 @@ import TabBar from "@/components/tabbar/tabbar.vue";
 import RingProgress from "@/components/ring-progress/ring-progress.vue";
 import CalendarPeriodPicker from "@/components/calendar-period-picker/calendar-period-picker.vue";
 import { useUserStore } from "@/stores/user.js";
+import { requireLogin } from '@/utils/guard.js';
 import { listLedgers } from "@/api/sparejar.js";
 import { formatFen, yuanToFen } from "@/utils/money.js";
 import { formatMonthKey, formatYearKey } from "@/utils/date.js";
@@ -959,6 +960,7 @@ async function refresh() {
 }
 
 onMounted(() => {
+  if (!requireLogin('/pages/challenge/challenge')) return
   calcTopbarPad();
   refresh();
 });

@@ -657,6 +657,7 @@ async function goOperate(action) {
 }
 
 onLoad((options) => {
+  if (!requireLogin('/pages/wish/detail')) return
   const id = (options && options.id) || "";
   if (id) init(id);
 });

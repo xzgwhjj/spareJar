@@ -4,7 +4,7 @@
       <view class="topbar-greeting">
         <!-- 待：替换成小狗版天气图，根据天气情况显示不同图标 -->
         <image
-          :src="cdn('/app_static/images/icon_sunny.png')"
+          :src="greetingIconUrl"
           class="greeting-icon"
         ></image>
         <text class="greeting-text">第{{ currentStreak }}天</text>
@@ -35,6 +35,7 @@ import { useUserStore } from "@/stores/user.js";
 import { cdn } from "@/utils/cdn.js";
 import { onMounted, ref, computed } from "vue";
 import { todayDateKey, parseDateKey } from "@/utils/date.js";
+import { fetchWeatherIcon, randomWeatherIcon, weatherIconUrl } from "@/utils/weather.js";
 
 defineEmits(["refresh"]);
 
@@ -65,8 +66,39 @@ function resolveTopPadding() {
 
 const topbarStyle = ref({ paddingTop: resolveTopPadding() });
 
+const weatherIcon = ref("icon_sunny");
+const greetingIconUrl = computed(() => weatherIconUrl(weatherIcon.value));
+
+// 未登录/已登录通用：申请位置 → 查天气 → 设图标；拒绝授权或接口失败 → 随机图标
+const WEATHER_CACHE_KEY = "sj_weather_cache";
+function loadWeather() {
+  const cached = uni.getStorageSync(WEATHER_CACHE_KEY);
+  const now = Date.now();
+  if (cached && now - cached.ts < 3600 * 1000) {
+    weatherIcon.value = cached.icon;
+    return;
+  }
+  uni.getLocation({
+    type: "gcj02",
+    success: async (res) => {
+      try {
+        const icon = await fetchWeatherIcon(res.latitude, res.longitude);
+        weatherIcon.value = icon;
+        uni.setStorageSync(WEATHER_CACHE_KEY, { icon, ts: Date.now() });
+      } catch (_e) {
+        weatherIcon.value = randomWeatherIcon();
+      }
+    },
+    fail: () => {
+      // 用户拒绝授权位置，随机显示天气图标
+      weatherIcon.value = randomWeatherIcon();
+    },
+  });
+}
+
 onMounted(() => {
   topbarStyle.value = { paddingTop: resolveTopPadding() };
+  loadWeather();
 });
 
 function onAvatarClick() {

@@ -150,6 +150,7 @@ const {
   spentTodayFen,
   leftTodayFen,
   isOverLimit,
+  checkLoggedIn,
 } = useUserStore();
 
 // 今日消费明细（真实账单前若干条，单行紧凑排列）
@@ -230,8 +231,20 @@ const cardClass = computed(() =>
   over.value ? "glass-hero-alert alert-flash" : "glass-hero"
 );
 
-const goLimitSetting = () =>
+const goLogin = (redirect) =>
+  uni.navigateTo({
+    url:
+      "/pages/login/login" +
+      (redirect ? "?redirect=" + encodeURIComponent(redirect) : ""),
+  });
+
+const goLimitSetting = () => {
+  if (!checkLoggedIn()) {
+    goLogin("/pages/limit-setting/limit-setting");
+    return;
+  }
   uni.navigateTo({ url: "/pages/limit-setting/limit-setting" });
+};
 </script>
 
 <style lang="scss" scoped>

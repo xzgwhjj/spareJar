@@ -87,7 +87,7 @@
             >
               <image
                 v-if="m.avatar_url"
-                :src="m.avatar_url"
+                :src="cloud.display(m.avatar_url)"
                 mode="aspectFill"
                 class="member-avatar-img"
               />
@@ -301,7 +301,7 @@
               <image
                 v-if="m.avatar_url"
                 class="member-avatar-img"
-                :src="m.avatar_url"
+                :src="cloud.display(m.avatar_url)"
                 mode="aspectFill"
               />
               <text v-else>{{ m.nickname.slice(0, 1) }}</text>
@@ -390,7 +390,9 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from "vue";
+import { onShow as uniOnShow } from "@dcloudio/uni-app";
 import { useUserStore, setFavoriteLedgerAction } from "@/stores/user.js";
+import { requireLogin } from '@/utils/guard.js';
 import BaseModal from "@/components/BaseModal.vue";
 import {
   updateLedger as apiUpdateLedger,
@@ -399,9 +401,17 @@ import {
 } from "@/api/sparejar.js";
 import { formatDateKey, formatMonthKey } from "@/utils/date.js";
 import { hexToRgba } from "@/utils/coverColor.js";
-import { resolveCover, getCloudTempUrl } from "@/utils/cdn.js";
+import { resolveCover, getCloudTempUrl, createCloudImageResolver } from "@/utils/cdn.js";
 
 const { state, categoryMap, loadCategories } = useUserStore();
+// cloud:// 头像需解析成临时 URL 才能被 <image> 渲染
+const cloud = createCloudImageResolver();
+function resolveMemberAvatars() {
+  const self = (state.user && state.user.avatar_url) || "";
+  const ids = [self, ...(members.value || []).map((m) => m.avatar_url)].filter(Boolean);
+  cloud.resolve(ids);
+}
+uniOnShow(resolveMemberAvatars);
 
 const LEDGER_ICONS = [
   "📒",
@@ -481,6 +491,7 @@ const FAV_KEY = (id) => `sparejar_fav_${id}`;
 const isFaved = ref(false);
 const favAnim = ref(""); // '' | 'entering' | 'leaving'
 onMounted(() => {
+  if (!requireLogin('/pages/ledger-detail/ledger-detail')) return
   if (ledger._id) {
     isFaved.value = uni.getStorageSync(FAV_KEY(ledger._id)) === 1;
   }
@@ -823,6 +834,7 @@ async function loadAll() {
         : "";
     memberCount.value = (data && data.memberCount) || 0;
     members.value = (data && data.members) || [];
+    resolveMemberAvatars(); // 解析成员头像（cloud:// → 临时 URL）
     // 登录态下以云端收藏态为准，校正本地缓存（多端一致）
     if (state.uid && data && typeof data.is_favorited === "boolean") {
       isFaved.value = data.is_favorited;

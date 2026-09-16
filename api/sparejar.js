@@ -150,6 +150,7 @@ export const ACTIONS = Object.freeze({
   DELETE_STICKER: 'deleteSticker',
   CONSUME_STICKER: 'consumeSticker',
   COMBINE_STICKER: 'combineSticker',
+  DECREMENT_STOCK: 'decrementStock',
   CHECK_IN: 'checkIn',
   GET_USER_POINTS: 'getUserPoints',
   RECOGNIZE_RECEIPT: 'recognizeReceipt',
@@ -183,7 +184,11 @@ export const ACTIONS = Object.freeze({
   GET_MEMBERS: 'getMembers',
   GET_LEDGER_MEMBERS: 'getLedgerMembers',
   GET_SURPLUS_POOL_LOGS: 'getSurplusPoolLogs',
-  SYNC_PERIOD_TARGETS: 'syncPeriodTargets'
+  SYNC_PERIOD_TARGETS: 'syncPeriodTargets',
+  DELETE_ACCOUNT: 'deleteAccount',
+  SCHEDULE_DELETE_ACCOUNT: 'scheduleDeleteAccount',
+  CANCEL_DELETE_ACCOUNT: 'cancelDeleteAccount',
+  EXPORT_USER_DATA: 'exportUserData'
 })
 
 export class SparejarApiError extends Error {
@@ -523,10 +528,17 @@ export function updateCategory(categoryId, payload) {
 
 /**
  * @param {string} categoryId
- * @param {string|null} [mergeToId] 有关联账目时必填合并目标分类 id
+ * @param {string|null} [mergeToId] mode='merge' 且有关联账目时必填合并目标分类 id
+ * @param {{ mode?: 'merge'|'keep'|'purge' }} [options]
+ *   mode='merge' 转移到目标分类；'keep' 保留账目不动（仅隐藏分类）；'purge' 连同账目一起删除
  */
-export function deleteCategory(categoryId, mergeToId = null) {
-  return callSparejar(ACTIONS.DELETE_CATEGORY, { category_id: categoryId, merge_to_id: mergeToId || null })
+export function deleteCategory(categoryId, mergeToId = null, options = {}) {
+  const m = options.mode
+  return callSparejar(ACTIONS.DELETE_CATEGORY, {
+    category_id: categoryId,
+    merge_to_id: mergeToId || null,
+    mode: m === 'keep' || m === 'purge' ? m : 'merge'
+  })
 }
 
 /**
@@ -702,6 +714,11 @@ export function consumeSticker(stickerId, qty) {
   return callSparejar(ACTIONS.CONSUME_STICKER, { sticker_id: stickerId, qty })
 }
 
+/** 仅扣减囤货库存（不生成支出），用于餐次保存时并入本餐。 */
+export function decrementStickerStock(stickerId, qty) {
+  return callSparejar(ACTIONS.DECREMENT_STOCK, { sticker_id: stickerId, qty })
+}
+
 // ===== 积分体系（签到 / 组合贴纸，阶段 9） =====
 
 /** 组合贴纸：多图合成一张（消耗积分）。data 含 name、source_images、category_id?。 */
@@ -848,6 +865,34 @@ export function getSurplusPoolLogs() {
   return callSparejar(ACTIONS.GET_SURPLUS_POOL_LOGS, {})
 }
 
+/**
+ * 注销账号：请求服务端硬删当前用户的全部个人数据（按 user_id/openid）。
+ * 后端 sparejar-finance 的 deleteAccount action 需自行实现（见 stores/auth.js deleteAccount）。
+ * 后端未实现 / 失败时 callSparejar 会抛 SparejarApiError，前端据此不清除本地登录态。
+ */
+export function deleteAccount() {
+  return callSparejar(ACTIONS.DELETE_ACCOUNT, {})
+}
+
+/**
+ * 申请注销（7 天冷静期 + 可恢复）：标记 deleting 并写入计划删除时间，暂不删数据。
+ * @param {number} [days] 冷静期天数，默认 7
+ * @returns {Promise<{ delete_scheduled_at: string, delete_scheduled_at_ts: number }>}
+ */
+export function scheduleDeleteAccount(days = 7) {
+  return callSparejar(ACTIONS.SCHEDULE_DELETE_ACCOUNT, { days })
+}
+
+/** 撤销注销：冷静期内恢复账号 */
+export function cancelDeleteAccount() {
+  return callSparejar(ACTIONS.CANCEL_DELETE_ACCOUNT, {})
+}
+
+/** 导出用户全量数据，返回可 JSON 序列化的对象 */
+export function exportUserData() {
+  return callSparejar(ACTIONS.EXPORT_USER_DATA, {})
+}
+
 /** 从指定资产账户划拨到心愿。amount 为「分」。 */
 export function depositWishFromAccount(wishId, amount, accountId, note = '') {
   return callSparejar(ACTIONS.DEPOSIT_WISH_FROM_ACCOUNT, { wish_id: wishId, amount, account_id: accountId, note })
@@ -973,5 +1018,9 @@ export default {
   upsertHealthProfile,
   getDailyHealthSnapshot,
   setExerciseCalories,
-  getWeeklyHealth
+  getWeeklyHealth,
+  deleteAccount,
+  scheduleDeleteAccount,
+  cancelDeleteAccount,
+  exportUserData
 }

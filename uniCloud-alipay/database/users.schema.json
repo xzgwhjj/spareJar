@@ -111,7 +111,18 @@
     "deleted_at": {
       "bsonType": "string",
       "description": "软删时间",
-      "maxLength": 19
+      "maxLength": 23
+    },
+    "account_status": {
+      "bsonType": "string",
+      "description": "账号状态：active 正常 / deleting 注销冷静期",
+      "enum": ["active", "deleting"],
+      "defaultValue": "active"
+    },
+    "delete_scheduled_at": {
+      "bsonType": "string",
+      "description": "计划硬删（注销生效）时间，空串表示未申请注销",
+      "maxLength": 23
     }
   }
 }

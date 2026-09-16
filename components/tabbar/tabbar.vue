@@ -19,17 +19,19 @@
         </template>
         <!-- 普通 Tab 图标 -->
         <template v-else>
-          <view
-            class="tab-icon-bg tab-active"
-          >
+          <view class="tab-icon-bg tab-active">
             <!-- 图标 -->
-            <image v-if="current !== index" :src="tab.icon" class="tab-icon" mode="heightFix" />
+            <image
+              v-if="current !== index"
+              :src="tab.icon"
+              class="tab-icon"
+              mode="heightFix"
+            />
             <image v-else :src="tab.activeIcon" class="tab-icon" mode="heightFix" />
           </view>
-          <text
-            class="tab-label"
-            :class="{ 'label-active': current === index }"
-          >{{ tab.label }}</text>
+          <text class="tab-label" :class="{ 'label-active': current === index }">{{
+            tab.label
+          }}</text>
         </template>
       </view>
     </view>
@@ -37,88 +39,88 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted, ref } from 'vue';
-import { checkLoggedIn } from '@/stores/user.js';
+import { onMounted, onUnmounted, ref } from "vue";
+import { checkLoggedIn } from "@/stores/user.js";
 
 defineOptions({
   virtualHost: true,
-  styleIsolation: 'shared',
+  styleIsolation: "shared",
 });
 
 const props = defineProps({
   current: {
     type: Number,
-    default: 0
-  }
-})
+    default: 0,
+  },
+});
 
-const isVisible = ref(true)
+const isVisible = ref(true);
 
 // 监听隐藏 tabbar 事件
 const onHideTabbar = () => {
-  isVisible.value = false
-}
+  isVisible.value = false;
+};
 
 // 监听显示 tabbar 事件
 const onShowTabbar = () => {
-  isVisible.value = true
-}
+  isVisible.value = true;
+};
 
 onMounted(() => {
-  uni.$on('hide-tabbar', onHideTabbar)
-  uni.$on('show-tabbar', onShowTabbar)
-})
+  uni.$on("hide-tabbar", onHideTabbar);
+  uni.$on("show-tabbar", onShowTabbar);
+});
 
 onUnmounted(() => {
-  uni.$off('hide-tabbar', onHideTabbar)
-  uni.$off('show-tabbar', onShowTabbar)
-})
+  uni.$off("hide-tabbar", onHideTabbar);
+  uni.$off("show-tabbar", onShowTabbar);
+});
 
 const tabs = [
   {
-    key: 'home',
-    label: '首页',
-	  path: '/pages/index/index',
+    key: "home",
+    label: "首页",
+    path: "/pages/index/index",
     center: false,
-    icon: '/static/images/icon_index.png',
-    activeIcon: '/static/images/icon_index_active.png',
+    icon: "/static/images/icon_index.png",
+    activeIcon: "/static/images/icon_index_active.png",
   },
   {
-    key: 'book',
-    label: '账本',
-	  path: '/pages/ledger/ledger',
+    key: "book",
+    label: "账本",
+    path: "/pages/ledger/ledger",
     center: false,
-    icon: '/static/images/icon_book.png',
-    activeIcon: '/static/images/icon_book_active.png',
+    icon: "/static/images/icon_book.png",
+    activeIcon: "/static/images/icon_book_active.png",
   },
   {
-    key: 'record',
-    label: '记一笔',
+    key: "record",
+    label: "记一笔",
     center: true,
-	  path: '/pages/add-record/add-record',
-    icon: '/static/images/icon_record.png',
-    activeIcon: '/static/images/icon_record.png',
+    path: "/pages/add-record/add-record",
+    icon: "/static/images/icon_record.png",
+    activeIcon: "/static/images/icon_record.png",
   },
   {
-    key: 'challenge',
-    label: '挑战',
+    key: "challenge",
+    label: "挑战",
     center: false,
-	  path: '/pages/challenge/challenge',
-    icon: '/static/images/icon_challenge.png',
-    activeIcon: '/static/images/icon_challenge_active.png',
+    path: "/pages/challenge/challenge",
+    icon: "/static/images/icon_challenge.png",
+    activeIcon: "/static/images/icon_challenge_active.png",
   },
   {
-    key: 'wish',
-    label: '心愿',
+    key: "wish",
+    label: "心愿",
     center: false,
-	  path: '/pages/wish/wish',
-    icon: '/static/images/icon_wish.png',
-    activeIcon: '/static/images/icon_wish_active.png',
+    path: "/pages/wish/wish",
+    icon: "/static/images/icon_wish.png",
+    activeIcon: "/static/images/icon_wish_active.png",
   },
 ];
 
 // 允许游客（未登录）直接访问的 tab（仅「首页」公开），其余 tab 均需登录
-const PUBLIC_KEYS = ['home'];
+const PUBLIC_KEYS = ["home"];
 
 const switchTab = (index) => {
   const tab = tabs[index];
@@ -126,12 +128,17 @@ const switchTab = (index) => {
   // 登录鉴权拦截：访问非公开 tab 且未登录时，重定向到登录页并携带目标路径，
   // 待登录成功后由登录页 reLaunch 回原目标页。
   if (!PUBLIC_KEYS.includes(tab.key) && !checkLoggedIn()) {
-    console.log('[tabbar] 未登录，拦截「' + tab.label + '」跳转至登录页，redirect =', tab.path);
-    uni.navigateTo({ url: `/pages/login/login?redirect=${encodeURIComponent(tab.path)}` });
+    console.log(
+      "[tabbar] 未登录，拦截「" + tab.label + "」跳转至登录页，redirect =",
+      tab.path
+    );
+    uni.navigateTo({
+      url: `/pages/login/login?redirect=${encodeURIComponent(tab.path)}`,
+    });
     return;
   }
   // 中间「记一笔」按钮已从 tabBar 移除，使用 navigateTo 进入（可带 ledger_id 预选账本）
-  if (tab.key === 'record') {
+  if (tab.key === "record") {
     uni.navigateTo({ url: tab.path });
     return;
   }
@@ -162,9 +169,7 @@ const switchTab = (index) => {
     backdrop-filter: blur(28px) saturate(1.6);
     -webkit-backdrop-filter: blur(28px) saturate(1.6);
     border: 2rpx solid rgba(255, 255, 255, 0.97);
-    box-shadow:
-      0 12rpx 56rpx rgba($sj-brand, 0.12),
-      0 4rpx 20rpx rgba(0, 0, 0, 0.07),
+    box-shadow: 0 12rpx 56rpx rgba($sj-brand, 0.12), 0 4rpx 20rpx rgba(0, 0, 0, 0.07),
       inset 0 3rpx 0 rgba(255, 255, 255, 0.95);
     display: flex;
     align-items: center;
@@ -197,9 +202,7 @@ const switchTab = (index) => {
     border-radius: 50%;
     background: #ffffff;
     border: 5rpx solid rgba(255, 255, 255, 0.95);
-    box-shadow:
-      0 8rpx 40rpx rgba($sj-brand, 0.4),
-      0 2rpx 12rpx rgba(0, 0, 0, 0.08),
+    box-shadow: 0 4rpx 16rpx rgba($sj-brand, 0.28), 0 1rpx 6rpx rgba(0, 0, 0, 0.06),
       inset 0 3rpx 0 rgba(255, 255, 255, 0.3);
     display: flex;
     align-items: center;
@@ -215,6 +218,11 @@ const switchTab = (index) => {
     color: #fff;
     font-weight: 300;
     line-height: 1;
+  }
+
+  .center-btn .tab-icon {
+    width: 100rpx;
+    height: 100rpx;
   }
 
   .center-placeholder {
@@ -239,11 +247,8 @@ const switchTab = (index) => {
     justify-content: center;
     position: absolute;
     top: 8rpx;
-    transition:
-      top 0.28s cubic-bezier(0.34, 1.5, 0.64, 1),
-      background 0.22s ease,
-      box-shadow 0.22s ease,
-      border 0.22s ease;
+    transition: top 0.28s cubic-bezier(0.34, 1.5, 0.64, 1), background 0.22s ease,
+      box-shadow 0.22s ease, border 0.22s ease;
 
     &.tab-active {
       top: -50rpx;
@@ -258,7 +263,7 @@ const switchTab = (index) => {
     }
 
     .tab-icon {
-      width: auto;
+      width: 100rpx;
       height: 100rpx;
     }
   }

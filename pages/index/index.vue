@@ -201,6 +201,12 @@ const goSurplusHistory = () => {
 };
 
 const goOcr = () => {
+  if (!isLoggedIn.value) {
+    uni.navigateTo({
+      url: "/pages/login/login?redirect=" + encodeURIComponent("/pages/ocr/ocr"),
+    });
+    return;
+  }
   uni.navigateTo({ url: "/pages/ocr/ocr" });
 };
 

@@ -51,11 +51,19 @@
     /* 小程序特有相关 */
     "mp-weixin" : {
         "appid" : "wxa6368add00b2cab1",
+        "permission" : {
+            "scope.userLocation" : {
+                "desc" : "用于显示您当地的天气"
+            }
+        },
+        "requiredPrivateInfos" : [
+            "getLocation"
+        ],
         "setting" : {
             "urlCheck" : false
         },
         "usingComponents" : true,
-		"__usePrivacyCheck__": true
+        "__usePrivacyCheck__": true
     },
     "mp-alipay" : {
         "usingComponents" : true

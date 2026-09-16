@@ -85,7 +85,7 @@ import { cdn } from "@/utils/cdn.js";
 import { formatFen } from "@/utils/money.js";
 import { computed, ref } from "vue";
 
-const { yesterdaySurplusFen, state, confirmSurplusRolloverAction } = useUserStore();
+const { yesterdaySurplusFen, state, confirmSurplusRolloverAction, checkLoggedIn } = useUserStore();
 const yesterdaySurplusText = computed(() => formatFen(yesterdaySurplusFen.value));
 
 /** 单个 tab 动画占全周期的 1/3，12s 一轮 */
@@ -126,6 +126,14 @@ const applying = ref(false);
 // 三个快捷 tab 直接确认/转走次日待滚入结余
 // carry=确认滚入次日限额；pool/wish=把待滚入结余立即转入对应目标
 const handleChip = async (id) => {
+  if (!checkLoggedIn()) {
+    uni.navigateTo({
+      url:
+        "/pages/login/login?redirect=" +
+        encodeURIComponent("/pages/index/index"),
+    });
+    return;
+  }
   if (applying.value) return;
   if (yesterdaySurplusFen.value <= 0) {
     applied.value = id;
@@ -156,7 +164,17 @@ const allocTabStyle = (c, index) => ({
   animationDelay: `${index * TAB_SLOT_S}s`,
 });
 
-const goAlloc = () => uni.navigateTo({ url: "/pages/surplus-alloc/surplus-alloc" });
+const goAlloc = () => {
+  if (!checkLoggedIn()) {
+    uni.navigateTo({
+      url:
+        "/pages/login/login?redirect=" +
+        encodeURIComponent("/pages/surplus-alloc/surplus-alloc"),
+    });
+    return;
+  }
+  uni.navigateTo({ url: "/pages/surplus-alloc/surplus-alloc" });
+};
 </script>
 
 <style scoped lang="scss">

@@ -108,6 +108,7 @@
 <script setup>
 import { reactive, computed, onMounted } from 'vue';
 import { useUserStore } from '@/stores/user.js';
+import { requireLogin } from '@/utils/guard.js';
 import { todayDateKey } from '@/utils/date.js';
 
 const { state, loadHealthProfile, upsertHealthProfileAction, setExerciseCaloriesAction, loadDailyHealth } = useUserStore();
@@ -220,6 +221,7 @@ async function save() {
 }
 
 onMounted(async () => {
+  if (!requireLogin('/pages/health-settings/health-settings')) return
   await loadHealthProfile().catch(() => {});
   await loadDailyHealth(todayDateKey()).catch(() => {});
   prefill();

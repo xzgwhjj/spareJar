@@ -1,6 +1,16 @@
 <template>
-  <view v-if="show" class="modal-overlay" :class="{ 'is-closing': closing }" @click="onOverlayClick">
-    <view class="modal-card" :class="{ 'is-closing': closing }" @click.stop @animationend="onCardAnimationEnd">
+  <view
+    v-if="show"
+    class="modal-overlay"
+    :class="{ 'is-closing': closing }"
+    @click="onOverlayClick"
+  >
+    <view
+      class="modal-card"
+      :class="{ 'is-closing': closing }"
+      @click.stop
+      @animationend="onCardAnimationEnd"
+    >
       <!-- 关闭按钮：右上角圆形，点击时旋转 + 缩放动效 -->
       <view
         v-if="showClose"
@@ -23,11 +33,7 @@
 
         <!-- 空态：占位图 + 提示文案 -->
         <view v-else class="modal-empty">
-          <image
-            class="modal-empty-img"
-            :src="resolvedEmptyImage"
-            mode="aspectFit"
-          />
+          <image class="modal-empty-img" :src="resolvedEmptyImage" mode="aspectFit" />
           <text class="modal-empty-text">{{ emptyText }}</text>
         </view>
       </view>
@@ -35,16 +41,13 @@
       <!-- 动作按钮：confirmText / cancelText 控制显隐。
            两个按钮时：取消=淡色，确认=深色；单按钮时：占满整行、深色主按钮 -->
       <view v-if="cancelText || confirmText" class="modal-actions">
-        <view
-          v-if="cancelText"
-          class="modal-btn modal-btn-cancel"
-          @click="onCancel"
-        >
+        <view v-if="cancelText" class="modal-btn modal-btn-cancel" @click="onCancel">
           <text>{{ cancelText }}</text>
         </view>
         <view
           v-if="confirmText"
           class="modal-btn modal-btn-confirm"
+          :class="{ 'modal-btn-danger': danger }"
           @click="onConfirm"
         >
           <text>{{ confirmText }}</text>
@@ -74,6 +77,8 @@ const props = defineProps({
   closeOnOverlay: { type: Boolean, default: true },
   /** 是否为空态（内容无值时展示占位图 + 提示） */
   empty: { type: Boolean, default: false },
+  /** 危险操作：确认按钮显示为红色警示样式（如注销账号） */
+  danger: { type: Boolean, default: false },
   /** 空态占位图（不传则随机取一张本地占位图） */
   emptyImage: { type: String, default: "" },
   /** 空态提示文案 */
@@ -92,9 +97,7 @@ const EMPTY_IMAGE_POOL = [
 ];
 const randomDefaultImage =
   EMPTY_IMAGE_POOL[Math.floor(Math.random() * EMPTY_IMAGE_POOL.length)];
-const resolvedEmptyImage = computed(
-  () => props.emptyImage || randomDefaultImage
-);
+const resolvedEmptyImage = computed(() => props.emptyImage || randomDefaultImage);
 
 const closing = ref(false);
 const btnPressed = ref(false);
@@ -353,10 +356,15 @@ function onConfirm() {
   box-shadow: 0 8rpx 24rpx rgba(var(--brand-rgb), 0.28);
 }
 
+/* 危险操作：确认按钮红色警示（注销账号等） */
+.modal-btn-danger {
+  background: linear-gradient(135deg, #ff7a7a, #ff5252);
+  box-shadow: 0 8rpx 24rpx rgba(255, 82, 82, 0.28);
+}
+
 /* 取消：淡色按钮 */
 .modal-btn-cancel {
-  background: var(--g0, #f1f7f2);
-  border: 2rpx solid var(--g2, #d9ead9);
+  background: rgba(245, 255, 247, 0.8);
   color: var(--ink3, #555);
 }
 </style>

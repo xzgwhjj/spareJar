@@ -75,6 +75,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { getLimitHistory } from '@/api/sparejar.js';
+import { requireLogin } from '@/utils/guard.js';
 import { todayDateKey } from '@/utils/date.js';
 
 const rawList = ref([]);
@@ -127,7 +128,10 @@ async function load() {
   }
 }
 
-onMounted(load);
+onMounted(() => {
+  if (!requireLogin('/pages/limit-history/limit-history')) return
+  load()
+});
 const goBack = () => uni.navigateBack();
 </script>
 

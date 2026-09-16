@@ -292,6 +292,8 @@ async function createCategory(userId, data = {}) {
   if (name.length > 32) throw new Error('分类名称不能超过32字')
 
   const icon = typeof data.icon === 'string' && data.icon ? data.icon.slice(0, 64) : '📦'
+  const iconType = data.icon_type === 'image' ? 'image' : 'emoji'
+  const iconUrl = iconType === 'image' && typeof data.icon_url === 'string' ? data.icon_url.slice(0, 512) : ''
 
   // 简介/备注（可选，最长 100 字）
   const desc = typeof data.desc === 'string' ? data.desc.trim().slice(0, 100) : ''
@@ -318,6 +320,8 @@ async function createCategory(userId, data = {}) {
       type,
       name,
       icon,
+      icon_type: iconType,
+      icon_url: iconUrl,
       desc,
       is_system: false,
       is_hidden: false,
@@ -330,16 +334,16 @@ async function createCategory(userId, data = {}) {
     throw err
   }
   return {
-    _id: addRes.id, user_id: userId, type, name, icon, desc,
+    _id: addRes.id, user_id: userId, type, name, icon, icon_type: iconType, icon_url: iconUrl, desc,
     is_system: false, is_hidden: false, sort_order: maxSort + 1, created_at: ts, usage_count: 0
   }
 }
 
 /**
- * 编辑分类：预置分类仅可切换隐藏；自定义可改名称/图标/隐藏/排序。
+ * 编辑分类：预置分类与自定义分类都可改名称/图标/简介/隐藏/排序（预置分类仅不可删除）。
  * @param {string} userId
  * @param {string} categoryId
- * @param {{ name?: string, icon?: string, is_hidden?: boolean, sort_order?: number }} data
+ * @param {{ name?: string, icon?: string, desc?: string, is_hidden?: boolean, sort_order?: number }} data
  */
 
 async function updateCategory(userId, categoryId, data = {}) {
@@ -351,21 +355,29 @@ async function updateCategory(userId, categoryId, data = {}) {
   const ts = nowTs()
   const updateDoc = { updated_at: ts }
 
-  if (cat.is_system) {
-    // 预置分类仅允许切换隐藏
-    if (data.is_hidden !== undefined) updateDoc.is_hidden = !!data.is_hidden
-  } else {
-    if (typeof data.name === 'string') {
-      const name = data.name.trim()
-      if (!name) throw new Error('分类名称不能为空')
-      if (name.length > 32) throw new Error('分类名称不能超过32字')
-      updateDoc.name = name
+  if (typeof data.name === 'string') {
+    const name = data.name.trim()
+    if (!name) throw new Error('分类名称不能为空')
+    if (name.length > 32) throw new Error('分类名称不能超过32字')
+    if (name !== cat.name) {
+      const dupRes = await db.collection('categories')
+        .where({ user_id: userId, type: cat.type, name }).limit(1).get()
+      if (dupRes.data && dupRes.data[0]) throw new Error('该分类名称已存在')
     }
-    if (typeof data.icon === 'string' && data.icon) updateDoc.icon = data.icon.slice(0, 64)
-    if (typeof data.desc === 'string') updateDoc.desc = data.desc.trim().slice(0, 100)
-    if (data.is_hidden !== undefined) updateDoc.is_hidden = !!data.is_hidden
-    if (typeof data.sort_order === 'number') updateDoc.sort_order = data.sort_order
+    updateDoc.name = name
   }
+  if (typeof data.icon === 'string' && data.icon) updateDoc.icon = data.icon.slice(0, 64)
+  // 自定义上传图标：icon_type=image 时持久化 icon_url；切回 emoji 时清空 icon_url
+  if (data.icon_type === 'image' || data.icon_type === 'emoji') {
+    updateDoc.icon_type = data.icon_type
+    updateDoc.icon_url =
+      data.icon_type === 'image' && typeof data.icon_url === 'string'
+        ? data.icon_url.slice(0, 512)
+        : ''
+  }
+  if (typeof data.desc === 'string') updateDoc.desc = data.desc.trim().slice(0, 100)
+  if (data.is_hidden !== undefined) updateDoc.is_hidden = !!data.is_hidden
+  if (typeof data.sort_order === 'number') updateDoc.sort_order = data.sort_order
 
   await db.collection('categories').doc(categoryId).update(updateDoc)
   return { category_id: categoryId, ...updateDoc }
@@ -373,14 +385,18 @@ async function updateCategory(userId, categoryId, data = {}) {
 
 /**
  * 删除自定义分类（软隐藏）。
- * 有关联账目时必须指定合并目标分类（mergeToId），关联账目与贴纸一并转移；
+ * 有关联账目时三选一：
+ *  - mode='merge'（默认，兼容旧调用）：指定 mergeToId，关联账目与贴纸一并转移到目标分类；
+ *  - mode='keep'：保留账目不动（账单仍归属该分类，仅分类本身隐藏、不可再选用）；贴纸解除绑定；
+ *  - mode='purge'：连同该分类下的账目一起软删除（逐条软删以回滚账户余额与当日结算）；贴纸解除绑定。
  * 无关联账目可直接删除（mergeToId 可空）。删除后分类置为隐藏并保留 merged_to_id。
  * @param {string} userId
  * @param {string} categoryId
  * @param {string|null} [mergeToId]
+ * @param {{ mode?: 'merge'|'keep'|'purge' }} [opts]
  */
 
-async function deleteCategory(userId, categoryId, mergeToId = null) {
+async function deleteCategory(userId, categoryId, mergeToId = null, opts = {}) {
   const db = getDb()
   const res = await db.collection('categories').doc(categoryId).get()
   const cat = res.data && res.data[0]
@@ -393,7 +409,35 @@ async function deleteCategory(userId, categoryId, mergeToId = null) {
   const txCount = txCountRes.total || 0
 
   const ts = nowTs()
-  if (txCount > 0) {
+  const rawMode = opts && opts.mode
+  const mode = rawMode === 'keep' || rawMode === 'purge' ? rawMode : 'merge'
+  let purged = 0
+  let kept = 0
+
+  if (txCount > 0 && mode === 'purge') {
+    // 连同账目一起软删除（逐条软删，保证账户余额 / 每日结算 / 挑战进度正确回滚）
+    const transaction = require('./transaction')
+    const where = { user_id: userId, category_id: categoryId, deleted_at: db.command.eq(null) }
+    let remain = txCount
+    while (remain > 0) {
+      const txRes = await db.collection('transactions').where(where).limit(100).get()
+      const rows = txRes.data || []
+      if (!rows.length) break
+      for (const tx of rows) {
+        await transaction.softDeleteTransaction(userId, tx._id)
+        purged += 1
+      }
+      remain -= rows.length
+    }
+    // 贴纸不删除，仅解除与该分类的绑定
+    await db.collection('stickers').where({ user_id: userId, category_id: categoryId })
+      .update({ category_id: '', updated_at: ts })
+    mergeToId = null
+  } else if (txCount > 0 && mode === 'keep') {
+    // 保留账目：账目与贴纸仍归属该分类（category_id 不变），仅分类隐藏不再可选
+    kept = txCount
+    mergeToId = null
+  } else if (txCount > 0) {
     if (!mergeToId) throw new Error('该分类下有关联账目，请选择合并目标分类')
     const mRes = await db.collection('categories').doc(mergeToId).get()
     const mCat = mRes.data && mRes.data[0]
@@ -405,15 +449,29 @@ async function deleteCategory(userId, categoryId, mergeToId = null) {
       .update({ category_id: mergeToId, updated_at: ts })
     await db.collection('stickers').where({ user_id: userId, category_id: categoryId })
       .update({ category_id: mergeToId, updated_at: ts })
+  } else {
+    // 无关联账目：直接删除，贴纸解除绑定
+    await db.collection('stickers').where({ user_id: userId, category_id: categoryId })
+      .update({ category_id: '', updated_at: ts })
+    mergeToId = null
   }
 
   // 软隐藏（删除）
   await db.collection('categories').doc(categoryId).update({
     is_hidden: true,
     merged_to_id: mergeToId || null,
+    deleted_at: ts,
     updated_at: ts
   })
-  return { deleted: true, category_id: categoryId, merged_to_id: mergeToId, reassigned: txCount }
+  return {
+    deleted: true,
+    category_id: categoryId,
+    merged_to_id: mergeToId || null,
+    mode,
+    reassigned: mode === 'merge' ? txCount : 0,
+    kept,
+    purged
+  }
 }
 
 /**

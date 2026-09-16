@@ -2,7 +2,7 @@
 
 const db = require('../core/db')
 const { getDocByUser, ensureDoc, isDuplicateKeyError } = require('../core/db')
-const { formatDateKey, nowTs, getDb } = require('../utils/date')
+const { formatDateKey, nowTs, getDb, formatDateTime } = require('../utils/date')
 const money = require('../utils/money')
 const ids = require('../utils/id')
 const ledger = require('./ledger')
@@ -128,6 +128,20 @@ async function initUser(userId, profile = {}) {
 
   // users 档案：独立幂等，created 标记仅用于返回语义
   const existingUser = await getDocByUser('users', userId)
+
+  // —— 注销处理中再次登录（同微信）= 默认彻底注销：清空旧数据，随后建全新空白账号 ——
+  let wasDeleting = false
+  if (existingUser && existingUser.account_status === 'deleting') {
+    wasDeleting = true
+    try {
+      await deleteAccount(userId)
+    } catch (e) {
+      // 硬删失败不阻断登录，保留 deleting 状态交由 cron 重试
+      console.error('[initUser] 注销中登录，硬删失败', userId, e)
+    }
+    existingUser = null
+  }
+
   let userDoc = existingUser
   let isNew = false
   if (!existingUser) {
@@ -148,7 +162,9 @@ async function initUser(userId, profile = {}) {
       last_check_in: null,
       created_at: ts,
       updated_at: ts,
-      deleted_at: null
+      deleted_at: null,
+      account_status: 'active',
+      delete_scheduled_at: ''
     }
     try {
       const res = await getDb().collection('users').add(userDoc)
@@ -278,9 +294,280 @@ async function initUser(userId, profile = {}) {
   // 老用户兼容：积分/签到字段缺省补 0/null
   if (!userDoc.points) userDoc.points = 0
   if (!userDoc.last_check_in) userDoc.last_check_in = null
-  return { created: isNew, user: userDoc, default_ledger_id: masterLedger._id }
+
+  // 老用户兼容：账号注销状态字段缺省补 active / 空（不覆盖已处于 deleting 的用户）
+  if (userDoc.account_status === undefined || userDoc.account_status === null) {
+    userDoc.account_status = 'active'
+    try {
+      await getDb().collection('users').doc(userDoc._id).update({ account_status: 'active' })
+    } catch (e) {
+      console.warn('[initUser] backfill account_status failed', e)
+    }
+  }
+  if (userDoc.delete_scheduled_at === undefined || userDoc.delete_scheduled_at === null) {
+    userDoc.delete_scheduled_at = ''
+  }
+
+  return { created: isNew, user: userDoc, default_ledger_id: masterLedger._id, wasDeleting }
 }
 
+
+/**
+ * 注销账号：硬删该用户的全部个人数据（个保法合规《账号注销 + 个人数据删除》）。
+ * 按 user_id 批量清除所有业务集合，并彻底删除 users 主档；同时写入 deleted_openids
+ * 审计记录（仅留痕，不作拦截）。彻底删除后，同一微信(openid)后续登录可由 initUser
+ * 幂等重建为全新空白账号（旧数据已清空，不算复活），前端据此清 token 退回游客态后重新注册。
+ *
+ * 实现说明：
+ *  - 云数据库 where().remove() 单次有数量上限，故采用「分批查询 _id + 按 _id in 删除」循环，
+ *    每批 500，必要时多轮直至清空，避免漏删。
+ *  - 多对多关联表（ledger_members / member_ledgers 按 ledger_id；meal_food_items 按 meal_id）
+ *    先取本用户账本/餐次 id，再按关联键清理，最后清主表。
+ */
+const DELETE_COLLECTIONS_BY_USER = [
+  'user_settings',
+  'user_streaks',
+  'user_health_profiles',
+  'user_achievements',
+  'user_penalty_logs',
+  'surplus_pools',
+  'surplus_pool_logs',
+  'surplus_allocations',
+  'savings_pools',
+  'savings_pool_logs',
+  'transactions',
+  'categories',
+  'wishes',
+  'wish_fund_logs',
+  'stickers',
+  'asset_accounts',
+  'investment_holdings',
+  'investment_logs',
+  'points_logs',
+  'limit_history',
+  'data_backups',
+  'subscribe_auth',
+  'challenge_records',
+  'daily_health',
+  'members',
+  'meals',
+  'ledgers'
+]
+
+/** 按 where 条件分批硬删，返回删除条数 */
+async function purgeByWhere(collection, whereClause) {
+  const db = getDb()
+  const BATCH = 500
+  let total = 0
+  for (let guard = 0; guard < 200; guard++) {
+    const res = await db.collection(collection).where(whereClause).limit(BATCH).get()
+    const list = (res && res.data) || []
+    if (!list.length) break
+    const ids = list.map((d) => d._id).filter(Boolean)
+    if (ids.length) {
+      await db.collection(collection).where({ _id: db.command.in(ids) }).remove()
+    }
+    total += list.length
+    if (list.length < BATCH) break
+  }
+  return total
+}
+
+async function deleteAccount(userId) {
+  const db = getDb()
+  const deleted = {}
+
+  // 1) 取本用户全部账本 id（用于清理多对多关联表）
+  const ledgerRes = await db
+    .collection('ledgers')
+    .where({ user_id: userId })
+    .field({ _id: true })
+    .limit(2000)
+    .get()
+  const ledgerIds = ((ledgerRes && ledgerRes.data) || []).map((l) => l._id).filter(Boolean)
+
+  // 2) 关联表：按账本 id 清理（ledger_members / member_ledgers）
+  if (ledgerIds.length) {
+    deleted.ledger_members = await purgeByWhere('ledger_members', {
+      ledger_id: db.command.in(ledgerIds)
+    })
+    deleted.member_ledgers = await purgeByWhere('member_ledgers', {
+      ledger_id: db.command.in(ledgerIds)
+    })
+  }
+
+  // 3) 餐次食物项：按餐次 id 清理（meals 本身随下面 user_id 批量删）
+  const mealRes = await db
+    .collection('meals')
+    .where({ user_id: userId })
+    .field({ _id: true })
+    .limit(2000)
+    .get()
+  const mealIds = ((mealRes && mealRes.data) || []).map((m) => m._id).filter(Boolean)
+  if (mealIds.length) {
+    deleted.meal_food_items = await purgeByWhere('meal_food_items', {
+      meal_id: db.command.in(mealIds)
+    })
+  }
+
+  // 4) 按 user_id 批量清除所有用户归属集合（含 meals / ledgers 主表）
+  for (const col of DELETE_COLLECTIONS_BY_USER) {
+    deleted[col] = await purgeByWhere(col, { user_id: userId })
+  }
+
+  // 5) 彻底删除 users 主档（允许同微信后续重新注册为全新空白账号，旧数据已清空不会复活），
+  //    并写入 deleted_openids 审计记录（仅留存「曾注销」痕迹，用于合规/排查，不作拦截）。
+  deleted.users = await purgeByWhere('users', { user_id: userId })
+  try {
+    await db.collection('deleted_openids').add({ openid: userId, deleted_at: nowTs() })
+  } catch (e) {
+    // 审计记录写入失败不阻断主流程（个人数据已清完）
+    console.warn('[deleteAccount] 写入 deleted_openids 审计失败', userId, e)
+  }
+
+  return { deleted }
+}
+
+/**
+ * 申请注销（7 天冷静期 + 可恢复）：
+ * 标记 account_status='deleting' 并写入 delete_scheduled_at（默认 7 天后），
+ * 数据暂不删除；期内登录可凭 cancelDeleteAccount 撤销，到期由 cron 调 deleteAccount 硬删。
+ * @param {string} userId openid
+ * @param {number} [days] 冷静期天数，默认 7
+ * @returns {Promise<{ delete_scheduled_at: string, delete_scheduled_at_ts: number }>}
+ */
+async function scheduleDeleteAccount(userId, days = 7) {
+  const db = getDb()
+  const userDoc = await getDocByUser('users', userId)
+  if (!userDoc) throw new Error('user not found')
+  // 幂等：重复申请则按请求天数重算到期时间
+  const scheduledDate = new Date(Date.now() + days * 86400000)
+  const deleteScheduledAt = formatDateTime(scheduledDate)
+  await db.collection('users').doc(userDoc._id).update({
+    account_status: 'deleting',
+    delete_scheduled_at: deleteScheduledAt,
+    updated_at: nowTs()
+  })
+  return { delete_scheduled_at: deleteScheduledAt, delete_scheduled_at_ts: scheduledDate.getTime() }
+}
+
+/**
+ * 撤销注销：冷静期内恢复账号（重置为 active 并清空计划删除时间）。
+ * @param {string} userId openid
+ * @returns {Promise<{ ok: boolean }>}
+ */
+async function cancelDeleteAccount(userId) {
+  const db = getDb()
+  const userDoc = await getDocByUser('users', userId)
+  if (!userDoc) throw new Error('user not found')
+  await db.collection('users').doc(userDoc._id).update({
+    account_status: 'active',
+    delete_scheduled_at: '',
+    updated_at: nowTs()
+  })
+  return { ok: true }
+}
+
+// 导出时额外纳入的按 user_id 归属集合（不在硬删列表中的只读/流水表）
+const EXPORT_EXTRA_COLLECTIONS = [
+  'daily_settlements',
+  'account_balance_logs',
+  'favorite_ledgers',
+  'daily_health_snapshots'
+]
+
+/**
+ * 导出用户全量数据（个保法第 45 条可携带权）。
+ * 聚合所有业务集合，按集合名归类；关联表（ledger_members/member_ledgers/meal_food_items）
+ * 经本用户账本/餐次 id 取回。返回可直接 JSON 序列化的对象。
+ * @param {string} userId openid
+ */
+async function exportUserData(userId) {
+  const db = getDb()
+  const uDoc = await getDocByUser('users', userId)
+  if (!uDoc) throw new Error('user not found')
+  const collections = {}
+
+  // 1) 直接按 user_id 归属的集合
+  const exportCols = DELETE_COLLECTIONS_BY_USER.concat(EXPORT_EXTRA_COLLECTIONS)
+  for (const col of exportCols) {
+    const res = await db.collection(col).where({ user_id: userId }).limit(2000).get()
+    collections[col] = (res && res.data) || []
+  }
+
+  // 2) 关联表：按账本 id
+  const ledgerRes = await db
+    .collection('ledgers')
+    .where({ user_id: userId })
+    .field({ _id: true })
+    .limit(2000)
+    .get()
+  const ledgerIds = ((ledgerRes && ledgerRes.data) || []).map((l) => l._id).filter(Boolean)
+  if (ledgerIds.length) {
+    for (const col of ['ledger_members', 'member_ledgers']) {
+      const res = await db
+        .collection(col)
+        .where({ ledger_id: db.command.in(ledgerIds) })
+        .limit(2000)
+        .get()
+      collections[col] = (res && res.data) || []
+    }
+  }
+
+  // 3) 关联表：按餐次 id
+  const mealRes = await db
+    .collection('meals')
+    .where({ user_id: userId })
+    .field({ _id: true })
+    .limit(2000)
+    .get()
+  const mealIds = ((mealRes && mealRes.data) || []).map((m) => m._id).filter(Boolean)
+  if (mealIds.length) {
+    const res = await db
+      .collection('meal_food_items')
+      .where({ meal_id: db.command.in(mealIds) })
+      .limit(2000)
+      .get()
+    collections.meal_food_items = (res && res.data) || []
+  }
+
+  const userDoc = await getDocByUser('users', userId)
+  return {
+    app: 'sparejar',
+    note: '余钱罐用户数据导出',
+    exported_at: nowTs(),
+    user_id: userId,
+    user: userDoc,
+    collections
+  }
+}
+
+/**
+ * 定时清理：硬删所有已过冷静期（delete_scheduled_at <= now 且 status='deleting'）的用户。
+ * 由 cronDailySettlement 在日切后调用，无需人工触发。
+ * @returns {Promise<{ purged: Array<{ user_id: string, deleted?: object, error?: string }> }>}
+ */
+async function purgeScheduledDeletions() {
+  const db = getDb()
+  const nowStr = formatDateTime(new Date())
+  const due = await db
+    .collection('users')
+    .where({ account_status: 'deleting', delete_scheduled_at: db.command.lte(nowStr) })
+    .field({ user_id: true })
+    .limit(200)
+    .get()
+  const purged = []
+  for (const u of ((due && due.data) || [])) {
+    try {
+      const deleted = await deleteAccount(u.user_id)
+      purged.push({ user_id: u.user_id, deleted })
+    } catch (e) {
+      console.error('[purgeScheduledDeletions] 删除失败', u.user_id, e)
+      purged.push({ user_id: u.user_id, error: e.message })
+    }
+  }
+  return { purged }
+}
 
 module.exports = {
   updateOnboarding,
@@ -288,4 +575,9 @@ module.exports = {
   recordSubscribeAuth,
   sendSubscribeMessage,
   initUser,
+  deleteAccount,
+  scheduleDeleteAccount,
+  cancelDeleteAccount,
+  exportUserData,
+  purgeScheduledDeletions,
 }

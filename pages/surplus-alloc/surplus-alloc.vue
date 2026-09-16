@@ -86,7 +86,7 @@ import { ref, reactive, computed, onMounted } from 'vue';
 import { useUserStore } from '@/stores/user.js';
 import { formatFen } from '@/utils/money.js';
 
-const { state, loadWishes, loadSurplusPool, loadPendingAllocationAction, confirmSurplusRolloverAction } = useUserStore();
+const { state, loadWishes, loadSurplusPool, loadPendingAllocationAction, confirmSurplusRolloverAction, checkLoggedIn } = useUserStore();
 
 const pending = ref(null);
 const wishes = computed(() => (Array.isArray(state.wishes) ? state.wishes : []));
@@ -160,6 +160,15 @@ const goHistory = () => uni.navigateTo({ url: '/pages/surplus-history/surplus-hi
 const goBack = () => uni.navigateBack();
 
 onMounted(async () => {
+  if (!checkLoggedIn()) {
+    uni.showToast({ title: "请先登录", icon: "none" });
+    uni.navigateTo({
+      url:
+        "/pages/login/login?redirect=" +
+        encodeURIComponent("/pages/surplus-alloc/surplus-alloc"),
+    });
+    return;
+  }
   try {
     const [p] = await Promise.all([loadPendingAllocationAction(), loadWishes()]);
     pending.value = p;

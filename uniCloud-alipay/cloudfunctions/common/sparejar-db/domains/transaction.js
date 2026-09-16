@@ -595,6 +595,7 @@ async function createTransaction(userId, data) {
     image_urls: data.image_urls || [],
     sticker_id: data.sticker_id || null,
     sticker_image_url: data.sticker_image_url || null,
+    sticker_qty: data.sticker_qty != null ? data.sticker_qty : 1,
     tags: data.tags || [],
     related_transaction_id: data.related_transaction_id || null,
     stock_consume_qty: data.stock_consume_qty || null,
@@ -822,6 +823,8 @@ async function updateTransaction(userId, transactionId, data) {
     image_urls: data.image_urls !== undefined ? (data.image_urls || []) : oldTx.image_urls,
     sticker_id: data.sticker_id !== undefined ? (data.sticker_id || null) : oldTx.sticker_id,
     sticker_image_url: data.sticker_image_url !== undefined ? (data.sticker_image_url || null) : oldTx.sticker_image_url,
+    sticker_qty: data.sticker_qty !== undefined ? (data.sticker_qty || 1) : oldTx.sticker_qty,
+    stock_consume_qty: data.stock_consume_qty !== undefined ? data.stock_consume_qty : oldTx.stock_consume_qty,
     include_in_daily_limit: includeInDailyLimit,
     include_in_challenge: includeInChallenge,
     updated_at: ts

@@ -63,6 +63,7 @@
 <script setup>
 import { ref } from 'vue';
 import { useUserStore } from '@/stores/user.js';
+import { requireLogin } from '@/utils/guard.js';
 import { updateSettings } from '@/api/sparejar.js';
 import { recordSubscribeAuthAction } from '@/stores/user.js';
 
@@ -114,8 +115,13 @@ function goBack() {
   uni.navigateBack({ delta: 1 });
 }
 
-if (!state.settings) loadSettings().then(syncFromSettings).catch(() => {});
-else syncFromSettings();
+if (!requireLogin('/pages/notify-setting/notify-setting')) {
+  // 未登录：已跳转登录页，跳过本地设置加载
+} else if (!state.settings) {
+  loadSettings().then(syncFromSettings).catch(() => {});
+} else {
+  syncFromSettings();
+}
 </script>
 
 <style scoped>

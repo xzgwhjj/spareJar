@@ -336,6 +336,9 @@ async function loadLedgerList() {
 onMounted(async () => {
   if (!userStore.state.uid) {
     uni.showToast({ title: '请先登录', icon: 'none' })
+    uni.navigateTo({
+      url: '/pages/login/login?redirect=' + encodeURIComponent('/pages/ocr/ocr'),
+    })
     return
   }
   await Promise.all([loadExpenseCats(), loadLedgerList()])

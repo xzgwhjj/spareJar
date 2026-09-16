@@ -27,7 +27,8 @@
         class="cat-row"
         :class="{ hidden: cat.is_hidden }"
       >
-        <text class="cat-icon">{{ cat.icon }}</text>
+        <image v-if="cat.icon_type === 'image' && cat.icon_url" class="cat-icon-img" :src="cloud.display(cat.icon_url)" mode="aspectFill" />
+        <text v-else class="cat-icon">{{ cat.icon }}</text>
         <view class="cat-info">
           <text class="cat-name">{{ cat.name }}</text>
           <view class="cat-tags">
@@ -43,9 +44,11 @@
           <template v-if="!cat.is_system">
             <view class="act-btn" :class="{ disabled: isFirst(idx) }" @click="move(idx, -1)"><text>↑</text></view>
             <view class="act-btn" :class="{ disabled: isLast(idx) }" @click="move(idx, 1)"><text>↓</text></view>
-            <view class="act-btn" @click="openEdit(cat)"><text>✏️</text></view>
-            <view class="act-btn act-danger" @click="openDelete(cat)"><text>🗑</text></view>
           </template>
+          <!-- 预置分类与自定义分类都可编辑（改名/换图标） -->
+          <view class="act-btn" @click="openEdit(cat)"><text>✏️</text></view>
+          <!-- 预置分类不可删除 -->
+          <view v-if="!cat.is_system" class="act-btn act-danger" @click="openDelete(cat)"><text>🗑</text></view>
           <view class="act-btn" @click="toggleHide(cat)">
             <text>{{ cat.is_hidden ? '👁' : '🚫' }}</text>
           </view>
@@ -79,9 +82,23 @@
             v-for="em in EMOJIS"
             :key="em"
             class="emoji-cell"
-            :class="{ active: form.icon === em }"
-            @click="form.icon = em"
+            :class="{ active: form.icon_type !== 'image' && form.icon === em }"
+            @click="pickEmoji(em)"
           ><text>{{ em }}</text></view>
+        </view>
+
+        <view class="icon-upload">
+          <view class="upload-cell" @click="chooseIcon">
+            <image
+              v-if="form.icon_type === 'image' && form.icon_url"
+              class="upload-prev"
+              :src="cloud.display(form.icon_url)"
+              mode="aspectFill"
+            />
+            <text v-else class="upload-plus">＋</text>
+            <text class="upload-txt">{{ form.icon_type === 'image' ? '更换图片' : '上传图片' }}</text>
+          </view>
+          <text v-if="form.icon_type === 'image'" class="upload-clear" @click="clearIcon">移除</text>
         </view>
 
         <view class="save-btn" @click="saveEdit"><text>{{ editingCat ? '保存' : '创建' }}</text></view>
@@ -95,26 +112,53 @@
         <text class="sheet-title">删除分类</text>
 
         <view v-if="deletingCat && deletingCat.usage_count > 0" class="merge-tip">
-          <text>该分类下有 {{ deletingCat.usage_count }} 笔账目，删除前请选择合并目标（账目将转移至目标分类）：</text>
+          <text>该分类下有 {{ deletingCat.usage_count }} 笔账目，请选择处理方式：</text>
         </view>
         <view v-else class="merge-tip">
           <text>确认删除该自定义分类？此操作不可恢复。</text>
         </view>
 
-        <view v-if="deletingCat && deletingCat.usage_count > 0" class="merge-list">
-          <view
-            v-for="t in mergeTargets"
-            :key="t._id"
-            class="merge-item"
-            :class="{ active: mergeTargetId === t._id }"
-            @click="mergeTargetId = t._id"
-          >
-            <text class="merge-icon">{{ t.icon }}</text>
-            <text class="merge-name">{{ t.name }}</text>
-            <text v-if="mergeTargetId === t._id" class="merge-check">✓</text>
+        <template v-if="deletingCat && deletingCat.usage_count > 0">
+          <view class="mode-list">
+            <view class="mode-item" :class="{ active: delMode === 'keep' }" @click="delMode = 'keep'">
+              <view class="mode-main">
+                <text class="mode-name">保留账单，仅删除分类</text>
+                <text class="mode-desc">账目仍显示为该分类，只是分类不再出现在选择列表</text>
+              </view>
+              <text v-if="delMode === 'keep'" class="mode-check">✓</text>
+            </view>
+            <view class="mode-item" :class="{ active: delMode === 'merge' }" @click="delMode = 'merge'">
+              <view class="mode-main">
+                <text class="mode-name">转移到其他分类</text>
+                <text class="mode-desc">账目与贴纸转移到目标分类，账单保留</text>
+              </view>
+              <text v-if="delMode === 'merge'" class="mode-check">✓</text>
+            </view>
+            <view class="mode-item" :class="{ active: delMode === 'purge' }" @click="delMode = 'purge'">
+              <view class="mode-main">
+                <text class="mode-name">连同账单一并删除</text>
+                <text class="mode-desc">同时删除这 {{ deletingCat.usage_count }} 笔账目，相关金额会同步回滚</text>
+              </view>
+              <text v-if="delMode === 'purge'" class="mode-check">✓</text>
+            </view>
           </view>
-          <view v-if="!mergeTargets.length" class="merge-empty"><text>无其他可选分类</text></view>
-        </view>
+
+          <view v-if="delMode === 'merge'" class="merge-list">
+            <view
+              v-for="t in mergeTargets"
+              :key="t._id"
+              class="merge-item"
+              :class="{ active: mergeTargetId === t._id }"
+              @click="mergeTargetId = t._id"
+            >
+              <image v-if="t.icon_type === 'image' && t.icon_url" class="merge-icon-img" :src="cloud.display(t.icon_url)" mode="aspectFill" />
+              <text v-else class="merge-icon">{{ t.icon }}</text>
+              <text class="merge-name">{{ t.name }}</text>
+              <text v-if="mergeTargetId === t._id" class="merge-check">✓</text>
+            </view>
+            <view v-if="!mergeTargets.length" class="merge-empty"><text>无其他可选分类</text></view>
+          </view>
+        </template>
 
         <view class="save-btn danger" @click="confirmDelete"><text>确认删除</text></view>
       </view>
@@ -124,7 +168,9 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { onShow as uniOnShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/stores/user.js'
+import { requireLogin } from '@/utils/guard.js';
 import {
   listCategories,
   createCategory,
@@ -132,8 +178,16 @@ import {
   deleteCategory,
   reorderCategories
 } from '@/api/sparejar.js'
+import { createCloudImageResolver } from '@/utils/cdn.js'
 
 const userStore = useUserStore()
+// cloud:// 需解析成临时 URL 才能被 <image> 渲染；onShow 重新解析以撑过切后台过期
+const cloud = createCloudImageResolver()
+function resolveIcons() {
+  const ids = [form.value.icon_url, ...(cats.value || []).map((c) => c.icon_url)].filter(Boolean)
+  cloud.resolve(ids)
+}
+uniOnShow(resolveIcons)
 
 const currentType = ref('expense')
 const cats = ref([])
@@ -160,7 +214,7 @@ const mergeTargets = computed(() => {
 const editSheetOpen = ref(false)
 const deleteSheetOpen = ref(false)
 const editingCat = ref(null)
-const form = ref({ name: '', desc: '', icon: '📦' })
+const form = ref({ name: '', desc: '', icon: '📦', icon_type: 'emoji', icon_url: '' })
 
 const EMOJIS = [
   '🍜', '🥡', '🧋', '🛒', '🏪', '🚌', '🚕', '⛽', '🅿️', '📞',
@@ -178,6 +232,7 @@ async function load() {
     cats.value = res || []
     // 同步刷新记账页可用的分类（不含隐藏）
     await userStore.loadCategories(false)
+    resolveIcons() // 解析分类图标（cloud:// → 临时 URL）
   } catch (err) {
     uni.showToast({ title: (err && err.message) || '加载失败', icon: 'none' })
   } finally {
@@ -199,14 +254,63 @@ function goBack() {
 
 function openCreate() {
   editingCat.value = null
-  form.value = { name: '', desc: '', icon: '📦' }
+  form.value = { name: '', desc: '', icon: '📦', icon_type: 'emoji', icon_url: '' }
   editSheetOpen.value = true
 }
 
 function openEdit(cat) {
   editingCat.value = cat
-  form.value = { name: cat.name, desc: cat.desc || '', icon: cat.icon }
+  form.value = { name: cat.name, desc: cat.desc || '', icon: cat.icon || '📦', icon_type: cat.icon_type || 'emoji', icon_url: cat.icon_url || '' }
   editSheetOpen.value = true
+}
+
+// 选 emoji 图标（切回 emoji 类型，清空自定义图标）
+function pickEmoji(em) {
+  form.value.icon = em
+  form.value.icon_type = 'emoji'
+  form.value.icon_url = ''
+}
+// 上传自定义图标：选图 → 传 uniCloud → 写入 icon_url
+const iconUploading = ref(false)
+async function chooseIcon() {
+  let imgPath = ''
+  try {
+    const res = await uni.chooseImage({
+      count: 1,
+      sizeType: ['compressed'],
+      sourceType: ['album', 'camera']
+    })
+    imgPath = (res.tempFilePaths && res.tempFilePaths[0]) || ''
+  } catch (_e) {
+    return // 用户取消
+  }
+  if (!imgPath) return
+  iconUploading.value = true
+  uni.showLoading({ title: '上传中…', mask: true })
+  try {
+    const ext = (imgPath.split('.').pop() || 'png').split('?')[0].toLowerCase()
+    const cloudPath = `cat-icons/${userStore.state.uid || 'anon'}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
+    const up = await uniCloud.uploadFile({ filePath: imgPath, cloudPath })
+    const fileID = (up && up.fileID) || ''
+    const url = fileID || (up && up.url) || ''
+    if (url) {
+      form.value.icon_type = 'image'
+      form.value.icon_url = url
+      cloud.resolve([url]) // cloud:// → 临时 URL 供 <image> 渲染
+    } else {
+      uni.showToast({ title: '上传失败，请重试', icon: 'none' })
+    }
+  } catch (err) {
+    uni.showToast({ title: (err && err.message) || '上传失败', icon: 'none' })
+  } finally {
+    iconUploading.value = false
+    uni.hideLoading()
+  }
+}
+// 移除自定义图标，回退到 emoji
+function clearIcon() {
+  form.value.icon_type = 'emoji'
+  form.value.icon_url = ''
 }
 
 async function saveEdit() {
@@ -216,18 +320,24 @@ async function saveEdit() {
     return
   }
   try {
+    const isImage = form.value.icon_type === 'image'
+    const iconUrl = isImage ? form.value.icon_url || '' : ''
     if (editingCat.value) {
       await updateCategory(editingCat.value._id, {
         name,
         desc: (form.value.desc || '').trim(),
-        icon: form.value.icon
+        icon: form.value.icon,
+        icon_type: form.value.icon_type || 'emoji',
+        icon_url: iconUrl
       })
     } else {
       await createCategory({
         type: currentType.value,
         name,
         desc: (form.value.desc || '').trim(),
-        icon: form.value.icon
+        icon: form.value.icon,
+        icon_type: form.value.icon_type || 'emoji',
+        icon_url: iconUrl
       })
     }
     editSheetOpen.value = false
@@ -270,21 +380,30 @@ async function move(idx, dir) {
   }
 }
 
+const delMode = ref('keep') // 'keep' 保留账单 | 'merge' 转移 | 'purge' 连同账单删除
+
 function openDelete(cat) {
+  if (cat.is_system) {
+    uni.showToast({ title: '预置分类不可删除', icon: 'none' })
+    return
+  }
   deletingCat.value = cat
   mergeTargetId.value = ''
+  delMode.value = 'keep'
   deleteSheetOpen.value = true
 }
 
 async function confirmDelete() {
   const cat = deletingCat.value
   if (!cat) return
-  if (cat.usage_count > 0 && !mergeTargetId.value) {
-    uni.showToast({ title: '请选择合并目标分类', icon: 'none' })
+  const hasTx = (cat.usage_count || 0) > 0
+  const mode = hasTx ? delMode.value : 'merge'
+  if (hasTx && mode === 'merge' && !mergeTargetId.value) {
+    uni.showToast({ title: '请选择目标分类', icon: 'none' })
     return
   }
   try {
-    await deleteCategory(cat._id, cat.usage_count > 0 ? mergeTargetId.value : null)
+    await deleteCategory(cat._id, mode === 'merge' ? mergeTargetId.value : null, { mode })
     deleteSheetOpen.value = false
     uni.showToast({ title: '已删除', icon: 'success' })
     await load()
@@ -293,7 +412,10 @@ async function confirmDelete() {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  if (!requireLogin('/pages/category-mgr/category-mgr')) return
+  load()
+})
 </script>
 
 <style scoped>
@@ -313,6 +435,7 @@ onMounted(load)
 .cat-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin-bottom: 8px; border-radius: 16px; background: rgba(255,255,255,0.7); border: 1px solid #e3f5e6; }
 .cat-row.hidden { opacity: 0.55; }
 .cat-icon { font-size: 24px; width: 32px; text-align: center; }
+.cat-icon-img { width: 32px; height: 32px; border-radius: 8px; }
 .cat-info { flex: 1; }
 .cat-name { font-size: 15px; font-weight: 700; color: #0f1c14; display: block; }
 .cat-tags { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
@@ -341,6 +464,13 @@ onMounted(load)
 .emoji-cell { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 20px; border-radius: 10px; background: rgba(255,255,255,0.6); border: 1px solid #e3f5e6; cursor: pointer; }
 .emoji-cell.active { border-color: #25cc5d; background: #eafaf0; }
 
+.icon-upload { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+.upload-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 72px; height: 72px; border-radius: 12px; background: rgba(255,255,255,0.6); border: 1px dashed #25cc5d; cursor: pointer; }
+.upload-prev { width: 100%; height: 100%; border-radius: 12px; }
+.upload-plus { font-size: 26px; color: #25cc5d; line-height: 1; }
+.upload-txt { margin-top: 4px; font-size: 11px; color: #6b8c7a; }
+.upload-clear { font-size: 13px; color: #ff6b6b; text-decoration: underline; }
+
 .seg-group { display: flex; flex-wrap: wrap; gap: 8px; }
 .seg-btn { padding: 8px 12px; border-radius: 12px; background: rgba(255,255,255,0.6); border: 1px solid #c2f2c8; font-size: 12px; font-weight: 600; color: #6b8c7a; cursor: pointer; }
 .seg-btn.active { background: linear-gradient(135deg,#4fd974,#25cc5d); color: #fff; border-color: transparent; }
@@ -349,10 +479,18 @@ onMounted(load)
 .save-btn.danger { background: linear-gradient(135deg,#ff8a8a,#ff6b6b); }
 
 .merge-tip { font-size: 13px; color: #6b8c7a; line-height: 1.6; margin-bottom: 12px; }
+.mode-list { display: flex; flex-direction: column; gap: 8px; }
+.mode-item { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,0.6); border: 1px solid #e3f5e6; cursor: pointer; }
+.mode-item.active { border-color: #25cc5d; background: #eafaf0; }
+.mode-main { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.mode-name { font-size: 14px; font-weight: 700; color: #0f1c14; }
+.mode-desc { font-size: 11px; color: #9bb8a8; }
+.mode-check { color: #25cc5d; font-weight: 800; }
 .merge-list { max-height: 40vh; overflow-y: auto; }
 .merge-item { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,0.6); border: 1px solid #e3f5e6; margin-bottom: 8px; cursor: pointer; }
 .merge-item.active { border-color: #25cc5d; background: #eafaf0; }
 .merge-icon { font-size: 20px; }
+.merge-icon-img { width: 24px; height: 24px; border-radius: 6px; }
 .merge-name { flex: 1; font-size: 14px; font-weight: 600; color: #0f1c14; }
 .merge-check { color: #25cc5d; font-weight: 800; }
 .merge-empty { text-align: center; color: #9bb8a8; font-size: 13px; padding: 20px 0; }

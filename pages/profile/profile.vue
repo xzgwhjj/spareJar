@@ -66,6 +66,32 @@
         </view>
       </view>
 
+      <!-- 注销冷静期横幅：申请注销后仍保持登录态，横幅读取云端 account_status；期内可撤销/导出，也可立即注销 -->
+      <view v-if="pendingDeletion" class="delete-banner">
+        <image
+          class="delete-banner-icon"
+          :src="cdn('/app_static/images/icon_timer.png')"
+          mode="aspectFit"
+        />
+        <view class="delete-banner-body">
+          <text class="delete-banner-title">账号注销处理中</text>
+          <text class="delete-banner-text">
+            你的账号将于 {{ formatDeleteDate() }} 永久删除，剩余约 {{ remainDays }} 天。期内可随时撤销并恢复全部数据，也可立即注销。
+          </text>
+          <view class="delete-banner-actions">
+            <view class="banner-btn banner-btn-cancel" @click="cancelDeleting">
+              <text>撤销注销</text>
+            </view>
+            <view class="banner-btn banner-btn-export" @click="exportData">
+              <text>导出数据</text>
+            </view>
+            <view class="banner-btn banner-btn-immediate" @click="openImmediateDelete">
+              <text>立即注销</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
       <view v-if="!isGuest">
         <view class="glass-mid" style="margin: 0 32rpx 32rpx; padding: 32rpx">
           <view class="stats-row">
@@ -117,6 +143,18 @@
               <view class="menu-left">
                 <text class="menu-icon">🚪</text>
                 <text class="menu-label logout-label">退出登录</text>
+              </view>
+              <text class="menu-arrow">›</text>
+            </view>
+            <view
+              v-if="!isDeletingAccount"
+              class="menu-item glass-thin menu-item-logout delete-account-item"
+              style="margin: 0 32rpx 0; border-radius: 0"
+              @click="openDeleteSheet"
+            >
+              <view class="menu-left">
+                <text class="menu-icon">🗑️</text>
+                <text class="menu-label logout-label">注销账号</text>
               </view>
               <text class="menu-arrow">›</text>
             </view>
@@ -355,6 +393,71 @@
       </view>
     </view>
 
+    <!-- 注销账号确认弹窗 -->
+    <view
+      v-if="activeSheet === 'deleteAccount'"
+      class="sheet-overlay"
+      @click="activeSheet = null"
+    >
+      <view class="sheet-panel" @click.stop>
+        <view class="sheet-handle"><view class="handle-bar" /></view>
+        <text class="sheet-title">注销账号</text>
+        <view class="delete-warn">
+          <text class="delete-warn-text"
+            >注销后账号将被永久删除，以下数据无法恢复：全部记账记录、账本、心愿、资产账户、健康与餐次数据、贴纸与成就等。此操作不可撤销。</text
+          >
+        </view>
+        <view class="agree-row" @click="agreeDelete = !agreeDelete">
+          <image
+            class="agree-icon"
+            :src="
+              agreeDelete
+                ? '/static/images/icon_coin.png'
+                : '/static/images/icon_coin_none.png'
+            "
+            mode="aspectFit"
+          />
+          <text class="agree-text">我已了解，注销后将永久删除我的全部数据</text>
+        </view>
+        <view
+          class="save-btn delete-btn"
+          :class="{ disabled: !agreeDelete || deleting }"
+          @click="confirmDeleteAccount"
+        >
+          <text>{{ deleting ? "注销中…" : "下一步" }}</text>
+        </view>
+        <view class="sheet-cancel" @click="activeSheet = null">
+          <text>取消</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 注销二次确认弹框：使用统一 BaseModal -->
+    <BaseModal
+      :show="showDeleteConfirm"
+      title="确认注销账号"
+      content="提交后账号将进入 7 天注销冷静期，期内可随时撤销并恢复全部数据；冷静期结束后数据将被永久删除且不可恢复。"
+      cancel-text="再想想"
+      confirm-text="提交注销"
+      danger
+      @confirm="onDeleteConfirm"
+      @cancel="onDeleteCancel"
+      @close="onDeleteCancel"
+    />
+
+    <!-- 立即注销二次确认：放弃冷静期，立即永久删除 -->
+    <BaseModal
+      :show="showImmediateDelete"
+      title="立即注销账号"
+      content="确认立即永久删除账号及全部数据？此操作不可撤销，将放弃剩余冷静期。删除后同微信再次登录将创建新账号。"
+      cancel-text="再想想"
+      confirm-text="立即注销"
+      danger
+      @confirm="confirmImmediateDelete"
+      @cancel="showImmediateDelete = false"
+      @close="showImmediateDelete = false"
+    />
+
     <!-- 全局数字键盘（单例）：由 main.js 全局注册 -->
     <amount-keyboard />
   </view>
@@ -364,6 +467,7 @@
 import { listTransactions, updateSettings } from "@/api/sparejar.js";
 import { useUserStore } from "@/stores/user.js";
 import { cdn } from "@/utils/cdn.js";
+import BaseModal from "@/components/BaseModal.vue";
 import { addDaysToDateKey, todayDateKey } from "@/utils/date.js";
 import { formatFen } from "@/utils/money.js";
 import { computed, onMounted, onUnmounted, ref } from "vue";
@@ -377,6 +481,10 @@ const {
   wishes,
   loadWishes,
   logout,
+  requestDeleteAccount,
+  cancelDeleteAccount,
+  exportUserData,
+  deleteAccount,
   loadSettings,
   refreshTodayDashboard,
 } = useUserStore();
@@ -501,11 +609,43 @@ const userStats = computed(() => [
 ]);
 
 const menuItems = [
-  { icon: "📊", label: "数据导出", action: () => {} },
+  { icon: "📊", label: "数据导出", action: exportData },
   { icon: "🔔", label: "通知设置", action: goNotifySetting },
   { icon: "🔒", label: "隐私与安全", action: () => {} },
   { icon: "🗑️", label: "清理数据", action: () => {} },
 ];
+
+// ===== 注销冷静期状态（account_status='deleting'） =====
+const isDeletingAccount = computed(
+  () => !!(state.user && state.user.account_status === "deleting")
+);
+const pendingDeletion = computed(
+  () => !!(state.user && state.user.account_status === "deleting")
+);
+const deleteScheduledAt = computed(() => {
+  if (state.user && state.user.delete_scheduled_at) return state.user.delete_scheduled_at;
+  return "";
+});
+const deleteScheduledTs = computed(() => {
+  const s = deleteScheduledAt.value;
+  if (!s) return 0;
+  const t = new Date(String(s).replace(" ", "T")).getTime();
+  return Number.isNaN(t) ? 0 : t;
+});
+const remainDays = computed(() => {
+  if (!deleteScheduledTs.value) return 0;
+  const ms = deleteScheduledTs.value - Date.now();
+  return Math.max(0, Math.ceil(ms / 86400000));
+});
+function formatDeleteDate() {
+  const t = deleteScheduledTs.value;
+  if (!t) return "";
+  const d = new Date(t);
+  const p = (n) => (n < 10 ? "0" + n : "" + n);
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(
+    d.getHours()
+  )}:${p(d.getMinutes())}`;
+}
 
 // 横向大分类（无背景无框文字） + 当前选中分类
 const catList = [
@@ -737,6 +877,140 @@ function handleLogout() {
     },
   });
 }
+
+// ===== 注销账号：勾选 + 二次弹窗 → 申请 7 天冷静期（可撤销），不立即删数据 =====
+const agreeDelete = ref(false);
+const deleting = ref(false);
+// 注销二次确认弹框（统一 BaseModal）显隐
+const showDeleteConfirm = ref(false);
+
+function openDeleteSheet() {
+  agreeDelete.value = false;
+  deleting.value = false;
+  activeSheet.value = "deleteAccount";
+}
+
+// 勾选同意后点击「下一步」：打开统一二次确认弹框
+function confirmDeleteAccount() {
+  if (!agreeDelete.value || deleting.value) return;
+  showDeleteConfirm.value = true;
+}
+
+// BaseModal 确认：执行注销提交
+async function onDeleteConfirm() {
+  if (deleting.value) return;
+  deleting.value = true;
+  showDeleteConfirm.value = false;
+  try {
+    await requestDeleteAccount(7);
+    deleting.value = false;
+    activeSheet.value = null;
+    uni.showToast({ title: "已提交注销", icon: "none" });
+  } catch (err) {
+    deleting.value = false;
+    uni.showToast({
+      title: (err && err.message) || "提交失败，请稍后重试",
+      icon: "none",
+    });
+  }
+}
+
+// BaseModal 取消 / 关闭：仅收起弹框
+function onDeleteCancel() {
+  showDeleteConfirm.value = false;
+}
+
+// 撤销注销：冷静期内恢复账号
+async function cancelDeleting() {
+  try {
+    await cancelDeleteAccount();
+    uni.showToast({ title: "已取消注销", icon: "none" });
+  } catch (err) {
+    uni.showToast({
+      title: (err && err.message) || "操作失败，请稍后重试",
+      icon: "none",
+    });
+  }
+}
+
+// 立即注销：放弃冷静期，立即硬删并登出（复用 auth.deleteAccount），之后同微信登录即新号
+const showImmediateDelete = ref(false);
+function openImmediateDelete() {
+  showImmediateDelete.value = true;
+}
+async function confirmImmediateDelete() {
+  showImmediateDelete.value = false;
+  try {
+    uni.showLoading({ title: "注销中…" });
+    await deleteAccount();
+    uni.hideLoading();
+    uni.showToast({ title: "账号已彻底注销", icon: "none" });
+  } catch (err) {
+    uni.hideLoading();
+    uni.showToast({
+      title: (err && err.message) || "注销失败，请稍后重试",
+      icon: "none",
+    });
+  }
+}
+
+// 导出用户全量数据为 JSON 文件（微信小程序：写入本地后分享；其他平台提示）
+async function exportData() {
+  try {
+    uni.showLoading({ title: "导出中…" });
+    const data = await exportUserData();
+    const json = JSON.stringify(data, null, 2);
+    const fileName = `余钱罐数据导出_${todayDateKey()}.json`;
+    // #ifdef MP-WEIXIN
+    const fs = uni.getFileSystemManager();
+    const filePath = `${uni.env.USER_DATA_PATH}/${fileName}`;
+    fs.writeFile({
+      filePath,
+      data: json,
+      encoding: "utf8",
+      success: () => {
+        uni.hideLoading();
+        // 优先用 uni 封装，缺失时回退到 wx 原生（微信文件分享到会话）
+        const shareFn =
+          typeof uni.shareFileMessage === "function"
+            ? uni.shareFileMessage
+            : typeof wx !== "undefined" && typeof wx.shareFileMessage === "function"
+            ? wx.shareFileMessage
+            : null;
+        if (shareFn) {
+          shareFn({
+            filePath,
+            fileName,
+            success: () => {},
+            fail: () => {
+              uni.showToast({
+                title: "已生成文件，可转发到聊天保存",
+                icon: "none",
+              });
+            },
+          });
+        } else {
+          uni.showToast({ title: "数据已导出至本地文件", icon: "none" });
+        }
+      },
+      fail: () => {
+        uni.hideLoading();
+        uni.showToast({ title: "导出失败，请重试", icon: "none" });
+      },
+    });
+    // #endif
+    // #ifndef MP-WEIXIN
+    uni.hideLoading();
+    uni.showToast({ title: "当前平台暂不支持文件导出", icon: "none" });
+    // #endif
+  } catch (err) {
+    uni.hideLoading();
+    uni.showToast({
+      title: (err && err.message) || "导出失败，请重试",
+      icon: "none",
+    });
+  }
+}
 </script>
 
 <style scoped lang="scss">
@@ -831,7 +1105,7 @@ function handleLogout() {
 /* 不同时间段：云朵位置/缩放/旋转差异化 */
 .cloud.cloud-morning {
   right: 12rpx;
-  top: -85rpx;
+  top: -65rpx;
 }
 .cloud.cloud-noon {
   top: -70rpx;
@@ -1338,5 +1612,124 @@ function handleLogout() {
   padding: 28rpx;
   font-size: 26rpx;
   margin-top: 32rpx;
+}
+
+/* 注销账号入口：与退出登录同款红色，但视觉上区分（更靠下的危险操作） */
+.delete-account-item {
+  margin-top: 4rpx !important;
+}
+.delete-account-item .menu-icon {
+  opacity: 0.9;
+}
+
+/* 注销确认弹窗 */
+.delete-warn {
+  padding: 24rpx 0 8rpx;
+}
+.delete-warn-text {
+  font-size: 26rpx;
+  color: var(--ink3);
+  line-height: 1.6;
+  display: block;
+}
+.agree-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+  padding: 28rpx 0 8rpx;
+  cursor: pointer;
+}
+.agree-icon {
+  width: 32rpx;
+  height: 32rpx;
+  flex-shrink: 0;
+}
+.agree-text {
+  font-size: 26rpx;
+  color: var(--ink);
+  line-height: 1.4;
+}
+/* 注销主按钮：危险红，未勾选/进行中置灰 */
+.delete-btn {
+  background: linear-gradient(135deg, var(--r7), var(--r6));
+  margin-top: 32rpx;
+}
+.delete-btn.disabled {
+  background: var(--g2-0);
+  color: var(--ink4);
+  cursor: not-allowed;
+}
+.sheet-cancel {
+  text-align: center;
+  padding: 28rpx 0 8rpx;
+  cursor: pointer;
+}
+.sheet-cancel text {
+  font-size: 28rpx;
+  color: var(--ink4);
+}
+
+/* 注销冷静期提示横幅 */
+.delete-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 20rpx;
+  margin: 0 32rpx 24rpx;
+  padding: 28rpx 28rpx 24rpx;
+  border-radius: 28rpx;
+  /* 毛玻璃效果：半透明琥珀底 + 背景模糊，沿用项目 sj-glass 风格 */
+  @include sj-glass(20rpx, rgba(255, 244, 224, 0.3), rgba(255, 184, 77, 0.2));
+  box-shadow: 0 8rpx 28rpx rgba(245, 158, 11, 0.14);
+}
+.delete-banner-icon {
+  width: 44rpx;
+  height: 44rpx;
+  flex-shrink: 0;
+}
+.delete-banner-body {
+  flex: 1;
+  min-width: 0;
+}
+.delete-banner-title {
+  font-size: 28rpx;
+  font-weight: 800;
+  color: var(--y8);
+  display: block;
+  margin-bottom: 8rpx;
+}
+.delete-banner-text {
+  font-size: 24rpx;
+  color: var(--y7);
+  line-height: 1.5;
+  display: block;
+}
+.delete-banner-actions {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 30rpx;
+}
+.banner-btn {
+  flex: 1;
+  padding: 18rpx 0;
+  border-radius: 24rpx;
+  text-align: center;
+  font-size: 26rpx;
+  font-weight: 700;
+  cursor: pointer;
+}
+.banner-btn text {
+  color: #fff;
+}
+.banner-btn-cancel {
+  background: linear-gradient(135deg, var(--y3), var(--y4));
+}
+.banner-btn-export {
+  background: var(--white-75);
+}
+.banner-btn-export text {
+  color: var(--y5);
+}
+.banner-btn-immediate {
+  background: linear-gradient(135deg, var(--r7), var(--r6));
 }
 </style>

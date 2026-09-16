@@ -102,6 +102,12 @@ export async function deleteLedgerCover(fileID) {
 /** 删除心愿 logo（复用兜底逻辑）。 */
 export const deleteWishLogo = deleteLedgerCover;
 
+/** 删除分类自定义图标（复用同一套直删 + 云函数兜底逻辑）。 */
+export const deleteCatIcon = deleteLedgerCover;
+
+/** 删除成员头像（复用同一套直删 + 云函数兜底逻辑）。 */
+export const deleteMemberAvatar = deleteLedgerCover;
+
 /**
  * 上传本地图片到云存储 asset_img 目录（资产账户自定义图标）。
  * @param {string} localPath 本地临时文件路径

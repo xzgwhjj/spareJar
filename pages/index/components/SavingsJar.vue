@@ -4,17 +4,16 @@
       <!-- 存钱罐直接由 Lottie 动画呈现 -->
       <canvas type="2d" id="lottieCanvas" class="lottie-canvas" />
     </view>
-      
-</view>
+  </view>
 </template>
 
 <script setup>
-import { loadAnimation, setup } from 'lottie-miniprogram';
-import { getCurrentInstance, onMounted, onUnmounted, watch } from 'vue';
-import { cdn } from '@/utils/cdn.js';
+import { loadAnimation, setup } from "lottie-miniprogram";
+import { getCurrentInstance, onMounted, onUnmounted, watch } from "vue";
+import { cdn } from "@/utils/cdn.js";
 
 // Lottie 动画资源（远程 CDN，失败自动回退本地打包）
-const CDN_LOTTIE_URL = cdn('/app_static/lotties/star_piggy_bank.json');
+const CDN_LOTTIE_URL = cdn("/app_static/lotties/star_piggy_bank.json");
 
 const props = defineProps({
   /** 剩余可花比例 0~1（保留以兼容父组件调用，视觉由 Lottie 呈现） */
@@ -26,7 +25,7 @@ const props = defineProps({
   autoCycle: { type: Boolean, default: false },
 });
 
-const STORAGE_KEY = 'sj_drops_level';
+const STORAGE_KEY = "sj_drops_level";
 const instance = getCurrentInstance();
 let anim = null;
 let loadPromise = null;
@@ -45,7 +44,7 @@ function getFrameSegments(lp) {
     // 0% 特例
     return { transition: [336, 342], loop: [342, 348], drops: 26 };
   }
-  const drops = Math.ceil((1 - lp) * 100 / 4);
+  const drops = Math.ceil(((1 - lp) * 100) / 4);
   if (drops === 0) {
     // 100% 首次进入
     return { transition: [0, 30], loop: [30, 36], drops: 0 };
@@ -67,13 +66,13 @@ function playTransitionThenLoop(seg, isFirstVisit) {
 
   _completeHandler = () => {
     if (!anim) return;
-    anim.removeEventListener('complete', _completeHandler);
+    anim.removeEventListener("complete", _completeHandler);
     _completeHandler = null;
     anim.loop = true;
     anim.setSpeed(0.1);
     anim.playSegments(seg.loop, true);
   };
-  anim.addEventListener('complete', _completeHandler);
+  anim.addEventListener("complete", _completeHandler);
 }
 
 /** 直接循环 */
@@ -98,17 +97,33 @@ const CYCLE_TOTAL = getFrameSegments(0).drops;
 function playCycleSegment(i, onDone) {
   if (!anim) return;
   anim.loop = false;
-  anim.setSpeed(0.5);
   // 复用记一笔后的真实帧段（transition 段即从上一高度下沉到当前高度）
   const seg = getFrameSegments(1 - i / CYCLE_TOTAL);
-  anim.playSegments(seg.transition, true);
-  cycleHandler = () => {
+  const [s, e] = seg.transition;
+  // 未登录(autoCycle)硬币消失：前后几帧放慢到 0.3 做缓入缓出，中间主体保持 0.5，避免消失突兀
+  const parts = [
+    { frames: [s, s + 2], speed: 0.15 },
+    { frames: [s + 2, e - 2], speed: 0.5 },
+    { frames: [e - 2, e], speed: 0.15 },
+  ];
+  let p = 0;
+  const playNext = () => {
     if (!anim) return;
-    anim.removeEventListener('complete', cycleHandler);
-    cycleHandler = null;
-    onDone && onDone();
+    if (p >= parts.length) {
+      onDone && onDone();
+      return;
+    }
+    const cur = parts[p++];
+    anim.setSpeed(cur.speed);
+    anim.playSegments(cur.frames, true);
+    const h = () => {
+      if (!anim) return;
+      anim.removeEventListener("complete", h);
+      playNext();
+    };
+    anim.addEventListener("complete", h);
   };
-  anim.addEventListener('complete', cycleHandler);
+  playNext();
 }
 
 /** 自动循环：满罐 → 逐帧消失 → 暂停 10-20s → 下一帧 → 空罐后回到第一帧无限循环 */
@@ -138,7 +153,7 @@ function startPlayback() {
 
   const seg = getFrameSegments(props.leftPct ?? 1);
   const lastDrops = uni.getStorageSync(STORAGE_KEY);
-  const isFirstVisit = lastDrops === '' || lastDrops === undefined || lastDrops === null;
+  const isFirstVisit = lastDrops === "" || lastDrops === undefined || lastDrops === null;
 
   if (isFirstVisit) {
     playTransitionThenLoop(seg, true);
@@ -157,7 +172,7 @@ async function initLottie() {
   loadPromise = new Promise((resolve) => {
     const query = uni.createSelectorQuery().in(instance.proxy || instance);
     query
-      .select('#lottieCanvas')
+      .select("#lottieCanvas")
       .fields({ node: true, size: true })
       .exec(async (res) => {
         if (!res || !res[0] || !res[0].node) {
@@ -165,8 +180,9 @@ async function initLottie() {
           return;
         }
         const canvas = res[0].node;
-        const ctx = canvas.getContext('2d');
-        const info = (uni.getWindowInfo && uni.getWindowInfo()) || uni.getSystemInfoSync();
+        const ctx = canvas.getContext("2d");
+        const info =
+          (uni.getWindowInfo && uni.getWindowInfo()) || uni.getSystemInfoSync();
         const dpr = info.pixelRatio || 1;
         canvas.width = res[0].width * dpr;
         canvas.height = res[0].height * dpr;
@@ -180,19 +196,19 @@ async function initLottie() {
           const req = await new Promise((resolve, reject) => {
             uni.request({
               url: CDN_LOTTIE_URL,
-              method: 'GET',
+              method: "GET",
               success: resolve,
               fail: reject,
             });
           });
           animationData = req.data;
         } catch (e) {
-          console.error('[SavingsJar] 远程 Lottie 加载失败:', e);
+          console.error("[SavingsJar] 远程 Lottie 加载失败:", e);
           resolve(false);
           return;
         }
         if (!animationData) {
-          console.error('[SavingsJar] 远程 Lottie 返回为空');
+          console.error("[SavingsJar] 远程 Lottie 返回为空");
           resolve(false);
           return;
         }
@@ -206,7 +222,7 @@ async function initLottie() {
           },
         });
 
-        anim.addEventListener('DOMLoaded', () => {
+        anim.addEventListener("DOMLoaded", () => {
           if (props.autoCycle) startCycle();
           else startPlayback();
           resolve(true);
@@ -232,11 +248,11 @@ function destroyLottie() {
   }
   if (anim) {
     if (_completeHandler) {
-      anim.removeEventListener('complete', _completeHandler);
+      anim.removeEventListener("complete", _completeHandler);
       _completeHandler = null;
     }
     if (cycleHandler) {
-      anim.removeEventListener('complete', cycleHandler);
+      anim.removeEventListener("complete", cycleHandler);
       cycleHandler = null;
     }
     anim.destroy();

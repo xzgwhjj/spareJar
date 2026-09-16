@@ -117,6 +117,7 @@
 import { ref, computed } from 'vue';
 import { cdn } from '@/utils/cdn.js';
 import { useUserStore } from '@/stores/user.js';
+import { requireLogin } from '@/utils/guard.js';
 import { createTransaction, createWish, updateSettings } from '@/api/sparejar.js';
 import { updateOnboardingAction, recordSubscribeAuthAction } from '@/stores/user.js';
 import { todayDateKey, formatDateTime } from '@/utils/date.js';
@@ -254,7 +255,9 @@ function skipAll() {
 }
 
 // 进入页面确保分类已加载（步骤 3 需要）
-if (!state.categories || !state.categories.length) {
+if (!requireLogin('/pages/onboarding/onboarding')) {
+  // 未登录：已跳转登录页
+} else if (!state.categories || !state.categories.length) {
   loadCategories().catch(() => {});
 }
 </script>

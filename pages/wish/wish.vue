@@ -1260,6 +1260,7 @@ import { ref, reactive, computed, onMounted, watch } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
 import TabBar from "@/components/tabbar/tabbar.vue";
 import { useUserStore } from "@/stores/user.js";
+import { requireLogin } from '@/utils/guard.js';
 import { advanceWishPhaseAction } from "@/stores/wish.js";
 import { formatFen, safeYuanToFen } from "@/utils/money.js";
 import { hexToHsv, hsvToHex } from "@/utils/coverColor.js";
@@ -1778,6 +1779,7 @@ function onAdvanceDateConfirm(payload) {
 }
 
 onMounted(async () => {
+  if (!requireLogin('/pages/wish/wish')) return
   try {
     await Promise.all([loadWishes(), loadSavingsPool(), loadArchivedWishesAction()]);
     await loadMonthlySaved();

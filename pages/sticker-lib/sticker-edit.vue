@@ -49,7 +49,7 @@
         <view class="section-label">{{ form.type === 'custom' ? '贴纸图片' : '商品图片' }}</view>
         <view class="img-row">
           <view v-if="form.image_url" class="img-preview">
-            <image :src="form.image_url" mode="aspectFill" class="img-preview-img" />
+            <image :src="cloud.display(form.image_url)" mode="aspectFill" class="img-preview-img" />
             <view class="img-remove" @click="form.image_url = ''">×</view>
           </view>
           <view v-else class="img-add" @click="chooseImage">
@@ -64,7 +64,7 @@
         <view class="section-label">素材图片（{{ form.sourceImages.length }}/9，至少 2 张）</view>
         <view class="combo-img-row">
           <view v-for="(u, i) in form.sourceImages" :key="u" class="combo-img">
-            <image :src="u" mode="aspectFill" class="combo-img-item" />
+            <image :src="cloud.display(u)" mode="aspectFill" class="combo-img-item" />
             <view class="combo-img-del" @click="form.sourceImages.splice(i, 1)">×</view>
           </view>
           <view v-if="form.sourceImages.length < 9" class="combo-img-add" @click="chooseImages">
@@ -166,11 +166,16 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
+import { onShow as uniOnShow } from '@dcloudio/uni-app'
 import { useUserStore } from '@/stores/user.js'
 import { listLedgers, listCategories } from '@/api/sparejar.js'
 import { yuanToFen, fenToYuanString } from '@/utils/money.js'
+import { createCloudImageResolver } from '@/utils/cdn.js'
 
 const userStore = useUserStore()
+// cloud:// 需解析成临时 URL 才能被 <image> 渲染；onShow 重新解析以撑过切后台过期
+const cloud = createCloudImageResolver()
+uniOnShow(() => cloud.resolve([form.image_url, ...form.sourceImages].filter(Boolean)))
 
 const isEdit = ref(false)
 const editId = ref('')
@@ -229,8 +234,12 @@ async function chooseImage() {
         const ext = (p.split('.').pop() || 'png').split('?')[0].toLowerCase()
         const cloudPath = `stickers/${userStore.state.uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
         const up = await uniCloud.uploadFile({ filePath: p, cloudPath })
-        const url = (up && (up.url || up.fileID)) || ''
-        if (url) form.image_url = url
+        const fileID = (up && up.fileID) || ''
+        const url = fileID || (up && up.url) || ''
+        if (url) {
+          form.image_url = url
+          cloud.resolve([url]) // cloud:// → 临时 URL 供 <image> 渲染
+        }
       } catch (err) {
         console.error('[sticker-edit] upload failed', err)
         uni.showToast({ title: '图片上传失败', icon: 'none' })
@@ -269,6 +278,8 @@ async function loadForEdit(id) {
   form.lowThreshold = s.low_stock_threshold != null ? String(s.low_stock_threshold) : '1'
   form.categoryId = s.category_id || ''
   form.ledgerId = s.ledger_id || ''
+  // 解析已有图片（cloud:// → 临时 URL）
+  cloud.resolve([form.image_url, ...form.sourceImages].filter(Boolean))
 }
 
 /** 多图上传（AI 组合素材），最多 9 张 */
@@ -288,9 +299,11 @@ async function chooseImages() {
           const ext = (p.split('.').pop() || 'png').split('?')[0].toLowerCase()
           const cloudPath = `stickers/${userStore.state.uid}/combo/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
           const up = await uniCloud.uploadFile({ filePath: p, cloudPath })
-          const url = (up && (up.url || up.fileID)) || ''
+          const fileID = (up && up.fileID) || ''
+          const url = fileID || (up && up.url) || ''
           if (url && !form.sourceImages.includes(url)) form.sourceImages.push(url)
         }
+        cloud.resolve(form.sourceImages) // 解析本次上传的 cloud:// 素材
       } catch (err) {
         console.error('[sticker-edit] combo upload failed', err)
         uni.showToast({ title: '图片上传失败', icon: 'none' })

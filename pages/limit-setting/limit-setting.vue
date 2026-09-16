@@ -357,7 +357,7 @@ import {
   pruneOverrides,
 } from "@/utils/limitEngine.js";
 
-const { state, loadSettings, refreshTodayDashboard } = useUserStore();
+const { state, loadSettings, refreshTodayDashboard, checkLoggedIn } = useUserStore();
 
 const DEFAULT_YUAN = 100; // 日维度默认（与 onboarding 一致）
 const DIM_DEFAULT_YUAN = { day: 100, month: 3000, year: 36000 };
@@ -455,6 +455,15 @@ function syncFromSettings() {
 }
 
 onMounted(async () => {
+  if (!checkLoggedIn()) {
+    uni.showToast({ title: "请先登录后设置限额", icon: "none" });
+    uni.navigateTo({
+      url:
+        "/pages/login/login?redirect=" +
+        encodeURIComponent("/pages/limit-setting/limit-setting"),
+    });
+    return;
+  }
   if (!state.settings) await loadSettings();
   syncFromSettings();
 });

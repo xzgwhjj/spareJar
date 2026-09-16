@@ -122,7 +122,16 @@ export const pendingRolloverFen = computed(() => {
 })
 export const totalDailyLimitFen = computed(() => dailyLimitFen.value + pendingRolloverFen.value)
 export const hasLimit = computed(() => totalDailyLimitFen.value > 0)
-export const spentTodayFen = computed(() => Number(state.spentToday) || 0)
+// 今日已用：由看板「当日交易」中支出类汇总（响应式，保存后 refresh 即更新）
+// 注：state.spentToday 字段此前从未被赋值，导致已用恒为 0，改为直接推导。
+export const spentTodayFen = computed(() => {
+  const txs = state.dashboard.transactions || []
+  return txs.reduce(
+    (sum, tx) =>
+      sum + (tx.type === 'expense' && typeof tx.amount === 'number' ? tx.amount : 0),
+    0
+  )
+})
 export const leftTodayFen = computed(() => Math.max(0, totalDailyLimitFen.value - spentTodayFen.value))
 export const isOverLimit = computed(() => spentTodayFen.value > totalDailyLimitFen.value)
 export const onboardingDone = computed(() => !!state.onboarding?.done)
@@ -194,6 +203,10 @@ export function useUserStore() {
     loginWithWeixin: auth.loginWithWeixin,
     bootstrap: auth.bootstrap,
     logout: auth.logout,
+    deleteAccount: auth.deleteAccount,
+    requestDeleteAccount: auth.requestDeleteAccount,
+    cancelDeleteAccount: auth.cancelDeleteAccount,
+    exportUserData: auth.exportUserData,
     clearAuthStorage: auth.clearAuthStorage,
     syncRefreshedToken: auth.syncRefreshedToken,
     loadSettings: auth.loadSettings,
@@ -286,6 +299,7 @@ export function useUserStore() {
     loadUserPoints: health.loadUserPoints,
     checkInAction: health.checkInAction,
     combineStickerAction: health.combineStickerAction,
+    decrementStickerStockAction: health.decrementStickerStockAction,
 
     // 聚合 computed（本模块内定义，本地绑定可用）
     surplusPoolBalanceFen,

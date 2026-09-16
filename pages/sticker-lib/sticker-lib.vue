@@ -75,14 +75,21 @@
           :key="s._id"
           class="sticker-card glass-mid"
           :class="{ disabled: isOutOfStock(s) }"
-          :style="{ animationDelay: i * 0.04 + 's', ...stickerBgStyle }"
+          :style="{ animationDelay: i * 0.04 + 's' }"
           @click="onTap(s)"
           @longpress="onLongPress(s)"
         >
+          <image class="sticker-card-bg" :src="stickerBgUrl" mode="aspectFit" />
           <image
-            v-if="s.image_url"
+            v-if="s.kind === 'category' && s.icon_type === 'image' && s.icon_url"
             class="sticker-img"
-            :src="s.image_url"
+            :src="iconDisplay(s.icon_url)"
+            mode="aspectFill"
+          />
+          <image
+            v-else-if="s.image_url"
+            class="sticker-img"
+            :src="iconDisplay(s.image_url)"
             mode="aspectFill"
           />
           <view v-else class="sticker-img sticker-img-ph">{{
@@ -96,7 +103,7 @@
 
           <text class="sticker-name">{{ s.name }}</text>
 
-          <template v-if="tab === 'stock'">
+          <template v-if="tab === 'stock' && s.type === 'stock'">
             <text class="sticker-sub"
               >库存 {{ s.stock_qty }} · ¥{{ yuan(s.unit_price) }}/件</text
             >
@@ -132,11 +139,23 @@
       <view class="detail-panel" @click.stop>
         <view class="detail-close" @click="closeDetail">×</view>
 
-        <view class="detail-hero" :style="stickerBgStyle">
+        <view class="detail-hero">
+          <image class="detail-hero-bg" :src="stickerBgUrl" mode="aspectFit" />
           <image
-            v-if="detail.image_url"
+            v-if="
+              detail.kind === 'category' &&
+              detail.icon_type === 'image' &&
+              detail.icon_url
+            "
             class="detail-img"
-            :src="detail.image_url"
+            :src="iconDisplay(detail.icon_url)"
+            mode="aspectFit"
+            @click="previewDetailImg"
+          />
+          <image
+            v-else-if="detail.image_url"
+            class="detail-img"
+            :src="iconDisplay(detail.image_url)"
             mode="aspectFit"
             @click="previewDetailImg"
           />
@@ -163,7 +182,10 @@
         <view class="detail-actions">
           <template v-if="detail.kind === 'category'">
             <view class="detail-btn ghost" @click="editCategoryFromDetail">编辑分类</view>
-            <view class="detail-btn danger" @click="deleteCategoryFromDetail"
+            <view
+              v-if="detailCat && !detailCat.is_system"
+              class="detail-btn danger"
+              @click="openCatDelete"
               >删除分类</view
             >
           </template>
@@ -179,37 +201,151 @@
     </view>
 
     <!-- 编辑分类弹框（不跳转，就地修改分类 name/icon/desc） -->
-    <view v-if="catEditOpen" class="sheet-mask" @click="catEditOpen = false">
+    <view v-if="catEditOpen" class="sheet-mask top" @click="closeCatEdit(false)">
       <view class="sheet" @click.stop>
         <view class="sheet-handle"><view class="handle-bar" /></view>
         <text class="sheet-title">编辑分类</text>
 
         <text class="form-label">名称</text>
-        <input class="sheet-input" v-model="catForm.name" maxlength="32" placeholder="如：奶茶、打车" />
+        <view class="name-field">
+          <input
+            v-model="catForm.name"
+            :focus="catNameFocus"
+            maxlength="32"
+            placeholder="如：奶茶、打车"
+            placeholder-class="sheet-ph"
+            placeholder-style="color:#6b8c7a;font-size:28rpx;"
+          />
+        </view>
 
-        <text class="form-label" style="margin-top: 28rpx">简介 / 备注（可选）</text>
-        <textarea
-          class="sheet-input desc-input"
-          v-model="catForm.desc"
-          maxlength="100"
-          placeholder="补充这个分类的说明"
-          auto-height
-        />
+        <text class="form-label">简介 / 备注（可选）</text>
+        <view class="desc-field">
+          <textarea
+            v-model="catForm.desc"
+            maxlength="100"
+            placeholder="补充这个分类的说明"
+            placeholder-class="sheet-ph"
+            auto-height
+          />
+        </view>
 
-        <text class="form-label" style="margin-top: 28rpx">图标</text>
+        <text class="form-label">图标</text>
         <view class="emoji-grid">
           <view
             v-for="em in EMOJIS"
             :key="em"
             class="emoji-cell"
-            :class="{ active: catForm.icon === em }"
-            @click="catForm.icon = em"
+            :class="{ active: catForm.icon_type !== 'image' && catForm.icon === em }"
+            @click="pickCatEmoji(em)"
             ><text>{{ em }}</text></view
           >
         </view>
 
+        <view class="icon-upload">
+          <view class="upload-cell" @click="chooseCatIcon">
+            <image
+              v-if="catForm.icon_type === 'image' && catForm.icon_url"
+              class="upload-prev"
+              :src="iconDisplay(catForm.icon_url)"
+              mode="aspectFill"
+            />
+            <text v-else class="upload-plus">＋</text>
+            <text v-if="catForm.icon_type !== 'image'" class="upload-txt">上传图片</text>
+            <view
+              v-if="catForm.icon_type === 'image'"
+              class="upload-clear"
+              @click.stop="clearCatIcon"
+              >×</view
+            >
+          </view>
+        </view>
+
         <view class="sheet-btn" :class="{ loading: catSaving }" @click="saveCatEdit">
           <text>{{ catSaving ? "保存中…" : "保存" }}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 删除分类弹框：有账目时选择处理方式 -->
+    <view v-if="catDelOpen" class="sheet-mask top" @click="catDelOpen = false">
+      <view class="sheet" @click.stop>
+        <view class="sheet-handle"><view class="handle-bar" /></view>
+        <text class="sheet-title">删除分类</text>
+
+        <view class="del-tip"> 确认删除「{{ catDelName }}」？此操作不可恢复。 </view>
+
+        <template v-if="catDelUsage > 0">
+          <text class="form-label" style="margin-top: 28rpx"
+            >该分类下有 {{ catDelUsage }} 笔账目，请选择处理方式</text
+          >
+          <view class="mode-list">
+            <view
+              class="mode-item"
+              :class="{ active: catDelMode === 'keep' }"
+              @click="catDelMode = 'keep'"
+            >
+              <view class="mode-main">
+                <text class="mode-name">保留账单，仅删除分类</text>
+                <text class="mode-desc"
+                  >账目仍显示为该分类，只是分类不再出现在选择列表</text
+                >
+              </view>
+              <text v-if="catDelMode === 'keep'" class="mode-check">✓</text>
+            </view>
+            <view
+              class="mode-item"
+              :class="{ active: catDelMode === 'merge' }"
+              @click="catDelMode = 'merge'"
+            >
+              <view class="mode-main">
+                <text class="mode-name">转移到其他分类</text>
+                <text class="mode-desc">账目与贴纸转移到目标分类，账单保留</text>
+              </view>
+              <text v-if="catDelMode === 'merge'" class="mode-check">✓</text>
+            </view>
+            <view
+              class="mode-item"
+              :class="{ active: catDelMode === 'purge' }"
+              @click="catDelMode = 'purge'"
+            >
+              <view class="mode-main">
+                <text class="mode-name">连同账单一并删除</text>
+                <text class="mode-desc"
+                  >同时删除这 {{ catDelUsage }} 笔账目，相关金额会同步回滚</text
+                >
+              </view>
+              <text v-if="catDelMode === 'purge'" class="mode-check">✓</text>
+            </view>
+          </view>
+
+          <template v-if="catDelMode === 'merge'">
+            <text class="form-label" style="margin-top: 28rpx">选择目标分类</text>
+            <view class="merge-list">
+              <view
+                v-for="t in catDelTargets"
+                :key="t._id"
+                class="merge-item"
+                :class="{ active: catDelTargetId === t._id }"
+                @click="catDelTargetId = t._id"
+              >
+                <text class="merge-icon">{{ t.icon }}</text>
+                <text class="merge-name">{{ t.name }}</text>
+                <text v-if="catDelTargetId === t._id" class="merge-check">✓</text>
+              </view>
+              <view v-if="!catDelTargets.length" class="merge-empty"
+                ><text>无其他可选分类</text></view
+              >
+            </view>
+          </template>
+        </template>
+        <view v-else class="del-tip">该分类下没有账目，可直接删除。</view>
+
+        <view
+          class="sheet-btn danger"
+          :class="{ loading: catDelSaving }"
+          @click="confirmCatDelete"
+        >
+          <text>{{ catDelSaving ? "删除中…" : "确认删除" }}</text>
         </view>
       </view>
     </view>
@@ -220,14 +356,16 @@
         <view class="sheet-handle"><view class="handle-bar" /></view>
         <text class="sheet-title">消耗记账 · {{ activeSticker.name }}</text>
         <view class="consume-preview">
-          <image class="cp-img" :src="activeSticker.image_url" mode="aspectFill" />
+          <image class="cp-img" :src="iconDisplay(activeSticker.image_url)" mode="aspectFill" />
           <view class="cp-info">
             <text class="cp-name">{{ activeSticker.name }}</text>
-            <text class="cp-stock"
+            <text v-if="activeSticker.type === 'stock'" class="cp-stock"
               >库存 {{ activeSticker.stock_qty }} 件 · 已用
               {{ activeSticker.use_count || 0 }} 次</text
             >
-            <text class="cp-price">单价 ¥{{ yuan(activeSticker.unit_price) }}</text>
+            <text v-if="activeSticker.type === 'stock'" class="cp-price"
+              >单价 ¥{{ yuan(activeSticker.unit_price) }}</text
+            >
             <text v-if="activeSticker.category_id" class="cp-cat"
               >分类 · {{ catName(activeSticker.category_id) }}</text
             >
@@ -272,14 +410,17 @@
 import { ref, computed, onMounted } from "vue";
 import { onLoad, onShow } from "@dcloudio/uni-app";
 import { useUserStore } from "@/stores/user.js";
+import { requireLogin } from '@/utils/guard.js';
 import { formatFen } from "@/utils/money.js";
 import { cdn, getCloudTempUrl, getCloudTempUrls } from "@/utils/cdn.js";
 import { deleteCategory, updateCategory } from "@/api/sparejar.js";
+import { deleteCatIcon } from "@/utils/cloudFile.js";
 
 const {
   state,
   categoryMap,
   loadStickers,
+  loadCategories,
   consumeStickerAction,
   deleteStickerAction,
 } = useUserStore();
@@ -299,9 +440,7 @@ const EMPTY_ICON = {
 const emptyIconUrl = computed(() => cdn(EMPTY_ICON[tab.value] || EMPTY_ICON.stock));
 
 // 贴纸卡片底图（与账本页三个贴纸卡片保持一致）
-const stickerBgStyle = {
-  "--sticker-bg-img": `url('${cdn("/app_static/images/icon_sticker_bg2.png")}')`,
-};
+const stickerBgUrl = cdn("/app_static/images/icon_sticker_bg2.png");
 
 /* 顶部安全区 */
 function resolveTop() {
@@ -324,9 +463,12 @@ const tab = ref("stock");
 // 分类贴纸（type=material）下的二级切换：按关联分类的支出/收入
 const catSubTab = ref("expense"); // 'expense' | 'income'
 
-// 分类 id → 支出/收入 类型映射
+// 分类 id → 支出/收入 类型映射（用全量兜底，已删除分类的贴纸仍能正确归类）
 const catTypeMap = computed(() => {
   const m = {};
+  (state.allCategories || []).forEach((c) => {
+    if (c && c._id) m[String(c._id)] = c.type;
+  });
   (state.categories || []).forEach((c) => {
     if (c && c._id) m[String(c._id)] = c.type;
   });
@@ -351,6 +493,8 @@ function categoryFallback(filterType) {
       catType: c.type === "income" ? "income" : "expense",
       name: c.name,
       icon: c.icon || "",
+      icon_type: c.icon_type || "emoji",
+      icon_url: c.icon_url || "",
       image_url: "",
       use_count: 0,
     }));
@@ -465,12 +609,19 @@ function detailTag(s) {
   return "分类素材";
 }
 
+/** 当前详情对应的完整账本分类（含 is_system / usage_count 等字段） */
+const detailCat = computed(() => {
+  const s = detail.value;
+  if (!s || !s._id || s.kind !== "category") return null;
+  return (state.categories || []).find((x) => x._id === s._id) || null;
+});
+
 /** 详情里展示的简介：贴纸用自身 desc，分类用分类 desc */
 const detailDesc = computed(() => {
   const s = detail.value;
   if (!s || !s._id) return "";
   if (s.kind === "category") {
-    const c = (state.categories || []).find((x) => x._id === s._id);
+    const c = detailCat.value;
     return (c && c.desc) || "";
   }
   return s.desc || "";
@@ -485,11 +636,6 @@ const detailRows = computed(() => {
     const rows = [{ label: "分组", value: c.type === "income" ? "收入" : "支出" }];
     if (c.usage_count != null)
       rows.push({ label: "关联账目", value: `${c.usage_count} 笔` });
-    // 该分类下绑定的所有贴纸（不限类型）：囤货/素材/上传都可能绑到这个分类
-    const catStickerCount = (state.stickers || []).filter(
-      (x) => String(x.category_id) === String(s._id)
-    ).length;
-    rows.push({ label: "关联贴纸", value: `${catStickerCount} 张` });
     return rows;
   }
   const rows = [{ label: "使用次数", value: `${s.use_count || 0} 次` }];
@@ -512,7 +658,9 @@ const detailRows = computed(() => {
 
 /** 详情大图点击 → 全屏预览 */
 function previewDetailImg() {
-  const url = detail.value && detail.value.image_url;
+  const d = detail.value;
+  const raw = d && (d.image_url || (d.icon_type === "image" ? d.icon_url : ""));
+  const url = iconDisplay(raw);
   if (!url) return;
   uni.previewImage({ urls: [url], current: url });
 }
@@ -527,25 +675,146 @@ function goEditFromDetail() {
 /** 从详情弹窗就地编辑该分类（不跳转，直接弹框） */
 const catEditOpen = ref(false);
 const catSaving = ref(false);
-const catForm = ref({ _id: "", name: "", desc: "", icon: "📦" });
+const catForm = ref({
+  _id: "",
+  name: "",
+  desc: "",
+  icon: "📦",
+  icon_type: "emoji",
+  icon_url: "",
+});
+// 微信原生 input 不聚焦时不重绘回显值，打开编辑框时对名称框自动聚焦以强制渲染
+const catNameFocus = ref(false);
+// 分类自定义图标：数据库存 cloud:// fileID，<image> 不能直接渲染，
+// 需经 getCloudTempUrl 解析成临时地址。这里集中维护 fileID→临时URL 的映射，
+// 模板统一用 iconDisplay(url) 取可显示地址（非 cloud:// 的原样返回）。
+const catIconUrls = ref({});
+function iconDisplay(url) {
+  if (!url) return "";
+  url = String(url);
+  if (url.startsWith("cloud://")) return catIconUrls.value[url] || "";
+  return url;
+}
+async function refreshCatIconUrls() {
+  const ids = [];
+  (state.categories || []).forEach((c) => {
+    if (
+      c.icon_type === "image" &&
+      c.icon_url &&
+      String(c.icon_url).startsWith("cloud://")
+    )
+      ids.push(c.icon_url);
+  });
+  (state.stickers || []).forEach((s) => {
+    if (
+      s.icon_type === "image" &&
+      s.icon_url &&
+      String(s.icon_url).startsWith("cloud://")
+    )
+      ids.push(s.icon_url);
+    // 普通图片贴纸的图片存在 image_url（cloud://），同样需解析
+    if (s.image_url && String(s.image_url).startsWith("cloud://")) ids.push(s.image_url);
+  });
+  if (!ids.length) return;
+  const map = await getCloudTempUrls(ids);
+  catIconUrls.value = { ...catIconUrls.value, ...map };
+}
 const EMOJIS = [
-  "🍜", "🥡", "🧋", "🛒", "🏪", "🚌", "🚕", "⛽", "🅿️", "📞",
-  "📦", "🏠", "🏦", "🚗", "💧", "💡", "🔥", "🏢", "🌐", "📱",
-  "👕", "👟", "💇", "💄", "🛋️", "🍳", "✈️", "🏨", "🎬", "🎮",
-  "🏋️", "🎨", "🐱", "📚", "🏥", "💊", "🩺", "🛡️", "🦷", "🎓",
-  "📖", "💻", "📝", "👶", "🧧", "🍻", "🎁", "💰", "📈",
+  "🍜",
+  "🥡",
+  "🧋",
+  "🛒",
+  "🏪",
+  "🚌",
+  "🚕",
+  "⛽",
+  "🅿️",
+  "📞",
+  "📦",
+  "🏠",
+  "🏦",
+  "🚗",
+  "💧",
+  "💡",
+  "🔥",
+  "🏢",
+  "🌐",
+  "📱",
+  "👕",
+  "👟",
+  "💇",
+  "💄",
+  "🛋️",
+  "🍳",
+  "✈️",
+  "🏨",
+  "🎬",
+  "🎮",
+  "🏋️",
+  "🎨",
+  "🐱",
+  "📚",
+  "🏥",
+  "💊",
+  "🩺",
+  "🛡️",
+  "🦷",
+  "🎓",
+  "📖",
+  "💻",
+  "📝",
+  "👶",
+  "🧧",
+  "🍻",
+  "🎁",
+  "💰",
+  "📈",
 ];
 function editCategoryFromDetail() {
   const s = detail.value;
   if (!s || !s._id) return;
   const c = (state.categories || []).find((x) => x._id === s._id) || {};
-  catForm.value = {
+  const target = {
     _id: s._id,
     name: c.name || s.name || "",
     desc: c.desc || "",
     icon: c.icon || s.icon || "📦",
+    icon_type: c.icon_type || "emoji",
+    icon_url: c.icon_url || "",
+  };
+  // 先以空值打开弹窗，再用 setTimeout 延迟回填：
+  // 微信原生 input/textarea 是异步挂载的，若在组件就绪前（如 nextTick 微任务阶段）
+  // 就赋值，值会被丢弃、直到聚焦才显示。等宏任务阶段原生组件稳定后再给值即可正常回显。
+  catForm.value = {
+    _id: s._id,
+    name: "",
+    desc: "",
+    icon: "📦",
+    icon_type: "emoji",
+    icon_url: "",
   };
   catEditOpen.value = true;
+  catNameFocus.value = false;
+  setTimeout(async () => {
+    catForm.value = target;
+    // 记录「打开时数据库里的原图」，以及重置本次会话上传记录
+    catOrigIconFileID.value =
+      target.icon_url && String(target.icon_url).startsWith("cloud://")
+        ? target.icon_url
+        : "";
+    catSessionUploads.value = [];
+    catNameFocus.value = true; // 自动聚焦名称框，强制微信渲染已回显的名称
+    // 已有图片图标：fileID 需解析成临时地址才能回显
+    if (
+      target.icon_type === "image" &&
+      target.icon_url &&
+      String(target.icon_url).startsWith("cloud://") &&
+      !catIconUrls.value[target.icon_url]
+    ) {
+      const m = await getCloudTempUrls([target.icon_url]);
+      catIconUrls.value = { ...catIconUrls.value, ...m };
+    }
+  }, 80);
 }
 
 async function saveCatEdit() {
@@ -557,15 +826,20 @@ async function saveCatEdit() {
   }
   catSaving.value = true;
   try {
+    const isImage = catForm.value.icon_type === "image";
     await updateCategory(catForm.value._id, {
       name,
       desc: (catForm.value.desc || "").trim(),
       icon: catForm.value.icon,
+      icon_type: catForm.value.icon_type || "emoji",
+      icon_url: isImage ? catForm.value.icon_url || "" : "",
     });
-    catEditOpen.value = false;
+    closeCatEdit(true);
     showDetail.value = false;
     uni.showToast({ title: "已保存", icon: "success" });
     await loadStickers();
+    await loadCategories();
+    await refreshCatIconUrls();
   } catch (err) {
     uni.showToast({ title: (err && err.message) || "保存失败", icon: "none" });
   } finally {
@@ -573,38 +847,147 @@ async function saveCatEdit() {
   }
 }
 
-/** 从详情弹窗删除该分类 */
-function deleteCategoryFromDetail() {
-  const s = detail.value;
-  if (!s || !s._id) return;
-  uni.showModal({
-    title: "删除分类",
-    content: `确认删除分类「${s.name || "该分类"}」？此操作不可恢复。`,
-    confirmText: "删除",
-    confirmColor: "#ff6b6b",
-    success: async (res) => {
-      if (!res.confirm) return;
-      try {
-        await deleteCategory(s._id);
-        showDetail.value = false;
-        uni.showToast({ title: "已删除", icon: "success" });
-        await loadStickers();
-      } catch (err) {
-        const msg = (err && err.message) || "删除失败";
-        // 分类下有用过的账目时，需到分类管理页选择合并目标
-        if (/合并|merge|usage|账目/.test(msg)) {
-          uni.showModal({
-            title: "无法删除",
-            content:
-              "该分类下有用过的账目，请到「我的 → 分类管理」中删除并选择合并目标。",
-            showCancel: false,
-          });
-        } else {
-          uni.showToast({ title: msg, icon: "none" });
-        }
-      }
-    },
-  });
+// 选 emoji 图标（同时切回 emoji 类型，清空自定义图标）
+function pickCatEmoji(em) {
+  catForm.value.icon = em;
+  catForm.value.icon_type = "emoji";
+  catForm.value.icon_url = "";
+}
+// 上传自定义图标：选图 → 传 uniCloud → 写入 icon_url
+const catUploading = ref(false);
+// 云端图标文件清理：记录「打开时数据库里的原图 fileID」与「本次会话新上传的文件」，
+// 在保存/关闭时删除已不再被引用的旧文件，避免云存储孤儿文件累积。
+const catOrigIconFileID = ref("");
+const catSessionUploads = ref([]);
+function disposeIconFile(fileID) {
+  if (!fileID || !String(fileID).startsWith("cloud://")) return;
+  // 尽力删除，失败不阻塞主流程
+  deleteCatIcon(fileID).catch(() => {});
+}
+function closeCatEdit(saved) {
+  const finalId = catForm.value.icon_url || "";
+  const toDelete = new Set();
+  // 保存成功：若原图被替换/移除，删除原图
+  if (
+    saved &&
+    catOrigIconFileID.value &&
+    catOrigIconFileID.value.startsWith("cloud://") &&
+    catOrigIconFileID.value !== finalId
+  ) {
+    toDelete.add(catOrigIconFileID.value);
+  }
+  // 本次会话新上传的文件：保存时仅保留最终那张，取消时全部删除
+  for (const f of catSessionUploads.value) {
+    if (saved ? f !== finalId : true) toDelete.add(f);
+  }
+  toDelete.forEach(disposeIconFile);
+  catEditOpen.value = false;
+}
+async function chooseCatIcon() {
+  let imgPath = "";
+  try {
+    const res = await uni.chooseImage({
+      count: 1,
+      sizeType: ["compressed"],
+      sourceType: ["album", "camera"],
+    });
+    imgPath = (res.tempFilePaths && res.tempFilePaths[0]) || "";
+  } catch (_e) {
+    return; // 用户取消
+  }
+  if (!imgPath) return;
+  catUploading.value = true;
+  uni.showLoading({ title: "上传中…", mask: true });
+  try {
+    const ext = (imgPath.split(".").pop() || "png").split("?")[0].toLowerCase();
+    const cloudPath = `cat-icons/${
+      state.uid || "anon"
+    }/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const up = await uniCloud.uploadFile({ filePath: imgPath, cloudPath });
+    const fileID = (up && up.fileID) || "";
+    if (fileID) {
+      // 存 fileID（与项目其余上传一致），并解析临时地址用于即时回显
+      catForm.value.icon_type = "image";
+      catForm.value.icon_url = fileID;
+      catSessionUploads.value = [...catSessionUploads.value, fileID];
+      const url = await getCloudTempUrl(fileID);
+      catIconUrls.value = { ...catIconUrls.value, [fileID]: url };
+    } else {
+      uni.showToast({ title: "上传失败，请重试", icon: "none" });
+    }
+  } catch (err) {
+    uni.showToast({ title: (err && err.message) || "上传失败", icon: "none" });
+  } finally {
+    catUploading.value = false;
+    uni.hideLoading();
+  }
+}
+// 移除自定义图标，回退到 emoji
+function clearCatIcon() {
+  catForm.value.icon_type = "emoji";
+  catForm.value.icon_url = "";
+}
+
+/** 从详情弹窗删除该分类（弹框选择账目处理方式） */
+const catDelOpen = ref(false);
+const catDelSaving = ref(false);
+const catDelMode = ref("keep"); // 'keep' 保留账单 | 'merge' 转移 | 'purge' 连同账单删除
+const catDelTargetId = ref("");
+const catDelCat = ref(null);
+
+const catDelName = computed(() => {
+  const c = catDelCat.value || detailCat.value;
+  return (c && c.name) || "该分类";
+});
+const catDelUsage = computed(() => {
+  const c = catDelCat.value || detailCat.value;
+  return (c && c.usage_count) || 0;
+});
+// 合并目标：同收支类型、非自身、未隐藏
+const catDelTargets = computed(() => {
+  const c = catDelCat.value;
+  if (!c) return [];
+  return (state.categories || []).filter(
+    (x) => x._id !== c._id && !x.is_hidden && x.type === c.type
+  );
+});
+
+function openCatDelete() {
+  const c = detailCat.value;
+  if (!c) return;
+  if (c.is_system) {
+    uni.showToast({ title: "预置分类不可删除", icon: "none" });
+    return;
+  }
+  catDelCat.value = c;
+  catDelMode.value = "keep";
+  catDelTargetId.value = "";
+  catDelOpen.value = true;
+}
+
+async function confirmCatDelete() {
+  const c = catDelCat.value;
+  if (!c || catDelSaving.value) return;
+  const hasTx = catDelUsage.value > 0;
+  const mode = hasTx ? catDelMode.value : "merge";
+  if (hasTx && mode === "merge" && !catDelTargetId.value) {
+    uni.showToast({ title: "请选择目标分类", icon: "none" });
+    return;
+  }
+  catDelSaving.value = true;
+  try {
+    await deleteCategory(c._id, mode === "merge" ? catDelTargetId.value : null, { mode });
+    catDelOpen.value = false;
+    showDetail.value = false;
+    uni.showToast({ title: "已删除", icon: "success" });
+    await loadCategories();
+    await loadStickers();
+    await refreshCatIconUrls();
+  } catch (err) {
+    uni.showToast({ title: (err && err.message) || "删除失败", icon: "none" });
+  } finally {
+    catDelSaving.value = false;
+  }
 }
 
 function decQty() {
@@ -693,6 +1076,7 @@ function goBack() {
 }
 
 onLoad((options) => {
+  if (!requireLogin('/pages/sticker-lib/sticker-lib')) return
   // 从账本页三卡片跳转：?type=stock|material|custom 预选对应 Tab
   if (options && options.type && TABS.some((t) => t.key === options.type)) {
     tab.value = options.type;
@@ -706,7 +1090,11 @@ function switchTab(key) {
 }
 
 onShow(async () => {
-  if (state.uid) await loadStickers();
+  if (state.uid) {
+    await loadStickers();
+    await loadCategories();
+    await refreshCatIconUrls();
+  }
 });
 </script>
 
@@ -867,14 +1255,29 @@ onShow(async () => {
     padding: 16rpx 12rpx 18rpx;
     text-align: center;
     cursor: pointer;
-    /* 贴纸底图：由 JS 通过 --sticker-bg-img 注入 CDN 地址 */
-    background-image: var(--sticker-bg-img, none);
-    background-size: contain;
-    background-repeat: no-repeat;
-    background-position: center;
+    overflow: hidden;
     animation: bounce-in 0.45s cubic-bezier(0.34, 1.4, 0.64, 1) backwards;
+    /* 底图改用内部 <image class="sticker-card-bg"> 绝对定位层渲染，
+       彻底绕开 CSS background 与全局 .glass-mid 的层叠问题 */
+    .sticker-card-bg {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+    }
     &.disabled {
       opacity: 0.5;
+    }
+    .sticker-img,
+    .sticker-name,
+    .sticker-sub,
+    .badge,
+    .consume-btn {
+      position: relative;
+      z-index: 1;
     }
     .sticker-img {
       width: 96rpx;
@@ -1001,19 +1404,28 @@ onShow(async () => {
     color: var(--ink4);
   }
   .detail-hero {
+    position: relative;
     width: 240rpx;
     height: 240rpx;
     border-radius: 28rpx;
     display: flex;
     align-items: center;
     justify-content: center;
-    background-image: var(--sticker-bg-img, none);
-    background-size: contain;
-    background-repeat: no-repeat;
-    background-position: center;
+    overflow: hidden;
     margin-bottom: 20rpx;
+    .detail-hero-bg {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+    }
   }
   .detail-img {
+    position: relative;
+    z-index: 1;
     width: 68%;
     height: 68%;
     border-radius: 20rpx;
@@ -1121,12 +1533,19 @@ onShow(async () => {
     z-index: 50;
     display: flex;
     align-items: flex-end;
+    /* 覆盖在详情弹窗（z-index: 60）之上 */
+    &.top {
+      z-index: 80;
+    }
   }
   .sheet {
     width: 100%;
+    max-height: 84vh;
+    overflow-y: auto;
     background: #fff;
     border-radius: 32rpx 32rpx 0 0;
     padding: 16rpx 32rpx 48rpx;
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
   }
@@ -1287,21 +1706,59 @@ onShow(async () => {
     font-size: 24rpx;
     color: var(--ink3);
     font-weight: 600;
-    margin-bottom: 12rpx;
+    margin-top: 32rpx;
+    margin-bottom: 16rpx;
   }
-  .sheet-input {
+  /* 名称输入：用我自己可控的 view(.name-field) 做外框，
+     display:flex + align-items:stretch 让 uni-app <input> 组件根节点拉伸到 120rpx，
+     再用 :deep(input) 让内部原生 input 填满并垂直居中。
+     （直接给 <input> 设高度在 uni-app 下被组件根节点拦截、不生效，故改为外层 view + 穿透） */
+  .name-field {
+    display: flex;
+    align-items: stretch;
     width: 100%;
+    height: 120rpx;
     box-sizing: border-box;
-    padding: 20rpx 24rpx;
     border-radius: 20rpx;
     background: rgba(255, 255, 255, 0.6);
     border: 1rpx solid rgba(37, 204, 93, 0.3);
+  }
+  .name-field :deep(input) {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    background: transparent;
+    line-height: 120rpx;
+    padding: 0 24rpx;
     font-size: 28rpx;
     color: var(--ink);
   }
-  .sheet-input.desc-input {
-    min-height: 120rpx;
-    line-height: 1.5;
+  /* 简介输入：同样用外层 view(.desc-field) 做边框/背景，
+     :deep(textarea) 穿透到内部原生 textarea 设置高度与内边距；
+     auto-height 时内层随内容增高，外层 view 跟随撑开。 */
+  .desc-field {
+    width: 100%;
+    min-height: 160rpx;
+    box-sizing: border-box;
+    border-radius: 20rpx;
+    background: rgba(255, 255, 255, 0.6);
+    border: 1rpx solid rgba(37, 204, 93, 0.3);
+  }
+  .desc-field :deep(textarea) {
+    display: block;
+    width: 100%;
+    min-height: 160rpx;
+    box-sizing: border-box;
+    background: transparent;
+    padding: 24rpx;
+    line-height: 1.6;
+    font-size: 28rpx;
+    color: var(--ink);
+  }
+  .sheet-ph {
+    font-size: 28rpx;
+    color: var(--ink3);
   }
   .emoji-grid {
     display: grid;
@@ -1322,6 +1779,146 @@ onShow(async () => {
       border-color: #25cc5d;
       background: rgba(37, 204, 93, 0.1);
     }
+  }
+  .icon-upload {
+    display: flex;
+    align-items: center;
+    gap: 20rpx;
+    margin-top: 20rpx;
+  }
+  .upload-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 140rpx;
+    height: 140rpx;
+    border-radius: 20rpx;
+    background: rgba(255, 255, 255, 0.6);
+    border: 1rpx dashed #25cc5d;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+  }
+  .upload-prev {
+    width: 100%;
+    height: 100%;
+    border-radius: 20rpx;
+  }
+  .upload-plus {
+    font-size: 48rpx;
+    color: #25cc5d;
+    line-height: 1;
+  }
+  .upload-txt {
+    margin-top: 6rpx;
+    font-size: 20rpx;
+    color: var(--ink3);
+  }
+  .upload-clear {
+    position: absolute;
+    top: 6rpx;
+    right: 6rpx;
+    width: 36rpx;
+    height: 36rpx;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.45);
+    color: #fff;
+    font-size: 28rpx;
+    line-height: 36rpx;
+    text-align: center;
+    z-index: 2;
+  }
+
+  /* 删除分类弹框 */
+  .del-tip {
+    padding: 16rpx 20rpx;
+    border-radius: 18rpx;
+    background: rgba(255, 107, 107, 0.08);
+    font-size: 24rpx;
+    color: var(--ink2);
+    line-height: 1.5;
+  }
+  .mode-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12rpx;
+  }
+  .mode-item {
+    display: flex;
+    align-items: center;
+    gap: 16rpx;
+    padding: 20rpx;
+    border-radius: 20rpx;
+    background: rgba(255, 255, 255, 0.6);
+    border: 1rpx solid #e3f5e6;
+    cursor: pointer;
+    &.active {
+      border-color: #25cc5d;
+      background: rgba(37, 204, 93, 0.08);
+    }
+    .mode-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4rpx;
+    }
+    .mode-name {
+      font-size: 26rpx;
+      font-weight: 700;
+      color: var(--ink);
+    }
+    .mode-desc {
+      font-size: 20rpx;
+      color: var(--ink4);
+    }
+    .mode-check {
+      color: #25cc5d;
+      font-weight: 800;
+      font-size: 30rpx;
+    }
+  }
+  .merge-list {
+    max-height: 40vh;
+    overflow-y: auto;
+  }
+  .merge-item {
+    display: flex;
+    align-items: center;
+    gap: 12rpx;
+    padding: 18rpx 20rpx;
+    border-radius: 18rpx;
+    background: rgba(255, 255, 255, 0.6);
+    border: 1rpx solid #e3f5e6;
+    margin-bottom: 10rpx;
+    cursor: pointer;
+    &.active {
+      border-color: #25cc5d;
+      background: rgba(37, 204, 93, 0.08);
+    }
+    .merge-icon {
+      font-size: 32rpx;
+    }
+    .merge-name {
+      flex: 1;
+      font-size: 26rpx;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .merge-check {
+      color: #25cc5d;
+      font-weight: 800;
+    }
+  }
+  .merge-empty {
+    text-align: center;
+    color: var(--ink4);
+    font-size: 22rpx;
+    padding: 24rpx 0;
+  }
+  .sheet-btn.danger {
+    background: linear-gradient(135deg, #ff8a8a, #ff6b6b);
+    box-shadow: 0 8rpx 40rpx rgba(255, 107, 107, 0.3);
   }
 }
 

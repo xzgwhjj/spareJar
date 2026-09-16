@@ -58,7 +58,7 @@ import { formatFen } from "@/utils/money.js";
 import { deleteTransaction } from "@/api/sparejar.js";
 import { cdn } from "@/utils/cdn.js";
 
-const { state, categoryMap, refreshTodayDashboard } = useUserStore();
+const { state, categoryMap, refreshTodayDashboard, isLoggedIn } = useUserStore();
 
 function pad2(n) {
   return n < 10 ? `0${n}` : String(n);
@@ -96,9 +96,26 @@ const bills = computed(() => {
   });
 });
 
-const addRecord = () => uni.navigateTo({ url: "/pages/add-record/add-record" });
+const goLogin = (redirect) =>
+  uni.navigateTo({
+    url:
+      "/pages/login/login" +
+      (redirect ? "?redirect=" + encodeURIComponent(redirect) : ""),
+  });
+
+const addRecord = () => {
+  if (!isLoggedIn.value) {
+    goLogin("/pages/add-record/add-record");
+    return;
+  }
+  uni.navigateTo({ url: "/pages/add-record/add-record" });
+};
 
 const editBill = (bill) => {
+  if (!isLoggedIn.value) {
+    goLogin(`/pages/add-record/add-record?id=${bill.id}`);
+    return;
+  }
   uni.navigateTo({ url: `/pages/add-record/add-record?id=${bill.id}` });
 };
 

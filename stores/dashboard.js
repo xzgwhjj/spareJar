@@ -7,9 +7,17 @@ import { todayDateKey } from '@/utils/date.js'
 import { state, pickDbRows, DASHBOARD_CACHE_TTL_MS, UserStoreError } from './core/state.js'
 import { runDailySettlement, recalculateSettlement, getDashboard, listCategories } from './core/api.js'
 
-/** 分类 id → 中文名映射 */
+/**
+ * 分类 id → 分类名映射。
+ * 以可用分类为主，用全量（含已删除但账单仍引用的分类）兜底，
+ * 保证「删除分类但保留账单」时历史账目仍能正确显示分类名。
+ */
 export const categoryMap = computed(() => {
   const map = {}
+  const all = Array.isArray(state.allCategories) ? state.allCategories : []
+  all.forEach((c) => {
+    if (c && c._id) map[String(c._id)] = c.name
+  })
   const list = Array.isArray(state.categories) ? state.categories : []
   list.forEach((c) => {
     if (c && c._id) map[String(c._id)] = c.name
@@ -20,9 +28,16 @@ export const categoryMap = computed(() => {
 export async function loadCategories() {
   if (!state.uid) {
     state.categories = []
+    state.allCategories = []
     return []
   }
   state.categories = await listCategories()
+  // 全量（含隐藏/已删除）仅用于回显，失败时不影响主流程
+  try {
+    state.allCategories = await listCategories({ include_hidden: true })
+  } catch (e) {
+    state.allCategories = state.categories
+  }
   return state.categories
 }
 
@@ -51,11 +66,11 @@ export function invalidateDashboard() {
  * 刷新今日看板：优先前端缓存（30s），过期则触发后端日结/重算。
  * 仅当登录态有效时调用。
  */
-export async function refreshTodayDashboard() {
+export async function refreshTodayDashboard(force = false) {
   if (!state.uid) return null
 
-  // 命中有效缓存直接返回
-  if (isDashboardFresh()) {
+  // 命中有效缓存直接返回（force 时跳过缓存，强制重算，确保新记账立即反映）
+  if (!force && isDashboardFresh()) {
     return state.dashboard.settlement
   }
 
