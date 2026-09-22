@@ -101,10 +101,12 @@ export const ACTIONS = Object.freeze({
   LIST_TRANSACTIONS: 'listTransactions',
   LIST_ACCOUNT_BALANCE_LOGS: 'listAccountBalanceLogs',
   GET_DASHBOARD: 'getDashboard',
+  ENSURE_USER_SETTINGS: 'ensureUserSettings',
   GET_DOC: 'getDoc',
   GET_LIMIT_HISTORY: 'getLimitHistory',
   RECALCULATE_SETTLEMENT: 'recalculateSettlement',
   RUN_DAILY_SETTLEMENT: 'runDailySettlement',
+  ROLLBACK_TODAY_SETTLEMENT: 'rollbackTodaySettlement',
   ALLOCATE_SURPLUS: 'allocateSurplus',
   CONFIRM_SURPLUS_ROLLOVER: 'confirmSurplusRollover',
   APPLY_SURPLUS_POOL_CHANGE: 'applySurplusPoolChange',
@@ -117,6 +119,7 @@ export const ACTIONS = Object.freeze({
   DELETE_CATEGORY: 'deleteCategory',
   REORDER_CATEGORIES: 'reorderCategories',
   UPDATE_SETTINGS: 'updateSettings',
+  UPDATE_USER: 'updateUser',
   LIST_WISHES: 'listWishes',
   CREATE_WISH: 'createWish',
   UPDATE_WISH: 'updateWish',
@@ -292,6 +295,11 @@ export function initUser(profile = {}) {
   return callSparejar(ACTIONS.INIT_USER, profile)
 }
 
+/** 更新用户基础资料（昵称 / 头像）。头像为 cloud:// fileID。 */
+export function updateUser(patch) {
+  return callSparejar(ACTIONS.UPDATE_USER, patch)
+}
+
 /** @param {Record<string, unknown>} payload */
 export function createTransaction(payload) {
   return callSparejar(ACTIONS.CREATE_TRANSACTION, payload)
@@ -425,6 +433,11 @@ export function getDashboard(dateKey) {
   return callSparejar(ACTIONS.GET_DASHBOARD, { date_key: dateKey })
 }
 
+/** 确保 user_settings 文档存在（缺失则创建），返回最新文档。 */
+export function ensureUserSettings() {
+  return callSparejar(ACTIONS.ENSURE_USER_SETTINGS)
+}
+
 /** 通用单文档读取（user_settings / user_streaks / surplus_pools / savings_pools 等） */
 export function getDoc(collection) {
   return callSparejar(ACTIONS.GET_DOC, { collection })
@@ -449,6 +462,11 @@ export function runDailySettlement(dateKey, options = {}) {
     ...(dateKey ? { date_key: dateKey } : {}),
     ...options
   })
+}
+
+/** 一次性回退「今天」被提前执行日终结算造成的多滚（仅回退当天记录，幂等）。 */
+export function rollbackTodaySettlement() {
+  return callSparejar(ACTIONS.ROLLBACK_TODAY_SETTLEMENT)
 }
 
 /**
@@ -954,6 +972,7 @@ export default {
   listTransactions,
   listAccountBalanceLogs,
   getDashboard,
+  ensureUserSettings,
   getDoc,
   recalculateSettlement,
   runDailySettlement,

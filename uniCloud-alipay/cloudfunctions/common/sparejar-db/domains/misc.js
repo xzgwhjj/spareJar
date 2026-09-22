@@ -13,13 +13,42 @@ const {
 
 async function updateOnboarding(userId, step, done) {
   const db = getDb()
-  const userDoc = await getDocByUser('users', userId)
-  if (!userDoc) return null
+  // onboarding_done / onboarding_step 同时写 users 与 user_settings 两份：
+  // users 由 initUser 每次整体返回、可靠进入 state.user；user_settings 为设计上的业务真源。
+  // 两份一致可避免「读哪份都不对」的复发（历史上仅写 users 导致读取方读不到而反复引导）。
   const patch = { updated_at: nowTs() }
   if (typeof step === 'number') patch.onboarding_step = step
   if (typeof done === 'boolean') patch.onboarding_done = done
-  await db.collection('users').doc(userDoc._id).update(patch)
+
+  const settingsDoc = await getDocByUser('user_settings', userId)
+  if (settingsDoc) {
+    await db.collection('user_settings').doc(settingsDoc._id).update(patch)
+  }
+  const userDoc = await getDocByUser('users', userId)
+  if (userDoc) {
+    await db.collection('users').doc(userDoc._id).update(patch)
+  }
   return patch
+}
+
+/**
+ * 更新用户基础资料（昵称 / 头像）。
+ * @param {string} userId openid
+ * @param {{nickname?:string, avatar?:string}} patch 头像为 cloud:// fileID
+ */
+async function updateUser(userId, patch = {}) {
+  const db = getDb()
+  const userDoc = await getDocByUser('users', userId)
+  if (!userDoc) throw new Error('user not found')
+  const updateDoc = { updated_at: nowTs() }
+  if (typeof patch.nickname === 'string') {
+    updateDoc.nickname = patch.nickname.trim().slice(0, 20)
+  }
+  if (typeof patch.avatar_url === 'string' && patch.avatar_url) {
+    updateDoc.avatar_url = patch.avatar_url
+  }
+  await db.collection('users').doc(userDoc._id).update(updateDoc)
+  return updateDoc
 }
 
 const WX_CONFIG = {
@@ -130,16 +159,23 @@ async function initUser(userId, profile = {}) {
   const existingUser = await getDocByUser('users', userId)
 
   // —— 注销处理中再次登录（同微信）= 默认彻底注销：清空旧数据，随后建全新空白账号 ——
+  // 硬删失败必须上抛，禁止吞异常后复用旧 users 文档：
+  // 否则会伪装成「注销成功」，但旧 created_at / 旧数据仍在，且新建因 user_id 唯一索引
+  // 冲突回退到旧档，表现为「注销重登后还是旧账号」。
   let wasDeleting = false
   if (existingUser && existingUser.account_status === 'deleting') {
-    wasDeleting = true
-    try {
+    // 仅当冷静期真正结束（计划删除时间已到）才硬删并建新号；
+    // 冷静期内保留旧账号，由前端 profile 横幅提供「撤销 / 立即注销」入口，不可登录即删。
+    const scheduledAt = existingUser.delete_scheduled_at
+    const expired =
+      !!scheduledAt &&
+      new Date(String(scheduledAt).replace(' ', 'T')).getTime() <= Date.now()
+    if (expired) {
+      wasDeleting = true
       await deleteAccount(userId)
-    } catch (e) {
-      // 硬删失败不阻断登录，保留 deleting 状态交由 cron 重试
-      console.error('[initUser] 注销中登录，硬删失败', userId, e)
+      existingUser = null
     }
-    existingUser = null
+    // 未到冷静期：不删，沿用 existingUser，前端读取 account_status==='deleting' 显示横幅
   }
 
   let userDoc = existingUser
@@ -349,6 +385,10 @@ const DELETE_COLLECTIONS_BY_USER = [
   'subscribe_auth',
   'challenge_records',
   'daily_health',
+  'daily_settlements',
+  'daily_health_snapshots',
+  'favorite_ledgers',
+  'account_balance_logs',
   'members',
   'meals',
   'ledgers'
@@ -569,12 +609,105 @@ async function purgeScheduledDeletions() {
   return { purged }
 }
 
+/**
+ * 返回用户账号新建日期（YYYY-MM-DD）。
+ * 用于约束「补录 / 补建历史业务数据」不得早于账号创建日：
+ * 新建前用户从未使用系统，不可能产生任何业务数据。
+ * @param {string} userId
+ * @returns {Promise<string|null>} 账号创建日 date_key；无法获取时返回 null（调用方保守处理）。
+ */
+async function getUserCreatedDateKey(userId) {
+  const u = await getDocByUser('users', userId)
+  if (!u || !u.created_at) return null
+  return formatDateKey(new Date(String(u.created_at).replace(' ', 'T')))
+}
+
+// 分页拉取整张集合（uniCloud 单次 get 默认上限 100，需提升 limit 并翻页）
+async function fetchAll(collectionName) {
+  const db = getDb()
+  const out = []
+  let skip = 0
+  const batch = 500
+  while (true) {
+    const res = await db.collection(collectionName).limit(batch).skip(skip).get()
+    const data = (res && res.data) || []
+    out.push(...data)
+    if (data.length < batch) break
+    skip += batch
+  }
+  return out
+}
+
+/**
+ * 排查「越界补录」：扫描 daily_settlements 中 date_key 早于对应账号创建日的记录。
+ * 这类记录在正常情况下不应存在（新建前用户无任何业务数据），属违规补建或上次注销残留。
+ * @returns {Promise<{total:number, violations:Array}>}
+ */
+async function auditPreAccountSettlements() {
+  const users = await fetchAll('users')
+  const byUser = {}
+  for (const u of users) {
+    byUser[u.user_id] = u.created_at
+      ? formatDateKey(new Date(String(u.created_at).replace(' ', 'T')))
+      : null
+  }
+  const settlements = await fetchAll('daily_settlements')
+  const violations = []
+  for (const s of settlements) {
+    const created = byUser[s.user_id]
+    if (created && s.date_key && s.date_key < created) {
+      violations.push({ user_id: s.user_id, date_key: s.date_key, created_at: created, _id: s._id })
+    }
+  }
+  return { total: violations.length, violations }
+}
+
+/**
+ * 清理「越界补录」：删除 auditPreAccountSettlements 找到的违规 settlement。
+ * 仅删除日期早于账号创建日的记录（新用户本不该有这些历史数据），不影响正常数据。
+ * @param {boolean} [dryRun] 为 true 时只返回待删清单，不实际删除。
+ */
+async function cleanPreAccountSettlements(dryRun) {
+  const audit = await auditPreAccountSettlements()
+  if (dryRun) return { dryRun: true, toDelete: audit.violations }
+  const db = getDb()
+  let removed = 0
+  for (const v of audit.violations) {
+    try {
+      await db.collection('daily_settlements').doc(v._id).remove()
+      removed++
+    } catch (e) {
+      // 单条失败不阻断其余
+    }
+  }
+  return { removed, total: audit.violations.length }
+}
+
+// 确保 user_settings 文档存在（缺失则按默认值创建），返回该文档。
+// 兜底用：部分老账号 / 初始化未完整创建时，避免 state.settings 为空，
+// 从而导致引导判定、限额显示等依赖 settings 的功能异常。
+async function ensureUserSettings(userId) {
+  await ensureDoc('user_settings', userId, () => ({
+    onboarding_done: false,
+    language: 'zh-CN',
+    daily_base_limit: 10000,
+    limit_dim: 'day',
+    created_at: nowTs(),
+  }))
+  return getDocByUser('user_settings', userId)
+}
+
 module.exports = {
   updateOnboarding,
+  getUserCreatedDateKey,
+  auditPreAccountSettlements,
+  cleanPreAccountSettlements,
+  updateUser,
   getWxAccessToken,
   recordSubscribeAuth,
   sendSubscribeMessage,
   initUser,
+  ensureUserSettings,
   deleteAccount,
   scheduleDeleteAccount,
   cancelDeleteAccount,

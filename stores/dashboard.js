@@ -81,7 +81,7 @@ export async function refreshTodayDashboard(force = false) {
     try {
       // 并发去重：App.onLaunch 与首页 onMounted 可能同时触发，避免重复请求
       if (!settlementPromise) {
-        settlementPromise = runDailySettlement().finally(() => {
+        settlementPromise = recalculateSettlement(todayDateKey()).finally(() => {
           settlementPromise = null
         })
       }
@@ -89,7 +89,7 @@ export async function refreshTodayDashboard(force = false) {
       settlement = (res && (res.settlement || res.data?.settlement)) || null
     } catch (err) {
       console.warn('[dashboard] 日结失败，尝试重算', err)
-      const rec = await recalculateSettlement()
+      const rec = await recalculateSettlement(todayDateKey())
       settlement = rec || null
     }
 

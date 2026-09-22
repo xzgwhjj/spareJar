@@ -23,7 +23,7 @@ import {
   exportUserData as apiExportUserData,
   isSparejarApiError
 } from './core/api.js'
-import { refreshToken, getSurplusPoolLogs } from '@/api/sparejar.js'
+import { refreshToken, getSurplusPoolLogs, ensureUserSettings } from '@/api/sparejar.js'
 import { loadWishes, loadArchivedWishesAction } from './wish.js'
 import { loadChallengeSummary, evaluateAchievementsAction, loadAchievements } from './challenge.js'
 import { loadAssetAccounts } from './asset.js'
@@ -381,10 +381,21 @@ export async function exportUserData() {
   return await apiExportUserData()
 }
 
-/** 加载 user_settings */
+/** 加载 user_settings（缺失时自动创建）；若 ensure 动作不可用则回退只读，避免打断整体引导 */
 export async function loadSettings() {
   if (!state.uid) return null
-  state.settings = await getDoc('user_settings')
+  let doc = null
+  try {
+    doc = await ensureUserSettings()
+  } catch (e) {
+    console.warn('[settings] ensureUserSettings 不可用，回退只读 user_settings', e)
+    try {
+      doc = await getDoc('user_settings')
+    } catch (_) {
+      doc = null
+    }
+  }
+  state.settings = doc
   return state.settings
 }
 
@@ -455,7 +466,9 @@ export async function bootstrap(profile = {}) {
     if (data.default_ledger_id) {
       state.defaultLedgerId = data.default_ledger_id
     }
-    await Promise.all([
+    // 用 allSettled 替代 all：单个 loader（如 ensureUserSettings 在未重启的本地函数上 404）
+    // 失败不能拖垮整体引导，否则后续的 loadSurplusPool 等不会被写入 state，导致限额/余额显示为 0。
+    const results = await Promise.allSettled([
       loadSettings(),
       loadStreak(),
       loadSurplusPool(),
@@ -473,6 +486,18 @@ export async function bootstrap(profile = {}) {
       loadWeeklyHealth(),
       loadArchivedWishesAction()
     ])
+    results.forEach((r, i) => {
+      if (r.status === 'rejected') {
+        console.warn(`[bootstrap] loader #${i} 失败：`, r.reason)
+      }
+    })
+    // 从持久化设置还原引导完成标记：重新登录/刷新后内存 state.onboarding 会丢失，
+    // 必须依据 user_settings.onboarding_done 还原，否则首页提示条与 App.vue 自动引导会反复出现。
+    // 兼容旧版把完成态写入 users.onboarding_done 的遗留数据（修复部署前的「跳过」）：二者任一为真即视为已完成。
+    if (state.user && state.settings) {
+      const legacyDone = !!state.user.onboarding_done
+      state.user.onboarding_done = !!state.settings.onboarding_done || legacyDone
+    }
     if (!state.defaultLedgerId) {
       await loadDefaultLedgerId()
     }

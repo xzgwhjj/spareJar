@@ -198,7 +198,7 @@
             viewTab === "archived" ? "还没有历史心愿" : "还没有心愿"
           }}</text>
           <text v-if="viewTab === 'active'" class="wish-empty-sub"
-            >点击上方「通用存款池」卡片右上角的星星小狗按钮，建一个心愿吧</text
+            >把每天结余存进心愿，让存钱更有动力 → 点上方「存款池」卡片的星星小狗建一个吧</text
           >
         </view>
 

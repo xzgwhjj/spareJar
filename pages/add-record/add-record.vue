@@ -1011,7 +1011,7 @@ const selfAvatar = computed(
       members.value.find((m) => m.user_id === userStore.state.uid) ||
       null
     )?.avatar ||
-    userStore.state.user?.avatar ||
+    userStore.state.user?.avatar_url ||
     ""
 );
 const newTag = ref(""); // 标签输入框临时值

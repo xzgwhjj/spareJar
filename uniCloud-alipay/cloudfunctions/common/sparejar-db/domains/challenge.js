@@ -6,18 +6,33 @@ const { formatDateKey, formatMonthKey, formatYearKey, todayDateKey, addDaysToDat
 const money = require('../utils/money')
 const ids = require('../utils/id')
 const transaction = require('./transaction')
+const misc = require('./misc')
 
 // 对缺失（未记账/未结算）的天补建 daily_settlements 记录，使其 available_start 等字段落库，
 // 后续查询即可直接读取字段，无需内存推算。仅处理 <= 今天的天，避免给未来/远古日期造记录。
 // 返回新写入的 settlement map。
 async function ensureDaySettlements(userId, days) {
   const todayKey = todayDateKey()
+  // 账号新建日期：禁止补建早于该日的 settlement（新建前用户从未使用系统，不可能有业务数据）
+  const createdDateKey = await misc.getUserCreatedDateKey(userId)
   const db = getDb()
   const existingRes = await db.collection('daily_settlements')
     .where({ user_id: userId, date_key: db.command.in(days) })
     .get()
   const have = new Set((existingRes.data || []).map((s) => s.date_key))
-  const need = days.filter((k) => !have.has(k) && k <= todayKey)
+  // 越界天（早于账号创建日）一律不补建，并明确标记异常
+  const rejected = []
+  const need = days.filter((k) => {
+    if (createdDateKey && k < createdDateKey) {
+      rejected.push(k)
+      return false
+    }
+    return !have.has(k) && k <= todayKey
+  })
+  if (rejected.length) {
+    console.warn('[ensureDaySettlements] 拒绝补建早于账号创建日的 settlement：',
+      'created=', createdDateKey, 'rejected=', rejected.join(','), 'userId=', userId)
+  }
   const map = {}
   await Promise.all(need.map(async (k) => {
     // recalculateDailySettlement 内部 upsert，写入含滚入的 available_start 真值字段

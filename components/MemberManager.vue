@@ -192,7 +192,7 @@ export default {
     },
     selfAvatar() {
       const u = state.user || {};
-      return u.avatar || u.avatar_url || "";
+      return u.avatar_url || "";
     },
     defaultAvatar() {
       return cdn("/app_static/images/icon_avatar.png");

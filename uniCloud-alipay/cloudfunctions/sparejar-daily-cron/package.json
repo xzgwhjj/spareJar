@@ -3,9 +3,7 @@
   "version": "1.0.0",
   "description": "余钱罐日切定时任务",
   "main": "index.js",
-  "dependencies": {
-    "sparejar-db": "file:../common/sparejar-db"
-  },
+  "dependencies": {},
   "cloudfunction-config": {
     "memorySize": 512,
     "timeout": 300,
@@ -13,7 +11,7 @@
       {
         "name": "dailySettlement",
         "type": "timer",
-        "config": "0 0 16 * * * *"
+        "config": "0 5 16 * * *"
       }
     ]
   }

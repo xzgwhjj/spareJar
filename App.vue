@@ -2,7 +2,7 @@
 import { initAppSession, compensateDailySettlements, useUserStore } from '@/stores/user.js';
 import { startTokenHeartbeat, stopTokenHeartbeat } from '@/stores/auth.js';
 import { initPrivacy } from '@/stores/privacy.js';
-import { todayDateKey } from '@/utils/date.js';
+import { todayDateKey, addDaysToDateKey } from '@/utils/date.js';
 
 export default {
   onLaunch: async function () {
@@ -21,10 +21,13 @@ export default {
     if (session.isLoggedIn && store.state.user && store.state.user.onboarding_done === false) {
       uni.navigateTo({ url: '/pages/onboarding/onboarding' });
     }
-    // 启动后补跑跨日结算（兜底定时任务）；仅登录态有效，游客态跳过
+    // 启动后补跑“昨日”日终结算（兜底定时任务）；本地无 cron 时由此处补上，使滚存正常累积。
+    // 注意：必须结算「昨天」而非「今天」，因为 runDailySettlement 对今天/未来日有 skip 保护（防提前日结）。
+    // 仅登录态有效，游客态跳过。
     if (session.isLoggedIn) {
-      compensateDailySettlements(todayDateKey()).catch((e) =>
-        console.warn('[App] 跨日补偿失败（已忽略）', e && e.message)
+      const yesterdayKey = addDaysToDateKey(todayDateKey(), -1);
+      await compensateDailySettlements(yesterdayKey).catch((e) =>
+        console.warn('[App] 跨日补偿(昨日)失败（已忽略）', e && e.message)
       );
     }
   },

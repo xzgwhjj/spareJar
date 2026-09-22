@@ -85,7 +85,7 @@ writeSchema('users', {
     read: 'doc.user_id == auth.uid',
     create: 'auth.uid != null',
     update: 'doc.user_id == auth.uid',
-    delete: false
+    delete: 'doc.user_id == auth.uid'
   },
   properties: {
     _id: { description: 'PK' },

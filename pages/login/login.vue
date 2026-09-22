@@ -153,9 +153,26 @@ async function handleLogin() {
     // 1) 仅等待微信登录换取 token（登录态建立的必要步骤，无法绕过）
     await loginWithWeixin();
 
-    // 2) 登录态已就绪，立即提示并跳转，不再等待全量业务数据加载
-    // uni.showToast({ title: '登录成功', icon: 'success' });
+    // 2) 等待业务档案就绪：用于判断「是否新号 / 是否需引导」。
+    //    注销完成后重登（users 已被硬删）会建全新空白号，此时应像新用户一样走引导页，
+    //    而不是静默顶着一个默认限额的空号进首页。
+    //    bootstrap 失败不阻断登录跳转（降级继续），仍尝试用本地 state.user 兜底判断引导。
+    let data = null
+    try {
+      data = await bootstrap()
+    } catch (e) {
+      console.error('[login] bootstrap 失败（降级继续）', e)
+    }
+    const userDoc = (data && data.user) || userStore.state.user || {}
+    const isNew = !!(data && data.created)
+    const needOnboarding = isNew || !userDoc.onboarding_done
+
     setTimeout(() => {
+      // 新号 / 未完成引导：优先跳引导页（等同新注册），redirect 场景下也先引导
+      if (needOnboarding) {
+        uni.reLaunch({ url: '/pages/onboarding/onboarding' });
+        return;
+      }
       // 若由受限页面拦截而来，登录成功后平滑返回原目标页面（reLaunch 同时支持 tabBar 与普通页）
       if (redirect.value) {
         console.log('[login] 登录成功，reLaunch 回原目标页 =', redirect.value);
@@ -169,10 +186,6 @@ async function handleLogin() {
         uni.switchTab({ url: '/pages/index/index' });
       }
     }, 300);
-
-    // 3) 业务数据（心愿/贴纸/挑战/资产/健康/分类/看板等）改为后台异步补全，
-    //    不阻塞登录跳转；目标页（如账本）进入后会自行按需加载，用户立即可见。
-    bootstrap().catch((err) => console.error('[login] 后台 bootstrap 失败', err));
     uni.$emit('sparejar-auth-changed', { isLoggedIn: true, uid: userStore.state.uid });
   } catch (err) {
     const message = isUserStoreError(err) ? err.message : (err?.message || '登录失败');

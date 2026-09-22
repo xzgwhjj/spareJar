@@ -124,6 +124,10 @@ exports.main = async (event, context) => {
         if (!data || typeof data !== 'object') return fail('patch is required')
         return ok(await dbApi.updateUserSettings(userId, data))
 
+      case 'updateUser':
+        if (!data || typeof data !== 'object') return fail('patch is required')
+        return ok(await dbApi.updateUser(userId, data))
+
       case 'listWishes':
         return ok(await dbApi.listWishes(userId))
 
@@ -241,11 +245,17 @@ exports.main = async (event, context) => {
         break
 
       case 'recalculateSettlement':
-        if (!data.date_key) return fail('date_key is required')
-        return ok(await dbApi.recalculateDailySettlement(userId, data.date_key))
+        // 缺省按今天重算（与 runDailySettlement 一致）；前端看板刷新即无参调用以重算今日。
+        return ok(await dbApi.recalculateDailySettlement(userId, data.date_key || dbApi.formatDateKey()))
 
       case 'runDailySettlement':
         return ok(await dbApi.runDailySettlement(userId, data.date_key || dbApi.formatDateKey(), data))
+
+      case 'rollbackTodaySettlement':
+        return ok(await dbApi.rollbackTodaySettlement(userId))
+
+      case 'ensureUserSettings':
+        return ok(await dbApi.ensureUserSettings(userId))
 
       case 'allocateSurplus':
         if (!data.date_key) return fail('date_key is required')
@@ -458,6 +468,13 @@ exports.main = async (event, context) => {
 
       case 'getSurplusPoolLogs':
         return ok(await dbApi.getSurplusPoolLogs(userId))
+
+      // 越界补录排查 / 清理（一次性诊断用）：扫描 daily_settlements 中早于账号创建日的记录
+      case 'auditPreAccountSettlements':
+        return ok(await dbApi.auditPreAccountSettlements())
+
+      case 'cleanPreAccountSettlements':
+        return ok(await dbApi.cleanPreAccountSettlements(!!data.dryRun))
 
       case 'getLedgerDetail':
         if (!data.ledger_id) return fail('ledger_id is required')

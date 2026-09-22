@@ -37,10 +37,14 @@
           class="onboard-tip"
           @click="goOnboarding"
         >
-          <text class="ot-icon">👋</text>
+          <image
+            class="ot-icon"
+            :src="cdn('/app_static/images/icon_newbie_setup.png')"
+            mode="aspectFit"
+          />
           <view class="ot-info">
             <text class="ot-title">完成新手设置，开启存钱之旅</text>
-            <text class="ot-sub">设日限额 · 记第一笔 · 建心愿</text>
+            <text class="ot-sub">设日限额，开启你的存钱循环</text>
           </view>
           <text class="ot-arrow">›</text>
         </view>
@@ -100,6 +104,20 @@
         <!-- 健康双轨 -->
         <HealthDualTrack />
 
+        <!-- 首次记账情境引导（Onboarding 第3步下沉）：从未记过账时引导记第一笔 -->
+        <view
+          v-if="!hasAnyTx"
+          class="first-record-guide card-in-1"
+          @click="goFirstRecord"
+        >
+          <view class="frg-icon">💡</view>
+          <view class="frg-info">
+            <text class="frg-title">记下第一笔，看看结余怎么攒起来</text>
+            <text class="frg-sub">每天没花完的钱会自动滚存，让存钱看得见</text>
+          </view>
+          <view class="frg-btn">记一笔</view>
+        </view>
+
         <!-- 账单列表 -->
         <BillList />
 
@@ -126,7 +144,7 @@ import TopBar from "./components/TopBar.vue";
 import WishMiniCard from "./components/WishMiniCard.vue";
 import { useUserStore } from "@/stores/user.js";
 import { formatFen } from "@/utils/money.js";
-import { todayDateKey } from "@/utils/date.js";
+import { todayDateKey, addDaysToDateKey } from "@/utils/date.js";
 import { cdn } from "@/utils/cdn.js";
 
 const {
@@ -143,6 +161,9 @@ const {
   loadCategories,
   loadWishes,
   loadAssetAccounts,
+  loadSurplusPool,
+  loadSavingsPool,
+  compensateDailySettlements,
   onboardingDone,
 } = useUserStore();
 
@@ -159,6 +180,22 @@ const balanceText = computed(() => formatFen(totalBalanceFen.value));
 
 const goOnboarding = () => {
   uni.navigateTo({ url: "/pages/onboarding/onboarding" });
+};
+
+// 首次记账情境引导（Onboarding 第3步下沉）：从未记过账时，点此直达记账页
+const hasAnyTx = computed(
+  () => ((state.dashboard && state.dashboard.transactions) || []).length > 0
+);
+const goFirstRecord = () => {
+  if (!isLoggedIn.value) {
+    uni.navigateTo({
+      url:
+        "/pages/login/login?redirect=" +
+        encodeURIComponent("/pages/add-record/add-record"),
+    });
+    return;
+  }
+  uni.navigateTo({ url: "/pages/add-record/add-record" });
 };
 
 const refreshing = ref(false);
@@ -179,17 +216,28 @@ const handleRefresh = async () => {
 
 onMounted(async () => {
   if (!isLoggedIn.value) return;
+
   try {
+    // 先补跑“昨日”日终结算：本地无 cron，靠启动/进首页时补上，确保滚存已计入最新一天。
+    // 必须在加载 surplusPool 之前 await 完成，否则看到的 roll 仍是旧的。
+    const yesterdayKey = addDaysToDateKey(todayDateKey(), -1);
+    await compensateDailySettlements(yesterdayKey).catch((e) =>
+      console.warn("[index] 补跑昨日结算失败（已忽略）", e && e.message)
+    );
+
     // 首页所需数据在 bootstrap 中已预加载；若缓存仍新鲜，直接复用避免重复请求
     const needDashboard =
       !state.dashboard.loadedAt || state.dashboard.dateKey !== todayDateKey();
     await Promise.all([
       needDashboard
-        ? refreshTodayDashboard()
+        ? refreshTodayDashboard({ force: true })
         : Promise.resolve(state.dashboard.settlement),
       loadCategories(),
       loadWishes(),
       loadSaveStreakAction(),
+      // 兜底：即便 bootstrap 因个别 loader 失败被中断，首页也确保把限额/余额所需数据补齐
+      loadSurplusPool(),
+      loadSavingsPool(),
     ]);
   } catch (err) {
     console.error("[index] 初始化看板失败", err);
@@ -280,7 +328,9 @@ const onTotalBalancePlaceholder = () => {
       border: 2rpx solid var(--g3);
 
       .ot-icon {
-        font-size: 36rpx;
+        width: 40rpx;
+        height: 40rpx;
+        flex-shrink: 0;
       }
       .ot-info {
         flex: 1;
@@ -300,6 +350,51 @@ const onTotalBalancePlaceholder = () => {
       .ot-arrow {
         font-size: 36rpx;
         color: var(--g5);
+      }
+    }
+
+    /* 首次记账情境引导卡 */
+    .first-record-guide {
+      display: flex;
+      align-items: center;
+      gap: 16rpx;
+      margin: 20rpx var(--page-margin);
+      padding: 28rpx 28rpx;
+      border-radius: var(--radius-badge);
+      background: linear-gradient(
+        135deg,
+        rgba(37, 204, 93, 0.12),
+        rgba(37, 204, 93, 0.06)
+      );
+      border: 2rpx solid var(--g3);
+
+      .frg-icon {
+        font-size: 44rpx;
+      }
+      .frg-info {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
+      .frg-title {
+        font-size: 28rpx;
+        font-weight: 700;
+        color: var(--ink);
+      }
+      .frg-sub {
+        font-size: 20rpx;
+        color: var(--g6);
+        margin-top: 6rpx;
+        line-height: 1.4;
+      }
+      .frg-btn {
+        flex-shrink: 0;
+        padding: 16rpx 32rpx;
+        border-radius: var(--radius-pill);
+        @include sj-brand-gradient;
+        color: #fff;
+        font-size: 26rpx;
+        font-weight: 800;
       }
     }
 

@@ -136,13 +136,21 @@ export async function evaluateAchievementsAction() {
   return state.achievements
 }
 
-/** 保存新手引导数据 */
-export async function saveOnboardingAction(data) {
+/** 保存新手引导进度 / 完成状态（step: 0-4，done: 是否完成） */
+export async function saveOnboardingAction(step, done) {
   ENSURE_LOGGED_IN()
-  const res = await updateOnboarding(data)
-  const rows = pickDbRows(res)
-  if (rows && rows[0] && state.settings) {
-    state.settings.onboarding = rows[0].onboarding
+  const res = await updateOnboarding(step, done)
+  // 后端已写入 user_settings.onboarding_done / onboarding_step（持久化真源）。
+  // 立即同步到 state.settings，使首页提示条（读 state.settings.onboarding_done）保存后即时生效。
+  const nextDone = done === true ? true : (state.onboarding?.done ?? false)
+  const nextStep = typeof step === 'number' ? step : (state.onboarding?.step ?? '')
+  state.onboarding = { done: nextDone, step: nextStep }
+  if (state.user) state.user.onboarding_done = nextDone
+  // 同步内存中的 user_settings（onboardingDone 计算属性优先读 state.settings.onboarding_done），
+  // 否则点完「跳过」后首页提示条要等下次重载设置才消失。
+  if (state.settings) {
+    state.settings.onboarding_done = nextDone
+    state.settings.onboarding_step = nextStep
   }
   return res
 }

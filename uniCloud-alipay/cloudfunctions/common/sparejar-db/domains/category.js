@@ -202,6 +202,26 @@ async function updateUserSettings(userId, patch = {}) {
     }
   }
 
+  // —— 加固：首页/日限额变更 → 主动重算「今日」settlement，使 base_limit 立即生效 ——
+  // 解决「设置页改了限额、首页仍显示旧 base」的不同步问题（重算读最新 settings 重算）。
+  // 今日一定 >= 账号创建日，不会命中越界补录防护；重算失败不阻断限额保存主流程。
+  const affectsDailyBase = ['limit_dim', 'limit_amount_fen', 'overrides', 'pending_base_limit', 'pending_amount_fen', 'pending_limit_dim', 'limit_effective_date', 'daily_base_limit'].some((k) => k in patch)
+  if (affectsDailyBase) {
+    try {
+      const { recalculateDailySettlement } = require('./transaction')
+      const todayKey = formatDateKey()
+      const result = await recalculateDailySettlement(userId, todayKey)
+      console.log('[updateUserSettings] 限额变更触发今日结算重算', {
+        userId, todayKey,
+        patchKeys: Object.keys(patch),
+        base_limit: result && result.base_limit,
+        pending_rollover_fen: result && result.pending_rollover_fen
+      })
+    } catch (err) {
+      console.error('[updateUserSettings] recalculateDailySettlement 失败', userId, err && (err.stack || err.message || err))
+    }
+  }
+
   return res.__created ? { created: true, ...updateDoc } : { updated: true, ...updateDoc }
 }
 

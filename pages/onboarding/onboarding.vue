@@ -10,7 +10,7 @@
 
     <!-- 进度条 -->
     <view class="progress-row">
-      <view v-for="n in 4" :key="n" class="progress-dot" :class="{ active: step >= n }" />
+      <view v-for="n in 2" :key="n" class="progress-dot" :class="{ active: step >= n }" />
     </view>
 
     <view class="ob-body">
@@ -18,74 +18,86 @@
       <view v-if="step === 1" class="step-wrap">
         <image class="ob-emoji" :src="cdn('/app_static/images/icon_logo2.png')" />
         <text class="ob-title">欢迎来到余钱罐</text>
-        <text class="ob-sub">用「日限额 + 结余攒钱」的方式，<br />把每一天的结余变成看得见的存款。</text>
+        <text class="ob-sub"
+          >用<text class="ob-keyword">日 / 月 / 年 限额 + 结余攒钱的方式</text
+          >，<br />把省下的钱变成看得见的存款。</text
+        >
         <!-- 待：图标修改 -->
         <view class="value-list">
-          <view class="value-item"><text class="vi-icon">🎯</text><text class="vi-text">设一个合理的每日消费上限</text></view>
-          <view class="value-item"><text class="vi-icon">💰</text><text class="vi-text">每天没花完的钱自动攒起来</text></view>
-          <view class="value-item"><text class="vi-icon">🔥</text><text class="vi-text">连续打卡养成存钱习惯</text></view>
+          <view class="value-item">
+            <image
+              class="vi-icon"
+              :src="cdn('/app_static/images/icon_budget_target.png')"
+              mode="aspectFit"
+            />
+            <text class="vi-text">按日 / 月 / 年设一个消费上限</text>
+          </view>
+          <view class="value-item">
+            <image
+              class="vi-icon"
+              :src="cdn('/app_static/images/icon_money.png')"
+              mode="aspectFit"
+            />
+            <text class="vi-text">没花完的钱自动攒起来</text>
+          </view>
+          <view class="value-item">
+            <image
+              class="vi-icon"
+              :src="cdn('/app_static/images/icon_checkin_streak.png')"
+              mode="aspectFit"
+            />
+            <text class="vi-text">坚持打卡养成存钱习惯</text>
+          </view>
         </view>
         <view class="disclaimer">
-          <!-- 待：图标修改 -->
-          <text class="dc-text">⚠️ 余钱罐为虚拟记账工具，所有金额均为模拟数据，不涉及真实资金交易。</text>
+          <image
+            class="dc-icon"
+            :src="cdn('/app_static/images/icon_warning.png')"
+            mode="aspectFit"
+          />
+          <text class="dc-text"
+            >余钱罐为虚拟记账工具，所有金额均为模拟数据，不涉及真实资金交易。</text
+          >
         </view>
       </view>
 
       <!-- 步骤 2：设日限额 -->
       <view v-else-if="step === 2" class="step-wrap">
         <text class="ob-title">设定你的每日限额</text>
-        <text class="ob-sub">不知道设多少？输入月薪，我们帮你算。</text>
+        <text class="ob-sub"
+          >不知道设多少？输入月薪，我们帮你算。日 / 月 / 年
+          额度都能在「设置」里随时调整。</text
+        >
         <view class="form-card">
           <text class="form-label">月薪（元）</text>
           <view class="input-row">
             <text class="input-prefix">¥</text>
-            <number-field class="input-main" :model-value="monthlySalary" placeholder="如 9000" title="月薪" :decimal-places="0" :max-integer="9" @update:model-value="(v) => (monthlySalary = v)" />
+            <number-field
+              class="input-main"
+              :model-value="monthlySalary"
+              placeholder="如 5000"
+              title="月薪"
+              :decimal-places="0"
+              :max-integer="9"
+              @update:model-value="(v) => (monthlySalary = v)"
+            />
           </view>
           <view class="calc-hint" v-if="suggestedDaily > 0">
-            <text>按 月薪 ÷ 30 估算，建议每日约 </text>
+            <text>按 月薪 ÷ {{ currentMonthDays }} 估算，建议每日约 </text>
             <text class="calc-num">¥{{ suggestedDaily }}</text>
           </view>
-          <text class="form-label" style="margin-top:36rpx;">每日限额（元）</text>
+          <text class="form-label" style="margin-top: 36rpx">每日限额（元）</text>
           <view class="input-row">
             <text class="input-prefix">¥</text>
-            <number-field class="input-main" :model-value="dailyLimit" placeholder="每日可花金额" title="每日限额" :decimal-places="0" :max-integer="9" @update:model-value="(v) => (dailyLimit = v)" />
-          </view>
-        </view>
-      </view>
-
-      <!-- 步骤 3：记第一笔 -->
-      <view v-else-if="step === 3" class="step-wrap">
-        <text class="ob-title">记下你的第一笔支出</text>
-        <text class="ob-sub">随便记一笔试试，感受一下流程（可跳过）。</text>
-        <view class="form-card">
-          <text class="form-label">金额（元）</text>
-          <view class="input-row">
-            <text class="input-prefix">¥</text>
-            <number-field class="input-main" :model-value="txAmount" placeholder="0.00" title="金额" :decimal-places="2" :max-integer="9" @update:model-value="(v) => (txAmount = v)" />
-          </view>
-          <text class="form-label" style="margin-top:36rpx;">分类</text>
-          <picker class="picker-row" :range="expenseCats" range-key="name" @change="onCatChange">
-            <view class="picker-inner">
-              <text>{{ selectedCat ? selectedCat.name : '请选择分类' }}</text>
-              <text class="picker-arrow">›</text>
-            </view>
-          </picker>
-          <text class="form-label" style="margin-top:36rpx;">备注（可选）</text>
-          <input class="input-main full" v-model="txNote" placeholder="如 午餐" />
-        </view>
-      </view>
-
-      <!-- 步骤 4：建心愿 -->
-      <view v-else-if="step === 4" class="step-wrap">
-        <text class="ob-title">建一个攒钱心愿</text>
-        <text class="ob-sub">把结余存进心愿，让存钱更有动力（可选）。</text>
-        <view class="form-card">
-          <text class="form-label">心愿名称</text>
-          <input class="input-main full" v-model="wishName" placeholder="如 旅行基金" />
-          <text class="form-label" style="margin-top:36rpx;">目标金额（元）</text>
-          <view class="input-row">
-            <text class="input-prefix">¥</text>
-            <number-field class="input-main" :model-value="wishAmount" placeholder="0.00" title="目标金额" :decimal-places="2" :max-integer="9" @update:model-value="(v) => (wishAmount = v)" />
+            <number-field
+              class="input-main"
+              :model-value="dailyLimit"
+              placeholder="每日可花金额"
+              title="每日限额"
+              :decimal-places="0"
+              :max-integer="9"
+              @update:model-value="(v) => (dailyLimit = v)"
+            />
           </view>
         </view>
       </view>
@@ -93,65 +105,48 @@
 
     <!-- 底部操作 -->
     <view class="ob-footer">
-      <view v-if="step === 1" class="primary-btn" @click="next"><text>开始设置</text></view>
+      <template v-if="step === 1">
+        <view class="ghost-btn" @click="finish"><text>跳过引导</text></view>
+        <view class="primary-btn" @click="next"><text>开始设置</text></view>
+      </template>
       <template v-else-if="step === 2">
-        <view class="ghost-btn" @click="skipAll"><text>跳过引导</text></view>
-        <view class="primary-btn" @click="saveLimit"><text>保存并继续</text>    
-    <!-- 全局数字键盘（单例）：由 main.js 全局注册 -->
-    <amount-keyboard />
-</view>
-      </template>
-      <template v-else-if="step === 3">
-        <view class="ghost-btn" @click="next"><text>跳过</text></view>
-        <view class="primary-btn" @click="saveTx"><text>保存并继续</text></view>
-      </template>
-      <template v-else-if="step === 4">
         <view class="ghost-btn" @click="finish"><text>稍后再说</text></view>
-        <view class="primary-btn" @click="saveWish"><text>创建并完成</text></view>
+        <view class="primary-btn" @click="saveLimit"><text>保存并进入</text></view>
       </template>
     </view>
+    <!-- 数字键盘（全局单例，由 number-field 的 @tap 触发弹出） -->
+    <amount-keyboard />
   </view>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
-import { cdn } from '@/utils/cdn.js';
-import { useUserStore } from '@/stores/user.js';
-import { requireLogin } from '@/utils/guard.js';
-import { createTransaction, createWish, updateSettings } from '@/api/sparejar.js';
-import { updateOnboardingAction, recordSubscribeAuthAction } from '@/stores/user.js';
-import { todayDateKey, formatDateTime } from '@/utils/date.js';
-import { safeYuanToFen, formatFen } from '@/utils/money.js';
+import { ref, computed, watch } from "vue";
+import { cdn } from "@/utils/cdn.js";
 
-const { state, loadCategories } = useUserStore();
+import { requireLogin } from "@/utils/guard.js";
+import { updateSettings } from "@/api/sparejar.js";
+import { updateOnboardingAction, recordSubscribeAuthAction } from "@/stores/user.js";
 
 const step = ref(1);
 
 // 步骤 2
-const monthlySalary = ref('');
-const dailyLimit = ref('');
+const monthlySalary = ref("");
+const dailyLimit = ref("");
+// 当前月份天数（28/29/30/31，含闰年 2 月），按当月实际天数估算每日限额
+const currentMonthDays = computed(() => {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+});
 const suggestedDaily = computed(() => {
   const m = Math.floor(Number(monthlySalary.value));
   if (!Number.isFinite(m) || m < 1) return 0;
-  return Math.round(m / 30);
+  return Math.round(m / currentMonthDays.value);
 });
-
-// 步骤 3
-const txAmount = ref('');
-const txNote = ref('');
-const selectedCat = ref(null);
-const expenseCats = computed(() =>
-  (Array.isArray(state.categories) ? state.categories : [])
-    .filter((c) => c && c.type === 'expense')
-    .slice(0, 12)
-);
-function onCatChange(e) {
-  selectedCat.value = expenseCats.value[Number(e.detail.value)] || null;
-}
-
-// 步骤 4
-const wishName = ref('');
-const wishAmount = ref('');
+// 输入月薪后自动按当月天数估算，并填入「每日限额」
+watch(monthlySalary, (v) => {
+  const m = Math.floor(Number(v));
+  dailyLimit.value = Number.isFinite(m) && m >= 1 ? String(suggestedDaily.value) : "";
+});
 
 // 微信订阅消息模板 ID（部署时在微信公众平台申请并填入；为空则跳过授权请求）
 const SUBSCRIBE_TMPL_IDS = [];
@@ -161,9 +156,11 @@ function requestSubscriptions() {
   uni.requestSubscribeMessage({
     tmplIds: SUBSCRIBE_TMPL_IDS,
     success: () => {
-      ['over_limit', 'daily_surplus', 'streak_risk'].forEach((t) => recordSubscribeAuthAction(t));
+      ["over_limit", "daily_surplus", "streak_risk"].forEach((t) =>
+        recordSubscribeAuthAction(t)
+      );
     },
-    fail: () => {}
+    fail: () => {},
   });
 }
 
@@ -175,90 +172,29 @@ async function saveLimit() {
   let yuan = Math.floor(Number(dailyLimit.value));
   if (!Number.isFinite(yuan) || yuan < 1) yuan = suggestedDaily.value;
   if (!Number.isFinite(yuan) || yuan < 1) {
-    uni.showToast({ title: '请先设定每日限额', icon: 'none' });
+    uni.showToast({ title: "请先设定每日限额", icon: "none" });
     return;
   }
   try {
     await updateSettings({ daily_base_limit: yuan * 100 });
-    await updateOnboardingAction(2, false);
-    // 第 2 步完成后请求订阅授权（§8.6）
+    // 第 2 步（设日限额）完成后请求订阅授权（§8.6）
     requestSubscriptions();
-    next();
-  } catch (err) {
-    uni.showToast({ title: (err && err.message) || '保存失败', icon: 'none' });
-  }
-}
-
-async function saveTx() {
-  const res = safeYuanToFen(txAmount.value);
-  if (!res.ok || res.value < 1) {
-    uni.showToast({ title: '请输入有效金额', icon: 'none' });
-    return;
-  }
-  if (!selectedCat.value) {
-    uni.showToast({ title: '请选择分类', icon: 'none' });
-    return;
-  }
-  try {
-    await createTransaction({
-      ledger_id: state.defaultLedgerId || '',
-      type: 'expense',
-      amount: res.value,
-      category_id: selectedCat.value._id,
-      note: txNote.value.trim(),
-      date_key: todayDateKey(),
-      transaction_at: formatDateTime()
-    });
-    await updateOnboardingAction(3, false);
-    uni.showToast({ title: '已记录', icon: 'success' });
-    next();
-  } catch (err) {
-    uni.showToast({ title: (err && err.message) || '保存失败', icon: 'none' });
-  }
-}
-
-async function saveWish() {
-  if (!wishName.value.trim()) {
-    uni.showToast({ title: '请输入心愿名称', icon: 'none' });
-    return;
-  }
-  const res = safeYuanToFen(wishAmount.value);
-  if (!res.ok || res.value < 1) {
-    uni.showToast({ title: '请输入有效目标金额', icon: 'none' });
-    return;
-  }
-  try {
-    await createWish({ name: wishName.value.trim(), target_amount: res.value, deadline: '' });
-    uni.showToast({ title: '心愿已创建', icon: 'success' });
     await finish();
   } catch (err) {
-    uni.showToast({ title: (err && err.message) || '创建失败', icon: 'none' });
+    uni.showToast({ title: (err && err.message) || "保存失败", icon: "none" });
   }
 }
 
 async function finish() {
   try {
-    await updateOnboardingAction(4, true);
+    await updateOnboardingAction(2, true);
   } catch (_e) {}
-  uni.switchTab({ url: '/pages/index/index' });
+  uni.switchTab({ url: "/pages/index/index" });
 }
 
-function skipAll() {
-  uni.showModal({
-    title: '跳过引导',
-    content: '你可以稍后在「我的 → 通知设置」上方或首页提示条继续设置。',
-    confirmText: '跳过',
-    success: (r) => {
-      if (r.confirm) finish();
-    }
-  });
-}
-
-// 进入页面确保分类已加载（步骤 3 需要）
-if (!requireLogin('/pages/onboarding/onboarding')) {
+// 进入页面先做登录门禁（未登录则跳转登录页，登录后自动回来）
+if (!requireLogin("/pages/onboarding/onboarding")) {
   // 未登录：已跳转登录页
-} else if (!state.categories || !state.categories.length) {
-  loadCategories().catch(() => {});
 }
 </script>
 
@@ -382,6 +318,12 @@ if (!requireLogin('/pages/onboarding/onboarding')) {
     line-height: 1.6;
     margin-top: 20rpx;
   }
+  .ob-keyword {
+    font-size: 32rpx;
+    font-weight: 700;
+    color: var(--ink2);
+    margin: 0 10rpx;
+  }
 
   .value-list {
     margin-top: 48rpx;
@@ -399,7 +341,9 @@ if (!requireLogin('/pages/onboarding/onboarding')) {
       padding: 28rpx;
 
       .vi-icon {
-        font-size: 44rpx;
+        width: 44rpx;
+        height: 44rpx;
+        flex-shrink: 0;
       }
 
       .vi-text {
@@ -416,11 +360,22 @@ if (!requireLogin('/pages/onboarding/onboarding')) {
     border: 2rpx solid var(--warn-border);
     border-radius: 24rpx;
     padding: 24rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12rpx;
+
+    .dc-icon {
+      width: 64rpx;
+      height: 64rpx;
+      flex-shrink: 0;
+    }
 
     .dc-text {
       font-size: 22rpx;
       color: var(--warn-text);
       line-height: 1.5;
+      text-align: left;
     }
   }
 
@@ -461,7 +416,7 @@ if (!requireLogin('/pages/onboarding/onboarding')) {
 
     .input-row {
       display: flex;
-      align-items: center;
+      align-items: baseline;
       gap: 12rpx;
       background: #fff;
       border: 2rpx solid var(--g2);

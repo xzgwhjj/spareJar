@@ -331,7 +331,6 @@ async function markRollOverLog(userId, amount, refs = {}) {
   return balanceAfter
 }
 
-
 module.exports = {
   listSavingsPoolLogs,
   getSurplusPoolLogs,

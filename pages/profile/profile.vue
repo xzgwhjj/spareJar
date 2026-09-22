@@ -46,19 +46,23 @@
             <view class="greet-arrow"></view>
             <text class="greet-text">{{ greetText }}</text>
           </view>
-          <view class="card-user">
+          <view class="card-user" @click="onEditProfile">
             <view class="avatar-ring">
               <view class="avatar-inner">
                 <image class="avatar-img" :src="avatarUrl" mode="aspectFit"></image>
               </view>
             </view>
             <view class="card-user-info">
-              <text class="profile-name">{{ isGuest ? "游客" : displayName }}</text>
+              <text class="profile-name" v-if="!isGuest">{{
+                isGuest ? "游客" : displayName
+              }}</text>
               <text class="profile-meta">{{
                 isGuest ? "登录后同步你的记账数据" : profileMeta
               }}</text>
-              <text class="saved-amount">累计节省 ¥{{ savedTotalText }}</text>
-              <view v-if="isGuest" class="profile-login-btn" @click="goLogin">
+              <text v-if="!isGuest" class="saved-amount"
+                >累计节省 ¥{{ savedTotalText }}</text
+              >
+              <view v-if="isGuest" class="profile-login-btn" @click.stop="goLogin">
                 <text>微信登录</text>
               </view>
             </view>
@@ -74,9 +78,10 @@
           mode="aspectFit"
         />
         <view class="delete-banner-body">
-          <text class="delete-banner-title">账号注销处理中</text>
+          <view class="delete-banner-title">账号注销处理中</view>
           <text class="delete-banner-text">
-            你的账号将于 {{ formatDeleteDate() }} 永久删除，剩余约 {{ remainDays }} 天。期内可随时撤销并恢复全部数据，也可立即注销。
+            你的账号将于 {{ formatDeleteDate() }} 永久删除，剩余约
+            {{ remainDays }} 天。期内可随时撤销并恢复全部数据，也可立即注销。
           </text>
           <view class="delete-banner-actions">
             <view class="banner-btn banner-btn-cancel" @click="cancelDeleting">
@@ -503,7 +508,7 @@ const displayName = computed(() => {
 
 // 用户头像：接口返回优先，缺失或游客使用默认头像
 const avatarUrl = computed(() => {
-  const url = state.user && state.user.avatar;
+  const url = state.user && state.user.avatar_url;
   return url ? url : cdn("/app_static/images/icon_avatar.png");
 });
 
@@ -681,6 +686,15 @@ const goNotifySetting = () => {
 };
 
 const goLogin = () => uni.navigateTo({ url: "/pages/login/login" });
+
+// 点击头像/用户名区：登录态进入资料编辑页，游客态引导登录
+function onEditProfile() {
+  if (isGuest.value) {
+    goLogin();
+    return;
+  }
+  uni.navigateTo({ url: "/pages/profile-edit/profile-edit" });
+}
 
 const goBack = () => {
   if (getCurrentPages().length > 1) uni.navigateBack();
@@ -1248,13 +1262,14 @@ async function exportData() {
   margin-top: 8rpx;
 }
 .profile-login-btn {
-  margin-top: 32rpx;
+  margin-top: 16rpx;
   padding: 20rpx 56rpx;
   border-radius: 40rpx;
   background: linear-gradient(135deg, var(--g4), var(--g5));
   color: #fff;
   font-size: 28rpx;
   font-weight: 700;
+  text-align: center;
 }
 
 .stats-row {
@@ -1674,17 +1689,21 @@ async function exportData() {
   display: flex;
   align-items: flex-start;
   gap: 20rpx;
-  margin: 0 32rpx 24rpx;
+  margin: 24rpx 42rpx 24rpx;
   padding: 28rpx 28rpx 24rpx;
   border-radius: 28rpx;
   /* 毛玻璃效果：半透明琥珀底 + 背景模糊，沿用项目 sj-glass 风格 */
   @include sj-glass(20rpx, rgba(255, 244, 224, 0.3), rgba(255, 184, 77, 0.2));
   box-shadow: 0 8rpx 28rpx rgba(245, 158, 11, 0.14);
+  position: relative;
 }
 .delete-banner-icon {
-  width: 44rpx;
-  height: 44rpx;
+  width: 100rpx;
+  height: 100rpx;
   flex-shrink: 0;
+  position: absolute;
+  top: -30rpx;
+  left: -20rpx;
 }
 .delete-banner-body {
   flex: 1;
@@ -1695,7 +1714,8 @@ async function exportData() {
   font-weight: 800;
   color: var(--y8);
   display: block;
-  margin-bottom: 8rpx;
+  margin-bottom: 16rpx;
+  padding: 0 0 0 60rpx;
 }
 .delete-banner-text {
   font-size: 24rpx;
@@ -1727,7 +1747,7 @@ async function exportData() {
   background: var(--white-75);
 }
 .banner-btn-export text {
-  color: var(--y5);
+  color: var(--g5);
 }
 .banner-btn-immediate {
   background: linear-gradient(135deg, var(--r7), var(--r6));

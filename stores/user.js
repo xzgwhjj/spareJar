@@ -25,6 +25,7 @@ import {
 } from './core/api.js'
 import { computeDayBaseLimit } from '@/utils/limitEngine.js'
 import { todayDateKey } from '@/utils/date.js'
+import { updateUser as apiUpdateUser } from '@/api/sparejar.js'
 
 // ---- 业务域 action / computed 汇聚（对外保留具名导出，页面侧解构无感）----
 export * from './auth.js'
@@ -97,30 +98,41 @@ export const bootstrapLoading = computed(() => state.loading.bootstrap)
 export const loginLoading = computed(() => state.loading.login)
 
 export const dailyLimitFen = computed(() => {
-  // 1) 已结算日：直接使用当日结算快照
+  // 1) 已结算日：直接使用当日结算快照（优先级最高，会无视 settings 的改动）
   const settlement = state.dashboard.settlement
   if (settlement && typeof settlement.base_limit === 'number') {
+    console.log('[限额·来源① settlement.base_limit]', settlement.base_limit)
     return settlement.base_limit
   }
   // 2) 未结算：用分层限额引擎按 settings 估算（兼容日/周/月/年维度）
   if (state.settings) {
     const dayKey = todayDateKey()
     const est = computeDayBaseLimit(state.settings, dayKey)
+    console.log('[限额·来源② computeDayBaseLimit]', est, 'settings=', JSON.stringify(state.settings))
     if (est > 0) return est
   }
   // 3) 兜底：直接读 user_settings.daily_base_limit
   if (state.settings && typeof state.settings.daily_base_limit === 'number') {
+    console.log('[限额·来源③ daily_base_limit]', state.settings.daily_base_limit)
     return state.settings.daily_base_limit
   }
+  console.log('[限额·默认0]')
   return 0
 })
 export const pendingRolloverFen = computed(() => {
   // 滚入次日可用额度 P，由结余池流水推导（surplusPool.rollOverPending 由 loadSurplusPool 计算）
-  return state.surplusPool && typeof state.surplusPool.rollOverPending === 'number'
+  const roll = state.surplusPool && typeof state.surplusPool.rollOverPending === 'number'
     ? state.surplusPool.rollOverPending
     : 0
+  console.log('[滚存 rollOverPending]', roll, 'surplusPool=', JSON.stringify(state.surplusPool))
+  return roll
 })
-export const totalDailyLimitFen = computed(() => dailyLimitFen.value + pendingRolloverFen.value)
+export const totalDailyLimitFen = computed(() => {
+  const base = dailyLimitFen.value
+  const roll = pendingRolloverFen.value
+  console.log('[总限额汇总] 固定base=', base, '滚存roll=', roll, 'total=', base + roll, '→ ¥', (base + roll) / 100)
+  return base + roll
+})
 export const hasLimit = computed(() => totalDailyLimitFen.value > 0)
 // 今日已用：由看板「当日交易」中支出类汇总（响应式，保存后 refresh 即更新）
 // 注：state.spentToday 字段此前从未被赋值，导致已用恒为 0，改为直接推导。
@@ -134,8 +146,27 @@ export const spentTodayFen = computed(() => {
 })
 export const leftTodayFen = computed(() => Math.max(0, totalDailyLimitFen.value - spentTodayFen.value))
 export const isOverLimit = computed(() => spentTodayFen.value > totalDailyLimitFen.value)
-export const onboardingDone = computed(() => !!state.onboarding?.done)
-export const onboardingStep = computed(() => state.onboarding?.step ?? '')
+// 引导完成/步骤状态：优先 user_settings（真源）；user_settings 缺失该字段时
+// （旧数据仅写在 users 表，user_settings 甚至无此字段）回退 users.onboarding_done / onboarding_step，
+// 避免「已完成却被反复引导」。两层都不存在才退回内存 state.onboarding（刷新即丢，仅兜底）。
+export const onboardingDone = computed(() => {
+  if (state.settings && typeof state.settings.onboarding_done === 'boolean') {
+    return state.settings.onboarding_done
+  }
+  if (typeof state.user?.onboarding_done === 'boolean') {
+    return state.user.onboarding_done
+  }
+  return !!state.onboarding?.done
+})
+export const onboardingStep = computed(() => {
+  if (state.settings && typeof state.settings.onboarding_step === 'number') {
+    return state.settings.onboarding_step
+  }
+  if (typeof state.user?.onboarding_step === 'number') {
+    return state.user.onboarding_step
+  }
+  return state.onboarding?.step ?? ''
+})
 
 export const challenges = computed(() => state.challenges)
 export const achievements = computed(() => state.achievements)
@@ -145,6 +176,21 @@ export const allAchievements = computed(() =>
 export const dashboardError = computed(() => state.lastError)
 
 // ---- 跨域 action（拆分时遗漏，自原 user.js 迁回）----
+/**
+ * 更新用户基础资料（昵称 / 头像），成功后同步前端 state.user。
+ * @param {{nickname?:string, avatar?:string}} patch 头像为 cloud:// fileID
+ */
+export async function updateProfile(patch = {}) {
+  if (!state.uid) throw new Error('未登录，无法修改资料')
+  await apiUpdateUser(patch)
+  if (state.user) {
+    if (typeof patch.nickname === 'string') state.user.nickname = patch.nickname
+    if (typeof patch.avatar_url === 'string') {
+      state.user.avatar_url = patch.avatar_url
+    }
+  }
+}
+
 export async function confirmSurplusRolloverAction(decision, opts = {}) {
   if (!state.uid) return
   await confirmSurplusRollover(decision, opts)
@@ -253,6 +299,7 @@ export function useUserStore() {
     withdrawSavingsPoolAction: pool.withdrawSavingsPoolAction,
     loadSavingsPoolLogsAction: pool.loadSavingsPoolLogsAction,
     loadSaveStreakAction,
+    updateProfile,
 
     // challenge
     loadChallengeSummary: challenge.loadChallengeSummary,

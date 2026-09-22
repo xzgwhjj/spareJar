@@ -34,6 +34,17 @@ async function computeRollOverPending(userId, poolBalance = 0) {
 
 async function recalculateDailySettlement(userId, dateKey) {
   const db = getDb()
+  // —— 防越界补录：禁止为「早于账号新建日」的日期创建/重算结算 ——
+  // 新建前用户从未使用系统，不可能产生任何业务数据；越界请求一律拒绝并标记异常。
+  const createdDateKey = await misc.getUserCreatedDateKey(userId)
+  if (createdDateKey && dateKey < createdDateKey) {
+    console.warn('[recalculateDailySettlement] 拒绝越界补录：date_key', dateKey,
+      '早于账号创建日', createdDateKey, 'userId=', userId)
+    // 不写入新记录；若已存在（历史违规残留）原样返回，清理交由审计脚本处理
+    const existing = await db.collection('daily_settlements')
+      .where({ user_id: userId, date_key: dateKey }).limit(1).get()
+    return (existing.data && existing.data[0]) || null
+  }
   const settings = await getDocByUser('user_settings', userId)
   const baseLimit = await category.getEffectiveBaseLimit(userId, dateKey)
   const surplusPoolDoc = await getDocByUser('surplus_pools', userId)
@@ -228,6 +239,13 @@ async function updateChallengeForDate(userId, dateKey, challengeConsumed, baseLi
 
 async function runDailySettlement(userId, dateKey, options = {}) {
   const db = getDb()
+  // —— 防提前日结：今天及未来的天尚未结束，不应结算滚存 ——
+  // 否则白天打开 App 触发 dashboard 日结会把「今天还没花的钱」提前滚入，
+  // 导致滚存多算一天（注册当天 / 当天未结束即被计入）。结算只对过去的天生效。
+  const todayKey = formatDateKey()
+  if (dateKey >= todayKey && !options.force) {
+    return { skipped: true, reason: 'not_past_day' }
+  }
   const existingRes = await db.collection('daily_settlements').where({ user_id: userId, date_key: dateKey }).limit(1).get()
   const existing = existingRes.data && existingRes.data[0]
   if (existing && existing.settled_at && !options.force) {
@@ -968,12 +986,100 @@ async function listAccountBalanceLogs(userId, accountId, limit = 40) {
   return res.data || []
 }
 
+/**
+ * 回退「非法」的日终结算（rollbackTodaySettlement）。
+ * 非法日期分两类：
+ *  ① 创建日之前的越界 settlement（历史残留，账号还没注册却有结算/滚存，本不该存在）；
+ *  ② 今天（白天 dashboard 提前日结，把「今天还没花的钱」提前滚入 surplus，导致多算一天）。
+ * 对每类非法日期：删除对应滚存入池流水、回退 surplus 池余额、删除分配记录；
+ * 越界 settlement 直接删除，今天的 settlement 仅清 settled_at/分配标记，等日终 cron 正常补滚。
+ * 仅处理非法日期，不动创建日及以后、且非今天的正常结算。
+ */
+async function rollbackTodaySettlement(userId) {
+  const db = getDb()
+  const todayKey = formatDateKey()
+  const createdDateKey = await misc.getUserCreatedDateKey(userId)
+  const out = { todayKey, createdDateKey, removedLogs: 0, rolledBackAmount: 0, removedAllocations: 0, removedSettlements: 0, resetSettlements: 0 }
+
+  // 非法日期筛选条件：① 创建日之前的越界（历史残留）② 今天（提前日结多滚）。
+  // 直接用 date_key 比较，不依赖 settlement 是否存在，避免漏清「孤儿」流水（settlement 已删但 log 还在）。
+  const illegalDateCond = createdDateKey
+    ? db.command.or(db.command.lt(createdDateKey), db.command.eq(todayKey))
+    : db.command.eq(todayKey)
+
+  // 1) 删除非法日期的滚存入池流水（仅 daily_surplus 实际改变池余额；roll_over 标签流水不改 balance）
+  const logWhere = {
+    user_id: userId,
+    date_key: illegalDateCond,
+    direction: 'in',
+    reason: db.command.in(['daily_surplus', 'roll_over', 'rollover', 'rollover_tomorrow'])
+  }
+  const logRes = await db.collection('surplus_pool_logs').where(logWhere).get()
+  const logs = logRes.data || []
+  const rolledBackAmount = logs
+    .filter((l) => l.reason === 'daily_surplus')
+    .reduce((s, l) => s + (l.amount || 0), 0)
+  if (logs.length) {
+    await db.collection('surplus_pool_logs').where(logWhere).remove()
+    out.removedLogs = logs.length
+    out.rolledBackAmount = rolledBackAmount
+  }
+
+  // 2) 回退池余额与累计入池额（total_in 必须同步回退，否则与 balance 失配）
+  if (rolledBackAmount > 0) {
+    const pool = await getDocByUser('surplus_pools', userId)
+    if (pool) {
+      const newBalance = Math.max(0, (pool.balance || 0) - rolledBackAmount)
+      const newTotalIn = Math.max(0, (pool.total_in || 0) - rolledBackAmount)
+      await db.collection('surplus_pools').doc(pool._id).update({
+        balance: newBalance,
+        total_in: newTotalIn,
+        updated_at: nowTs()
+      })
+    }
+  }
+
+  // 3) 删除非法日期的分配记录
+  const allocWhere = { user_id: userId, date_key: illegalDateCond }
+  const allocRes = await db.collection('surplus_allocations').where(allocWhere).get()
+  if (allocRes.data && allocRes.data.length) {
+    await db.collection('surplus_allocations').where(allocWhere).remove()
+    out.removedAllocations = allocRes.data.length
+  }
+
+  // 4) 复位 daily_settlements：越界（创建日前）直接删；今天的清 settled_at 等日终 cron 正常补滚
+  if (createdDateKey) {
+    const preRes = await db.collection('daily_settlements')
+      .where({ user_id: userId, date_key: db.command.lt(createdDateKey) })
+      .get()
+    if (preRes.data && preRes.data.length) {
+      await db.collection('daily_settlements')
+        .where({ user_id: userId, date_key: db.command.lt(createdDateKey) })
+        .remove()
+      out.removedSettlements = preRes.data.length
+    }
+  }
+  const todayRes = await db.collection('daily_settlements').where({ user_id: userId, date_key: todayKey }).limit(1).get()
+  const todaySettle = todayRes.data && todayRes.data[0]
+  if (todaySettle) {
+    await db.collection('daily_settlements').doc(todaySettle._id).update({
+      settled_at: null,
+      allocation_status: 'pending',
+      allocation_id: null
+    })
+    out.resetSettlements++
+  }
+
+  return out
+}
+
 /** 首页仪表盘数据：当日交易（limit 50）+ 昨日结算快照。 */
 
 module.exports = {
   recalculateDailySettlement,
   updateChallengeForDate,
   runDailySettlement,
+  rollbackTodaySettlement,
   archiveLimitHistory,
   allocateSurplus,
   confirmSurplusRollover,
