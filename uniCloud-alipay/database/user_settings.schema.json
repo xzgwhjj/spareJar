@@ -36,11 +36,6 @@
       "description": "限额生效日",
       "maxLength": 10
     },
-    "limit_amount_fen": {
-      "bsonType": "int",
-      "description": "主管控维度总池(分)，limit_dim=month/year 时生效",
-      "minimum": 100
-    },
     "limit_dim": {
       "bsonType": "string",
       "enum": [
@@ -48,8 +43,13 @@
         "month",
         "year"
       ],
-      "description": "主管控维度（day/month/year），默认 day",
+      "description": "主管控维度",
       "defaultValue": "day"
+    },
+    "limit_amount_fen": {
+      "bsonType": "int",
+      "description": "主管控维度总池(分)",
+      "minimum": 100
     },
     "year_strategy": {
       "bsonType": "string",
@@ -57,8 +57,8 @@
         "equal",
         "rollover"
       ],
-      "description": "年→月 拆分策略（equal=均分, rollover=剩余滚动），仅 limit_dim=year 生效",
-      "defaultValue": "equal"
+      "description": "年→月策略",
+      "defaultValue": "rollover"
     },
     "month_strategy": {
       "bsonType": "string",
@@ -66,8 +66,8 @@
         "equal",
         "rollover"
       ],
-      "description": "月→日 拆分策略（equal=均分, rollover=剩余滚动），limit_dim=month/year 生效",
-      "defaultValue": "equal"
+      "description": "月→日策略",
+      "defaultValue": "rollover"
     },
     "pending_limit_dim": {
       "bsonType": "string",
@@ -76,7 +76,7 @@
         "month",
         "year"
       ],
-      "description": "待生效主管控维度"
+      "description": "待生效维度"
     },
     "pending_amount_fen": {
       "bsonType": "int",
@@ -89,7 +89,7 @@
         "equal",
         "rollover"
       ],
-      "description": "待生效年→月策略"
+      "description": "待生效年策略"
     },
     "pending_month_strategy": {
       "bsonType": "string",
@@ -97,12 +97,11 @@
         "equal",
         "rollover"
       ],
-      "description": "待生效月→日策略"
+      "description": "待生效月策略"
     },
     "overrides": {
       "bsonType": "array",
-      "description": "局部覆盖（day 最近7天 / month 最近1~3月），过期自动清理",
-      "maxItems": 60,
+      "description": "局部覆盖(day 最近7天 / month 最近1~3月)",
       "item": {
         "bsonType": "object",
         "required": [
@@ -117,20 +116,22 @@
             "enum": [
               "day",
               "month"
-            ]
+            ],
+            "description": "覆盖类型"
           },
           "key": {
             "bsonType": "string",
-            "description": "日期(YYYY-MM-DD) 或 月份(YYYY-MM)",
+            "description": "日期或月份",
             "maxLength": 10
           },
           "amount_fen": {
             "bsonType": "int",
+            "description": "覆盖额度(分)",
             "minimum": 0
           },
           "expire_at": {
             "bsonType": "string",
-            "description": "覆盖失效日(YYYY-MM-DD)，到期自动清理",
+            "description": "失效日",
             "maxLength": 10
           }
         }

@@ -18,36 +18,34 @@
     },
     "user_id": {
       "bsonType": "string",
-      "description": "成员归属用户 openid；本人与自定义联系人均挂在创建者 user_id 下",
+      "description": "FK→users.user_id",
       "maxLength": 64,
       "foreignKey": "users.user_id"
     },
     "is_self": {
       "bsonType": "bool",
-      "description": "是否当前用户本人（每个用户固定一条 is_self=true 的记录）",
+      "description": "是否本人（每用户固定一条）",
       "defaultValue": false
     },
     "nickname": {
       "bsonType": "string",
-      "description": "成员显示昵称（本人冗余自 users；自定义联系人由用户填写）",
+      "description": "成员昵称",
       "maxLength": 64
     },
     "avatar": {
       "bsonType": "string",
-      "description": "成员头像 URL（本人冗余自 users，或自定义 emoji）",
-      "defaultValue": ""
+      "description": "头像 URL"
     },
     "bio": {
       "bsonType": "string",
-      "description": "成员简介/备注（如「负责日常采买」）",
-      "defaultValue": "",
+      "description": "成员简介/备注",
       "maxLength": 200
     },
     "relation": {
       "bsonType": "string",
-      "description": "与用户的关系标识，如 self/family/partner/friend/child/colleague/other",
-      "defaultValue": "other",
-      "maxLength": 32
+      "description": "关系标识 self/family/partner/friend/child/colleague/other",
+      "maxLength": 32,
+      "defaultValue": "other"
     },
     "created_at": {
       "bsonType": "string",

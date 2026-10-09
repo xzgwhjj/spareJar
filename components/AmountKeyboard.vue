@@ -8,8 +8,17 @@
         <text class="ak-preview" :class="{ 'is-empty': !state.value }">{{
           displayPreview
         }}</text>
-        <view class="ak-collapse" @click="onDone">
-          <text class="ak-collapse-icon">∨</text>
+        <view class="ak-head-actions">
+          <view
+            class="ak-clear"
+            :class="{ 'is-disabled': !state.value }"
+            @click="onClear"
+          >
+            <text class="ak-clear-text">清空</text>
+          </view>
+          <view class="ak-collapse" @click="onDone">
+            <text class="ak-collapse-icon">∨</text>
+          </view>
         </view>
       </view>
 
@@ -108,6 +117,11 @@ function onPress(val) {
 function onDone() {
   close();
 }
+function onClear() {
+  if (!state.value) return;
+  state.value = "";
+  emitInput("");
+}
 function onMaskClick() {
   close();
 }
@@ -167,6 +181,30 @@ function onMaskClick() {
 }
 .ak-preview.is-empty {
   color: #b0b4bb;
+}
+
+.ak-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  flex: 0 0 auto;
+}
+
+.ak-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 60rpx;
+  padding: 0 14rpx;
+  border-radius: 10rpx;
+}
+.ak-clear-text {
+  font-size: 26rpx;
+  color: #8a8f99;
+  line-height: 1;
+}
+.ak-clear.is-disabled {
+  opacity: 0.35;
 }
 
 .ak-collapse {

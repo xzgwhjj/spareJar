@@ -1,17 +1,6 @@
 <template>
   <view class="sticker-page" data-cmp="StickerLib">
-    <!-- 顶部栏 -->
-    <!-- <view class="add-btn" @click="goCreate"><text>＋</text></view> -->
-    <view class="topbar" :style="{ paddingTop: pagePaddingTop }">
-      <image
-        :src="cdn('/app_static/images/icon_left.png')"
-        class="back-icon"
-        mode="aspectFit"
-        @click="goBack"
-      ></image>
-      <text class="topbar-title">贴纸库</text>
-      <view style="width: 72rpx" />
-    </view>
+    <PageHeader title="贴纸库" @back="goBack" />
 
     <!-- Tab 切换 -->
     <view class="tabs">
@@ -285,7 +274,7 @@
               @click="catDelMode = 'keep'"
             >
               <view class="mode-main">
-                <text class="mode-name">保留账单，仅删除分类</text>
+                <text class="mode-name">保留账目，仅删除分类</text>
                 <text class="mode-desc"
                   >账目仍显示为该分类，只是分类不再出现在选择列表</text
                 >
@@ -299,7 +288,7 @@
             >
               <view class="mode-main">
                 <text class="mode-name">转移到其他分类</text>
-                <text class="mode-desc">账目与贴纸转移到目标分类，账单保留</text>
+                <text class="mode-desc">账目与贴纸转移到目标分类，账目保留</text>
               </view>
               <text v-if="catDelMode === 'merge'" class="mode-check">✓</text>
             </view>
@@ -309,7 +298,7 @@
               @click="catDelMode = 'purge'"
             >
               <view class="mode-main">
-                <text class="mode-name">连同账单一并删除</text>
+                <text class="mode-name">连同账目一并删除</text>
                 <text class="mode-desc"
                   >同时删除这 {{ catDelUsage }} 笔账目，相关金额会同步回滚</text
                 >
@@ -407,12 +396,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
+import { ref, computed } from "vue";
 import { onLoad, onShow } from "@dcloudio/uni-app";
 import { useUserStore } from "@/stores/user.js";
 import { requireLogin } from '@/utils/guard.js';
 import { formatFen } from "@/utils/money.js";
 import { cdn, getCloudTempUrl, getCloudTempUrls } from "@/utils/cdn.js";
+import PageHeader from '@/components/PageHeader.vue';
 import { deleteCategory, updateCategory } from "@/api/sparejar.js";
 import { deleteCatIcon } from "@/utils/cloudFile.js";
 
@@ -442,23 +432,6 @@ const emptyIconUrl = computed(() => cdn(EMPTY_ICON[tab.value] || EMPTY_ICON.stoc
 // 贴纸卡片底图（与账本页三个贴纸卡片保持一致）
 const stickerBgUrl = cdn("/app_static/images/icon_sticker_bg2.png");
 
-/* 顶部安全区 */
-function resolveTop() {
-  try {
-    const rect = uni.getMenuButtonBoundingClientRect();
-    if (rect && rect.top > 0 && rect.height > 0) {
-      return { padTop: `${rect.top + 4}px`, barH: `${rect.height}px` };
-    }
-  } catch (e) {}
-  const { statusBarHeight = 20 } = uni.getSystemInfoSync();
-  return { padTop: `${statusBarHeight + 48}px`, barH: "32px" };
-}
-const top = resolveTop();
-const pagePaddingTop = ref(top.padTop);
-onMounted(() => {
-  const t = resolveTop();
-  pagePaddingTop.value = t.padTop;
-});
 const tab = ref("stock");
 // 分类贴纸（type=material）下的二级切换：按关联分类的支出/收入
 const catSubTab = ref("expense"); // 'expense' | 'income'
@@ -931,7 +904,7 @@ function clearCatIcon() {
 /** 从详情弹窗删除该分类（弹框选择账目处理方式） */
 const catDelOpen = ref(false);
 const catDelSaving = ref(false);
-const catDelMode = ref("keep"); // 'keep' 保留账单 | 'merge' 转移 | 'purge' 连同账单删除
+const catDelMode = ref("keep"); // 'keep' 保留账目 | 'merge' 转移 | 'purge' 连同账目删除
 const catDelTargetId = ref("");
 const catDelCat = ref(null);
 
@@ -1118,10 +1091,6 @@ onShow(async () => {
     left: 0;
     right: 0;
     z-index: 100;
-  }
-  .back-icon {
-    width: 60rpx;
-    height: 60rpx;
   }
   .back-btn,
   .add-btn {

@@ -124,14 +124,14 @@ writeSchema('user_settings', {
     limit_effective_date: strField(10, '限额生效日'),
     limit_dim: { ...enumField(['day', 'month', 'year'], '主管控维度'), defaultValue: 'day' },
     limit_amount_fen: { ...intField('主管控维度总池(分)'), minimum: 100 },
-    year_strategy: { ...enumField(['equal', 'rollover'], '年→月策略'), defaultValue: 'equal' },
-    month_strategy: { ...enumField(['equal', 'rollover'], '月→日策略'), defaultValue: 'equal' },
+    year_strategy: { ...enumField(['equal', 'rollover'], '年→月策略'), defaultValue: 'rollover' },
+    month_strategy: { ...enumField(['equal', 'rollover'], '月→日策略'), defaultValue: 'rollover' },
     pending_limit_dim: { ...enumField(['day', 'month', 'year'], '待生效维度') },
     pending_amount_fen: { ...intField('待生效总池(分)'), minimum: 100 },
     pending_year_strategy: { ...enumField(['equal', 'rollover'], '待生效年策略') },
     pending_month_strategy: { ...enumField(['equal', 'rollover'], '待生效月策略') },
     overrides: {
-      bsonType: 'array', description: '局部覆盖(day 最近7天 / month 最近1~3月)',
+      bsonType: 'array', description: '局部覆盖(day 未来7天 / month 未来1~3月)',
       item: {
         bsonType: 'object',
         required: ['type', 'key', 'amount_fen', 'expire_at'],
@@ -913,11 +913,37 @@ writeSchema('limit_history', {
     spent_fen: intField('当日实际花费(分)'),
     surplus_fen: intField('当日结余(分)'),
     surplus_dest: { ...enumField(['rollover_tomorrow', 'rollover_pool', 'wish', 'savings', 'none'], '结余去向') },
+    purge_archived: { ...boolField('已归档进 limit_history_yearly，待清理'), defaultValue: false },
     created_at: tsField('创建时间')
   }
 })
 writeIndex('limit_history', [
   idx('uk_user_date', [{ name: 'user_id', type: 'varchar' }, { name: 'date_key', type: 'varchar' }], true)
+])
+
+// ========== limit_history_yearly（3 年留存期外的年度归档汇总） ==========
+// 由 cronPurgeOldLimitHistory 将超期 limit_history 明细按 user_id+year 累加后写入，
+// 既满足合规最小化（明细物理删除），又保留长期趋势所需的年度聚合值。
+writeSchema('limit_history_yearly', {
+  bsonType: 'object',
+  required: ['user_id', 'year'],
+  permission: USER_PERM,
+  properties: {
+    _id: { description: 'PK' },
+    user_id: { ...strField(64, '用户 openid'), ...fk('users', 'user_id') },
+    year: strField(4, '年度 YYYY'),
+    days_count: intField('该年记录天数'),
+    months_tracked: intField('该年有记录的自然月数量'),
+    total_day_limit_fen: intField('全年每日额度合计(分)，日均= /days_count'),
+    year_limit_fen: intField('当年年池上限(分)'),
+    total_spent_fen: intField('全年实际花费合计(分)'),
+    total_surplus_fen: intField('全年结余合计(分)'),
+    created_at: tsField('创建时间'),
+    updated_at: tsField('更新时间')
+  }
+})
+writeIndex('limit_history_yearly', [
+  idx('uk_user_year', [{ name: 'user_id', type: 'varchar' }, { name: 'year', type: 'varchar' }], true)
 ])
 
 // ========== jar_skins ==========

@@ -1,7 +1,7 @@
 <template>
   <view class="budget-gauge-card card-in-1" :class="cardClass" data-cmp="BudgetGaugeCard">
     <!-- 背景光晕 -->
-    <view class="bg-glow" :class="{ 'over-glow': isOver }" />
+    <view class="bg-glow" :class="{ 'over-glow': isOver && !isYearOver, 'year-glow': isYearOver }" />
 
     <!-- 标题行 -->
     <view class="gauge-header">
@@ -26,8 +26,9 @@
         <text class="limit-btn-text">未设置</text>
         <text class="limit-btn-arrow">›</text>
       </view>
-      <view v-if="isOver" class="over-badge">
-        <text class="over-badge-text">已超支</text>
+      <view v-if="over" class="over-badge" :class="{ 'over-badge--year': isYearOver, 'over-badge--month': isMonthOver }">
+        <text class="over-badge-icon">{{ badgeIcon }}</text>
+        <text class="over-badge-text">{{ badgeText }}</text>
       </view>
     </view>
 
@@ -139,6 +140,8 @@ import { formatFen, formatFenCompact } from "@/utils/money.js";
 
 const props = defineProps({
   isOver: { type: Boolean, default: false },
+  /** 超限类型：none/day/month/year，年池突破时做更醒目的专属提示 */
+  overKind: { type: String, default: 'none' },
 });
 
 const {
@@ -177,6 +180,14 @@ const TOTAL_BILLS = computed(
 );
 
 const over = computed(() => props.isOver || isOverLimit.value);
+const isYearOver = computed(() => props.overKind === 'year');
+const isMonthOver = computed(() => props.overKind === 'month');
+const badgeIcon = computed(() => (isYearOver.value ? '🚨' : '⚠️'));
+const badgeText = computed(() => {
+  if (isYearOver.value) return '年度预算已超';
+  if (isMonthOver.value) return '月池已超';
+  return '已超支';
+});
 const dailyLimitText = computed(() => formatFen(dailyLimitFen.value));
 const totalDailyLimitText = computed(() => formatFen(totalDailyLimitFen.value));
 const pendingRolloverText = computed(() => formatFen(pendingRolloverFen.value));
@@ -228,7 +239,11 @@ const spentPct = computed(() => {
   return Math.min(spentTodayFen.value / limit, 1);
 });
 const cardClass = computed(() =>
-  over.value ? "glass-hero-alert alert-flash" : "glass-hero"
+  !over.value
+    ? "glass-hero"
+    : isYearOver.value
+      ? "glass-hero-alert alert-flash alert-year"
+      : "glass-hero-alert alert-flash"
 );
 
 const goLogin = (redirect) =>
@@ -280,6 +295,15 @@ const goLimitSetting = () => {
     &.over-glow {
       background: radial-gradient(circle, rgba(255, 107, 107, 0.06), transparent 65%);
     }
+    &.year-glow {
+      background: radial-gradient(circle, rgba(255, 59, 59, 0.16), transparent 65%);
+    }
+  }
+
+  // 年池突破：整卡加一圈红色描边光晕，比月维度更醒目
+  &.alert-year {
+    box-shadow: 0 0 0 2rpx rgba(255, 59, 59, 0.28),
+      0 18rpx 60rpx rgba(255, 59, 59, 0.2);
   }
 
   .gauge-header {
@@ -352,10 +376,51 @@ const goLimitSetting = () => {
     border-radius: 20rpx;
     padding: 8rpx 18rpx;
 
+    &-icon {
+      font-size: 24rpx;
+      line-height: 1;
+    }
     &-text {
       font-size: 22rpx;
       color: $over;
       font-weight: 600;
+    }
+
+    // 月池突破：温和红色提示（默认样式）
+    &--month {
+      background: rgba(255, 107, 107, 0.12);
+    }
+
+    // 年池突破：更醒目——实心渐变 + 白字 + 脉冲缩放光晕
+    &--year {
+      background: linear-gradient(135deg, #ff6b6b, #ff3b3b);
+      padding: 8rpx 20rpx;
+      box-shadow: 0 6rpx 20rpx rgba(255, 59, 59, 0.35),
+        inset 0 0 0 2rpx rgba(255, 255, 255, 0.4);
+      animation: year-badge-pulse 1.4s ease-in-out infinite;
+
+      .over-badge-text {
+        color: #fff;
+        font-weight: 800;
+        font-size: 24rpx;
+      }
+      .over-badge-icon {
+        filter: drop-shadow(0 0 4rpx rgba(255, 255, 255, 0.6));
+      }
+    }
+  }
+
+  @keyframes year-badge-pulse {
+    0%,
+    100% {
+      box-shadow: 0 6rpx 20rpx rgba(255, 59, 59, 0.35),
+        inset 0 0 0 2rpx rgba(255, 255, 255, 0.4);
+      transform: scale(1);
+    }
+    50% {
+      box-shadow: 0 8rpx 28rpx rgba(255, 59, 59, 0.55),
+        inset 0 0 0 2rpx rgba(255, 255, 255, 0.5);
+      transform: scale(1.04);
     }
   }
 

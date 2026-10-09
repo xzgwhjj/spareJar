@@ -8,16 +8,7 @@
       <view class="blob-top-r" />
     </view>
 
-    <view class="topbar" :style="{ paddingTop: pagePaddingTop }">
-      <image
-        :src="cdn('/app_static/images/icon_left.png')"
-        class="back-icon"
-        mode="aspectFit"
-        @click="goBack"
-      ></image>
-      <text class="topbar-title"></text>
-      <view style="width: 72rpx" />
-    </view>
+    <PageHeader @back="goBack" />
 
     <scroll-view
       class="page-scroll"
@@ -275,6 +266,17 @@
               >
               <text class="menu-arrow">›</text>
             </view>
+            <view
+              class="menu-item glass-thin"
+              style="margin: 0 32rpx 0; border-radius: 0"
+              @click="goDevtools"
+            >
+              <view class="menu-left"
+                ><text class="menu-icon">🛠️</text
+                ><text class="menu-label">数据维护</text></view
+              >
+              <text class="menu-arrow">›</text>
+            </view>
           </view>
         </view>
 
@@ -472,6 +474,7 @@
 import { listTransactions, updateSettings } from "@/api/sparejar.js";
 import { useUserStore } from "@/stores/user.js";
 import { cdn } from "@/utils/cdn.js";
+import PageHeader from "@/components/PageHeader.vue";
 import BaseModal from "@/components/BaseModal.vue";
 import { addDaysToDateKey, todayDateKey } from "@/utils/date.js";
 import { formatFen } from "@/utils/money.js";
@@ -512,21 +515,7 @@ const avatarUrl = computed(() => {
   return url ? url : cdn("/app_static/images/icon_avatar.png");
 });
 
-function resolveTop() {
-  try {
-    const rect = uni.getMenuButtonBoundingClientRect();
-    if (rect && rect.top > 0 && rect.height > 0) {
-      return { padTop: `${rect.top + 4}px`, barH: `${rect.height}px` };
-    }
-  } catch (e) {}
-  const { statusBarHeight = 20 } = uni.getSystemInfoSync();
-  return { padTop: `${statusBarHeight + 48}px`, barH: "32px" };
-}
-const top = resolveTop();
-const pagePaddingTop = ref(top.padTop);
 onMounted(() => {
-  const t = resolveTop();
-  pagePaddingTop.value = t.padTop;
   // 每分钟刷新时段，跨时段自动切换问候
   greetTimer = setInterval(() => {
     nowHour.value = new Date().getHours();
@@ -677,6 +666,14 @@ const goCategoryMgr = () => {
   uni.navigateTo({ url: "/pages/category-mgr/category-mgr" });
 };
 
+const goDevtools = () => {
+  if (isGuest.value) {
+    goLogin();
+    return;
+  }
+  uni.navigateTo({ url: "/pages/devtools/devtools" });
+};
+
 const goNotifySetting = () => {
   if (isGuest.value) {
     goLogin();
@@ -712,37 +709,31 @@ const greetPhrases = {
   morning: [
     "早安！今天也要好好记账呀",
     "新的一天，从记一笔开始",
-    "早安，今天的小金库由你守护~",
-    "记得吃顿热乎的早餐，胃暖一天都舒坦",
+    "早安，今天的小金库由你来守护",
+    "记得吃顿热乎的早餐，胃暖了，一整天都舒坦",
     "清晨喝杯温水，给身体充个电吧",
-    "今天也要记得多喝水哦，小口慢饮更舒服",
-    "出门前看眼天气，冷热自己加减件衣服",
+    "今天也请记得多喝水，小口慢饮更舒适",
+    "出门前留意天气，冷暖适时增减衣物",
   ],
-  noon: [
-    "午间小憩一下，别忘了记录午餐",
-    "再忙也不要忘记吃午饭",
-    "饭后站起来走两步，松松筋骨精神更好",
-  ],
+  noon: ["午间小憩一下，别忘了记录午餐", "再忙也不要忘记吃午饭"],
   afternoon: [
     "下午茶时间，理性消费更安心",
-    "坚持记账的你超棒的，继续加油！",
-    "工作间隙起身活动下，远眺一会儿护护眼",
-    "累了就喝口水、伸个懒腰，别硬扛",
-    "保持好心情，今天的小确幸也值得记一笔",
+    "坚持记账的你超棒的，继续保持",
+    "工作间隙起身活动下，远眺片刻缓解眼睛疲劳",
+    "累了就喝口水、伸个懒腰，休息一会",
   ],
   evening: [
-    "晚上好，今天的花销都记下了吗",
+    "晚上好，今天的花销都记录了吗",
     "睡前看看今日结余，安心入眠",
-    "晚饭别吃太撑，留点空间给好睡眠",
-    "和家人聊聊天，或做点喜欢的事放松下",
+    "做点喜欢的事放松一下",
     "今天辛苦啦，给自己一个小小的肯定",
   ],
   late: [
-    "夜深了，早点休息，明天再记",
+    "夜深了，早点休息",
     "已经很晚了，放下手机睡吧",
-    "明天还要早起的话，现在就关灯躺平吧",
-    "睡前喝口温水、调暗灯光，更好入眠",
-    "今天的事翻篇啦，安心睡个好觉",
+    "明天还要早起的话，现在就关灯休息吧",
+    "睡前喝口温水、调暗灯光，更有助于入眠",
+    "今天的事告一段落，安心睡个好觉",
   ],
 };
 
@@ -1053,10 +1044,6 @@ async function exportData() {
   z-index: 10;
 }
 
-.back-icon {
-  width: 60rpx;
-  height: 60rpx;
-}
 .topbar-title {
   font-size: 34rpx;
   font-weight: 700;

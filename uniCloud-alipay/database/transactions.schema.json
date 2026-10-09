@@ -131,7 +131,7 @@
     },
     "sticker_qty": {
       "bsonType": "int",
-      "description": "商品贴纸数量（囤货=消耗件数）",
+      "description": "商品贴纸数量",
       "minimum": 1
     },
     "include_in_daily_limit": {

@@ -1,6 +1,6 @@
 [
   {
-    "IndexName": "uk_user_date",
+    "IndexName": "uk_user_ledger",
     "MgoKeySchema": {
       "MgoIndexKeys": [
         {
@@ -9,7 +9,7 @@
           "Type": "varchar"
         },
         {
-          "Name": "date_key",
+          "Name": "ledger_id",
           "Direction": "1",
           "Type": "varchar"
         }

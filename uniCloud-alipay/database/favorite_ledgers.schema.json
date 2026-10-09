@@ -1,29 +1,19 @@
 {
   "bsonType": "object",
   "required": [
-    "member_id",
+    "user_id",
     "ledger_id",
-    "user_id"
+    "created_at"
   ],
   "permission": {
     "read": "doc.user_id == auth.uid",
     "create": "doc.user_id == auth.uid",
-    "update": "doc.user_id == auth.uid",
+    "update": false,
     "delete": "doc.user_id == auth.uid"
   },
   "properties": {
     "_id": {
       "description": "PK"
-    },
-    "member_id": {
-      "bsonType": "string",
-      "description": "FK→members._id",
-      "foreignKey": "members._id"
-    },
-    "ledger_id": {
-      "bsonType": "string",
-      "description": "FK→ledgers._id",
-      "foreignKey": "ledgers._id"
     },
     "user_id": {
       "bsonType": "string",
@@ -31,9 +21,14 @@
       "maxLength": 64,
       "foreignKey": "users.user_id"
     },
-    "linked_at": {
+    "ledger_id": {
       "bsonType": "string",
-      "description": "关联时间",
+      "description": "FK→ledgers._id",
+      "foreignKey": "ledgers._id"
+    },
+    "created_at": {
+      "bsonType": "string",
+      "description": "收藏时间",
       "maxLength": 19
     }
   }

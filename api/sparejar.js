@@ -119,6 +119,9 @@ export const ACTIONS = Object.freeze({
   DELETE_CATEGORY: 'deleteCategory',
   REORDER_CATEGORIES: 'reorderCategories',
   UPDATE_SETTINGS: 'updateSettings',
+  SAVE_BUDGET_PLAN: 'saveBudgetPlan',
+  GET_BUDGET_CHANGE_LOG: 'getBudgetChangeLog',
+  TERMINATE_PENDING_BUDGET: 'terminatePendingBudget',
   UPDATE_USER: 'updateUser',
   LIST_WISHES: 'listWishes',
   CREATE_WISH: 'createWish',
@@ -141,6 +144,7 @@ export const ACTIONS = Object.freeze({
   WITHDRAW_SAVINGS_POOL: 'withdrawSavingsPool',
   GET_CHALLENGE_SUMMARY: 'getChallengeSummary',
   GET_LIMIT_STATUS: 'getLimitStatus',
+  GET_LIMIT_PREVIEW_SPEND: 'getLimitPreviewSpend',
   SET_CHALLENGE_TARGET: 'setChallengeTarget',
   GET_ACHIEVEMENTS: 'getAchievements',
   EVALUATE_ACHIEVEMENTS: 'evaluateAchievements',
@@ -179,6 +183,8 @@ export const ACTIONS = Object.freeze({
   SET_EXERCISE_CALORIES: 'setExerciseCalories',
   GET_WEEKLY_HEALTH: 'getWeeklyHealth',
   CRON_DAILY_SETTLEMENT: 'cronDailySettlement',
+  CRON_PURGE_OLD_LIMIT_HISTORY: 'cronPurgeOldLimitHistory',
+  GET_LIMIT_HISTORY_YEARLY: 'getLimitHistoryYearly',
   ADD_MEMBER: 'addMember',
   UPDATE_MEMBER: 'updateMember',
   REMOVE_MEMBER: 'removeMember',
@@ -519,6 +525,16 @@ export function cronDailySettlement(options = {}) {
   return callSparejar(ACTIONS.CRON_DAILY_SETTLEMENT, options)
 }
 
+/** 手动触发限额历史归档清理（日常由日切定时任务每月自动执行） */
+export function cronPurgeOldLimitHistory(options = {}) {
+  return callSparejar(ACTIONS.CRON_PURGE_OLD_LIMIT_HISTORY, options)
+}
+
+/** 读取超 3 年留存窗口的年度归档汇总 */
+export function getLimitHistoryYearly() {
+  return callSparejar(ACTIONS.GET_LIMIT_HISTORY_YEARLY, {})
+}
+
 /**
  * @param {{ type?: 'expense'|'income', include_hidden?: boolean }} [opts]
  */
@@ -573,6 +589,21 @@ export function reorderCategories(type, orderedIds) {
  */
 export function updateSettings(patch) {
   return callSparejar(ACTIONS.UPDATE_SETTINGS, patch)
+}
+
+// 保存预算主额度（M3：收紧即时 / 放宽顺延）+ 限次 + 变更记录
+export function saveBudgetPlan(data) {
+  return callSparejar(ACTIONS.SAVE_BUDGET_PLAN, data)
+}
+
+// 查询预算变更记录与当期配额（月/年放宽次数）
+export function getBudgetChangeLog(data = {}) {
+  return callSparejar(ACTIONS.GET_BUDGET_CHANGE_LOG, data)
+}
+
+// 终止某维度待生效的放宽（仅月/年），记失败并重新计时
+export function terminatePendingBudget(data) {
+  return callSparejar(ACTIONS.TERMINATE_PENDING_BUDGET, data)
 }
 
 /** 列出用户心愿目标（按进度降序，未归档）。 */
@@ -650,6 +681,15 @@ export function getChallengeSummary() {
  */
 export function getLimitStatus(dim, key) {
   return callSparejar(ACTIONS.GET_LIMIT_STATUS, { dim, key })
+}
+
+/**
+ * 限额预览用真实已花费：本月累计（1号~昨日）+ 年内截至上月累计（分）。
+ * @param {string} dateKey
+ * @returns {Promise<{ actualSpendThisMonthFen: number, actualSpendPriorMonthsThisYearFen: number }>}
+ */
+export function getLimitPreviewSpend(dateKey) {
+  return callSparejar(ACTIONS.GET_LIMIT_PREVIEW_SPEND, { date_key: dateKey })
 }
 
 /**
@@ -972,6 +1012,7 @@ export default {
   listTransactions,
   listAccountBalanceLogs,
   getDashboard,
+  getLimitPreviewSpend,
   ensureUserSettings,
   getDoc,
   recalculateSettlement,
@@ -989,6 +1030,9 @@ export default {
   deleteCategory,
   reorderCategories,
   updateSettings,
+  saveBudgetPlan,
+  getBudgetChangeLog,
+  terminatePendingBudget,
   listWishes,
   createWish,
   updateWish,

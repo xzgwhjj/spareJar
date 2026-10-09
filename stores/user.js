@@ -121,6 +121,9 @@ export const dailyLimitFen = computed(() => {
 })
 export const pendingRolloverFen = computed(() => {
   // 滚入次日可用额度 P，由结余池流水推导（surplusPool.rollOverPending 由 loadSurplusPool 计算）
+  // 月/年维度无日级滚存（结余回流父池由 C 重平处理），此处对月/年维度归零，避免仪表盘重复显示
+  const dim = state.settings ? (state.settings.limit_dim || 'day') : 'day'
+  if (dim !== 'day') return 0
   const roll = state.surplusPool && typeof state.surplusPool.rollOverPending === 'number'
     ? state.surplusPool.rollOverPending
     : 0
@@ -145,7 +148,25 @@ export const spentTodayFen = computed(() => {
   )
 })
 export const leftTodayFen = computed(() => Math.max(0, totalDailyLimitFen.value - spentTodayFen.value))
-export const isOverLimit = computed(() => spentTodayFen.value > totalDailyLimitFen.value)
+// 超额判定口径与后端 recalculateDailySettlement 对齐：
+// 日维度 = 当日花费 > 当日 base_limit+滚存；
+// 月/年维度 = 父池(月/年)是否突破（由后端日结统一判定，单日超节奏不记失败）。
+export const isOverLimit = computed(() => {
+  const dim = state.settings ? (state.settings.limit_dim || 'day') : 'day'
+  if (dim === 'day') {
+    return spentTodayFen.value > totalDailyLimitFen.value
+  }
+  const s = state.dashboard.settlement
+  return !!(s && s.is_over_limit)
+})
+
+// 超限类型：none/day/month/year，供 UI 区分"月池已超"与"年池已超"做差异化醒目提示。
+export const overLimitKind = computed(() => {
+  const dim = state.settings ? (state.settings.limit_dim || 'day') : 'day'
+  if (dim === 'day') return spentTodayFen.value > totalDailyLimitFen.value ? 'day' : 'none'
+  const s = state.dashboard.settlement
+  return s && s.is_over_limit ? dim : 'none'
+})
 // 引导完成/步骤状态：优先 user_settings（真源）；user_settings 缺失该字段时
 // （旧数据仅写在 users 表，user_settings 甚至无此字段）回退 users.onboarding_done / onboarding_step，
 // 避免「已完成却被反复引导」。两层都不存在才退回内存 state.onboarding（刷新即丢，仅兜底）。

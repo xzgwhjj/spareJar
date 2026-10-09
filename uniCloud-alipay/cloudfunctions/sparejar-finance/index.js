@@ -20,7 +20,8 @@ exports.main = async (event, context) => {
   let refreshedAuth = null
 
   // 定时任务走内部调度，跳过 token 鉴权
-  if (action !== 'cronDailySettlement') {
+  const NO_AUTH_ACTIONS = new Set(['cronDailySettlement', 'cronPurgeOldLimitHistory'])
+  if (!NO_AUTH_ACTIONS.has(action)) {
     const uniIdIns = uniID.createInstance({ context })
     const tokenRes = await uniIdIns.checkToken(event.uniIdToken)
     if (tokenRes.errCode !== 0) {
@@ -47,7 +48,7 @@ exports.main = async (event, context) => {
 
   const userId = getUid(event, context)
 
-  if (!userId && action !== 'cronDailySettlement') {
+  if (!userId && !NO_AUTH_ACTIONS.has(action)) {
     return fail('unauthorized', 401)
   }
 
@@ -124,6 +125,17 @@ exports.main = async (event, context) => {
         if (!data || typeof data !== 'object') return fail('patch is required')
         return ok(await dbApi.updateUserSettings(userId, data))
 
+      case 'saveBudgetPlan':
+        if (!data || !data.dim) return fail('dim required')
+        return ok(await dbApi.saveBudgetPlan(userId, data))
+
+      case 'getBudgetChangeLog':
+        return ok(await dbApi.getBudgetChangeLog(userId, data || {}))
+
+      case 'terminatePendingBudget':
+        if (!data || !data.dim) return fail('dim required')
+        return ok(await dbApi.terminatePendingBudget(userId, data.dim))
+
       case 'updateUser':
         if (!data || typeof data !== 'object') return fail('patch is required')
         return ok(await dbApi.updateUser(userId, data))
@@ -175,6 +187,9 @@ exports.main = async (event, context) => {
           return fail('dim and key are required')
         }
         return ok(await dbApi.getLimitStatus(userId, data.dim, data.key))
+
+      case 'getLimitPreviewSpend':
+        return ok(await dbApi.getLimitPreviewSpend(userId, data.date_key))
 
       case 'setChallengeTarget':
         if (!data.type || !data.period_key || !data.target_amount) {
@@ -433,8 +448,17 @@ exports.main = async (event, context) => {
         return ok(await dbApi.getLimitHistory(userId, {
           start_key: data.start_key,
           end_key: data.end_key,
+          before_key: data.before_key,
           limit: data.limit
         }))
+
+      // 超 3 年留存窗口的年度归档汇总（供前端在到顶后展示长期趋势）
+      case 'getLimitHistoryYearly':
+        return ok(await dbApi.getLimitHistoryYearly(userId))
+
+      // 手动触发限额历史归档清理（日常由 cronDailySettlement 每月自动执行）
+      case 'cronPurgeOldLimitHistory':
+        return ok(await dbApi.purgeOldLimitHistory(data || {}))
 
       case 'cronDailySettlement': {
         const db = uniCloud.database()
@@ -458,6 +482,15 @@ exports.main = async (event, context) => {
           }
         } catch (e) {
           results.push({ __purgeScheduledDeletions: { error: e.message } })
+        }
+        // 限额历史超 3 年留存期：每月 1 号归档到 limit_history_yearly 并清理明细（幂等）
+        if (new Date().getDate() === 1) {
+          try {
+            const purge = await dbApi.purgeOldLimitHistory()
+            if (purge && purge.purged) results.push({ __purgeOldLimitHistory: purge })
+          } catch (e) {
+            results.push({ __purgeOldLimitHistory: { error: e.message } })
+          }
         }
         return ok({ date_key: dateKey, results })
       }

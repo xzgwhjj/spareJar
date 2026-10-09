@@ -10,7 +10,7 @@
     "read": "doc.user_id == auth.uid",
     "create": "auth.uid != null",
     "update": "doc.user_id == auth.uid",
-    "delete": false
+    "delete": "doc.user_id == auth.uid"
   },
   "properties": {
     "_id": {
@@ -97,32 +97,10 @@
       "description": "更新时间",
       "maxLength": 19
     },
-    "points": {
-      "bsonType": "int",
-      "description": "积分余额（签到奖励/组合贴纸消耗）",
-      "minimum": 0,
-      "defaultValue": 0
-    },
-    "last_check_in": {
-      "bsonType": "string",
-      "description": "最近签到日 YYYY-MM-DD",
-      "maxLength": 10
-    },
     "deleted_at": {
       "bsonType": "string",
       "description": "软删时间",
-      "maxLength": 23
-    },
-    "account_status": {
-      "bsonType": "string",
-      "description": "账号状态：active 正常 / deleting 注销冷静期",
-      "enum": ["active", "deleting"],
-      "defaultValue": "active"
-    },
-    "delete_scheduled_at": {
-      "bsonType": "string",
-      "description": "计划硬删（注销生效）时间，空串表示未申请注销",
-      "maxLength": 23
+      "maxLength": 19
     }
   }
 }

@@ -2,7 +2,7 @@
 
 const db = require('../core/db')
 const { getDocByUser, getDb, upsertByUnique, isDuplicateKeyError } = require('../core/db')
-const { formatDateKey, parseDateKey, toStoredTime, nowTs } = require('../utils/date')
+const { formatDateKey, parseDateKey, toStoredTime, nowTs, todayDateKey } = require('../utils/date')
 const money = require('../utils/money')
 const ids = require('../utils/id')
 const ledger = require('./ledger')
@@ -32,6 +32,67 @@ async function computeRollOverPending(userId, poolBalance = 0) {
   return p
 }
 
+/**
+ * 本月截至 dateKey 之前（不含 dateKey）的实际花费合计（限额口径 consumed）。
+ * 用于月/年维度的预算感知重平（C）：把"已花掉的钱"从月池里扣掉再平分剩余。
+ */
+async function sumMonthConsumedBefore(userId, dateKey) {
+  const db = getDb()
+  const monthStart = dateKey.slice(0, 7) + '-01'
+  const res = await db.collection('daily_settlements')
+    .where({ user_id: userId, date_key: { $gte: monthStart, $lt: dateKey } })
+    .field({ consumed: true })
+    .limit(100)
+    .get()
+  const list = (res && res.data) || []
+  return list.reduce((s, r) => s + (Number(r.consumed) || 0), 0)
+}
+
+/**
+ * 年内截至本月之前（不含本月）的实际花费合计（限额口径 consumed）。
+ * 用于年维度的预算感知重平（C）：把"之前月份已花掉的钱"从年池里扣掉，
+ * 再按剩余月数平分到当月月池。与月维度的 sumMonthConsumedBefore 区间不重叠
+ * （本函数算 1月~上月，月维度算本月1号~昨日），两者合计 = 年内截至昨日。
+ * 用分页累加，避免每日一笔结算超过单查 100 条上限而漏算。
+ */
+async function sumYearPriorMonthsConsumedBefore(userId, dateKey) {
+  const db = getDb()
+  const year = dateKey.slice(0, 4)
+  const monthStart = dateKey.slice(0, 7) + '-01'
+  const yearStart = year + '-01-01'
+  let total = 0
+  let skip = 0
+  const BATCH = 100
+  while (true) {
+    const res = await db.collection('daily_settlements')
+      .where({ user_id: userId, date_key: { $gte: yearStart, $lt: monthStart } })
+      .field({ consumed: true })
+      .skip(skip)
+      .limit(BATCH)
+      .get()
+    const list = (res && res.data) || []
+    if (!list.length) break
+    for (const r of list) total += (Number(r.consumed) || 0)
+    if (list.length < BATCH) break
+    skip += BATCH
+  }
+  return total
+}
+
+/**
+ * 限额预览用：返回「截至 dateKey 之前」的真实已花费（限额口径 consumed），
+ * 供前端限额预览做预算感知重平（C）。
+ * - actualSpendThisMonthFen：本月 1 号 ~ 昨日（月→日 C 用）
+ * - actualSpendPriorMonthsThisYearFen：年内 1 月 ~ 上月（年→月 C 用）
+ * 与 recalculateDailySettlement 内部使用同一对求和函数，口径完全一致。
+ */
+async function getLimitPreviewSpend(userId, dateKey) {
+  const dk = dateKey || todayDateKey()
+  const actualSpendThisMonthFen = await sumMonthConsumedBefore(userId, dk)
+  const actualSpendPriorMonthsThisYearFen = await sumYearPriorMonthsConsumedBefore(userId, dk)
+  return { actualSpendThisMonthFen, actualSpendPriorMonthsThisYearFen }
+}
+
 async function recalculateDailySettlement(userId, dateKey) {
   const db = getDb()
   // —— 防越界补录：禁止为「早于账号新建日」的日期创建/重算结算 ——
@@ -46,7 +107,62 @@ async function recalculateDailySettlement(userId, dateKey) {
     return (existing.data && existing.data[0]) || null
   }
   const settings = await getDocByUser('user_settings', userId)
-  const baseLimit = await category.getEffectiveBaseLimit(userId, dateKey)
+  let dim = settings ? (settings.limit_dim || 'day') : 'day'
+
+  // —— pending 生效提升：limit_effective_date 已到时，将 pending_* 固化为主字段并清空 pending ——
+  // 修复「同周期内二次编辑回落旧值」：pending 一旦生效即成为主预算，避免后续编辑覆盖 pending 后失效。
+  if (settings && settings.limit_effective_date && settings.limit_effective_date <= dateKey) {
+    const _promotedDim = settings.pending_limit_dim
+    const _effDate = settings.limit_effective_date
+    const patch = { updated_at: nowTs() }
+    if (settings.pending_limit_dim && settings.pending_limit_dim !== settings.limit_dim) patch.limit_dim = settings.pending_limit_dim
+    // 以"待提升到的维度"为准写入对应额度字段：切换回日维度时，即便当前仍是月/年维度，也要把 pending_base_limit 落到 daily_base_limit
+    if (_promotedDim === 'day') {
+      if (settings.pending_base_limit != null) patch.daily_base_limit = settings.pending_base_limit
+    } else if (settings.pending_amount_fen != null) {
+      patch.limit_amount_fen = settings.pending_amount_fen
+    }
+    if (settings.pending_year_strategy != null) patch.year_strategy = settings.pending_year_strategy
+    if (settings.pending_month_strategy != null) patch.month_strategy = settings.pending_month_strategy
+    patch.pending_base_limit = null
+    patch.pending_amount_fen = null
+    patch.pending_limit_dim = null
+    patch.pending_year_strategy = null
+    patch.pending_month_strategy = null
+    patch.limit_effective_date = null
+    try {
+      await upsertByUnique('user_settings', { user_id: userId }, patch)
+      // 预算变更日志：把"待生效"放宽翻成"已生效"
+      try {
+        if (_promotedDim && _promotedDim !== 'day') {
+          await db.collection('budget_change_log')
+            .where({ user_id: userId, dim: _promotedDim, type: 'loosen', status: 'scheduled', effective_date: _effDate })
+            .update({ status: 'applied', updated_at: nowTs() })
+        }
+      } catch (e) {
+        console.error('[recalculateDailySettlement] 更新预算变更日志失败', e && (e.stack || e.message || e))
+      }
+      const refreshed = await getDocByUser('user_settings', userId)
+      if (refreshed) { settings = refreshed; dim = settings.limit_dim || 'day' }
+    } catch (e) {
+      console.error('[recalculateDailySettlement] promote pending 失败', userId, e && (e.stack || e.message || e))
+    }
+  }
+
+  // 月/年维度：预算感知重平（C）需要"本月已实际花费（截至今日之前）"
+  let actualSpendThisMonthFen = 0
+  // 年维度额外需要"年内截至上月已花"，用于年→月预算感知重平
+  let actualSpendPriorMonthsThisYearFen = 0
+  let monthBreached = false
+  let yearBreached = false
+  if (dim !== 'day') {
+    actualSpendThisMonthFen = await sumMonthConsumedBefore(userId, dateKey)
+  }
+  if (dim === 'year') {
+    actualSpendPriorMonthsThisYearFen = await sumYearPriorMonthsConsumedBefore(userId, dateKey)
+  }
+
+  const baseLimit = await category.getEffectiveBaseLimit(userId, dateKey, { actualSpendThisMonthFen, actualSpendPriorMonthsThisYearFen })
   const surplusPoolDoc = await getDocByUser('surplus_pools', userId)
   const surplusPoolBalance = surplusPoolDoc ? surplusPoolDoc.balance || 0 : 0
   // 滚入次日可用额度 P：由流水推导（in:roll_over 之和 - out:roll_over_used 之和），恒 ≤ 池余额
@@ -57,17 +173,38 @@ async function recalculateDailySettlement(userId, dateKey) {
   // 挑战口径消费：按 include_in_challenge 过滤，退款始终冲减（「退款不计入挑战」），与限额口径独立
   const challengeConsumed = await category.sumDailyLimitExpenses(userId, dateKey, true, true)
   const consumedFromBase = Math.min(consumed, baseLimit)
+  // 月/年维度：日级结余池滚存 P 不参与「可用额度」，避免与 C 预算感知重平双重计数；
+  // 仅日维度把 P 叠加到可用额度（攒钱可灵活再用）。
+  const effectiveRollover = dim === 'day' ? pendingRollover : 0
   const consumedFromSurplus = Math.max(0, consumed - baseLimit)
-  // 生效总限额 = 固定限额 + 滚入次日的结余（P 为池余额子集，不脱离池）
-  const availableStart = baseLimit + pendingRollover
+  // 生效总限额 = 固定限额 + 滚入次日的结余（P 为池余额子集，不脱离池；月/年维度 P=0）
+  const availableStart = baseLimit + effectiveRollover
   const availableEnd = availableStart - consumed
   const surplus = Math.max(0, baseLimit - consumedFromBase)
-  const overAmount = Math.max(0, consumed - baseLimit - pendingRollover)
-  const isOverLimit = overAmount > 0 || consumed > baseLimit + pendingRollover
+  // 超额判定：日维度以"当日消费 vs 当日 base_limit+滚存"为准；
+  // 月维度以"月池是否突破"为准；年维度以"年池是否突破"为准（单日/单月超节奏不判失败）。
+  let overAmount, isOverLimit
+  if (dim === 'day') {
+    overAmount = Math.max(0, consumed - baseLimit - pendingRollover)
+    isOverLimit = overAmount > 0 || consumed > baseLimit + pendingRollover
+  } else {
+    const monthPool = category.resolveMonthPool(settings, dateKey, { actualSpendPriorMonthsThisYearFen })
+    const monthConsumedSoFar = actualSpendThisMonthFen + consumed
+    monthBreached = monthPool > 0 && monthConsumedSoFar > monthPool
+    // 年维度：超额闸门只看"年池"是否突破，单月超支由重平在后续月份自动收紧，不记失败
+    if (dim === 'year') {
+      const yearPool = Number(settings.limit_amount_fen) || 0
+      const yearConsumedSoFar = (actualSpendPriorMonthsThisYearFen || 0) + monthConsumedSoFar
+      yearBreached = yearPool > 0 && yearConsumedSoFar > yearPool
+    }
+    isOverLimit = dim === 'year' ? yearBreached : monthBreached
+    // over_amount 仅记录当日对"日节奏"的超出量（信息用），不作为闸门，且不叠加 P
+    overAmount = consumed > baseLimit ? consumed - baseLimit : 0
+  }
 
   const payload = {
     base_limit: baseLimit,
-    pending_rollover_fen: pendingRollover,
+    pending_rollover_fen: effectiveRollover,
     surplus_pool_start: surplusPoolBalance,
     consumed,
     consumed_from_base: consumedFromBase,
@@ -101,7 +238,7 @@ async function recalculateDailySettlement(userId, dateKey) {
       created_at: nowTs()
     }
   )
-  return { ...doc, challenge_consumed: challengeConsumed, prev_challenge_consumed: prevChallengeConsumed }
+  return { ...doc, challenge_consumed: challengeConsumed, prev_challenge_consumed: prevChallengeConsumed, dim, monthBreached, yearBreached }
 }
 
 
@@ -132,12 +269,15 @@ function derivePeriodTarget(settings, type, periodKey) {
   return 0
 }
 
-async function updateChallengeForDate(userId, dateKey, challengeConsumed, baseLimit, prevChallengeConsumed = 0) {
+async function updateChallengeForDate(userId, dateKey, challengeConsumed, baseLimit, prevChallengeConsumed = 0, opts = {}) {
   const db = getDb()
   const monthKey = dateKey.slice(0, 7)
   const yearKey = dateKey.slice(0, 4)
   // 挑战口径消费：退款已冲减（「退款不计入挑战」），按 include_in_challenge 统计
-  const isSuccess = challengeConsumed <= baseLimit
+  // 取向 2：月/年维度下，单日超"节奏"不判失败，以父池(月)是否突破为准
+  const isSuccess = (opts && opts.dim && opts.dim !== 'day')
+    ? !opts.monthBreached
+    : (challengeConsumed <= baseLimit)
 
   // 当日挑战消费变化量（delta）：用于月/年挑战增量累加，避免每次交易变更重复累加当日消费。
   // prevChallengeConsumed 由 recalculateDailySettlement 在重算前捕获并传入（挑战口径当日消费），
@@ -253,7 +393,7 @@ async function runDailySettlement(userId, dateKey, options = {}) {
   }
 
   const settlement = await recalculateDailySettlement(userId, dateKey)
-  await updateChallengeForDate(userId, dateKey, settlement.challenge_consumed != null ? settlement.challenge_consumed : settlement.consumed, settlement.base_limit, settlement.prev_challenge_consumed || 0)
+  await updateChallengeForDate(userId, dateKey, settlement.challenge_consumed != null ? settlement.challenge_consumed : settlement.consumed, settlement.base_limit, settlement.prev_challenge_consumed || 0, { dim: settlement.dim, monthBreached: settlement.monthBreached })
 
   const settings = await getDocByUser('user_settings', userId)
   let allocationResult = null
@@ -332,14 +472,27 @@ async function archiveLimitHistory(userId, dateKey, settlement, settings, alloca
     yearLimitFen = 0
   }
 
-  // 结余去向
+  // 结余去向：优先用本次分配结果；force 重跑时 allocationResult 为 null，
+  // 但 settlement 早已分配过，需从已有分配记录还原 surplus_dest，避免被默认 'none' 覆盖。
   let surplusDest = 'none'
-  if (allocationResult && allocationResult.items && allocationResult.items.length) {
-    const t = allocationResult.items[0].target_type
+  let allocItems = allocationResult && allocationResult.items
+  if (!allocItems || !allocItems.length) {
+    const aRes = await db.collection('surplus_allocations').where({ user_id: userId, date_key: dateKey }).limit(1).get()
+    allocItems = aRes.data && aRes.data[0] && aRes.data[0].items
+  }
+  if (allocItems && allocItems.length) {
+    const t = allocItems[0].target_type
     if (t === 'wish') surplusDest = 'wish'
     else if (t === 'savings_pool') surplusDest = 'savings'
-    else if (t === 'roll_over') surplusDest = (dim !== 'day' && (settings.month_strategy || 'equal') === 'rollover') ? 'rollover_pool' : 'rollover_tomorrow'
+    else if (t === 'rollover_pool') surplusDest = 'rollover_pool'
+    else if (t === 'roll_over') surplusDest = (dim !== 'day') ? 'rollover_pool' : 'rollover_tomorrow'
   }
+
+  // 重归档且仍无法推导时，保留已写入的值（created_at 同理），避免回退为 none / 刷新写入时间
+  const exRes = await db.collection('limit_history').where({ user_id: userId, date_key: dateKey }).limit(1).get()
+  const existing = exRes.data && exRes.data[0]
+  if (surplusDest === 'none' && existing && existing.surplus_dest) surplusDest = existing.surplus_dest
+  const createdAt = existing && existing.created_at ? existing.created_at : nowTs()
 
   const payload = {
     day_limit_fen: settlement.base_limit || 0,
@@ -349,7 +502,7 @@ async function archiveLimitHistory(userId, dateKey, settlement, settings, alloca
     spent_fen: settlement.consumed || 0,
     surplus_fen: settlement.surplus || 0,
     surplus_dest: surplusDest,
-    created_at: nowTs()
+    created_at: createdAt
   }
 
   await upsertByUnique('limit_history', { user_id: userId, date_key: dateKey }, payload)
@@ -373,16 +526,23 @@ async function allocateSurplus(userId, dateKey, items, isAuto = false) {
   }
 
   const settings = await getDocByUser('user_settings', userId)
+  const dim = settings ? (settings.limit_dim || 'day') : 'day'
   let allocItems = items
   if (!allocItems || !allocItems.length) {
     const action = settings ? settings.default_surplus_action : 'roll_over'
-    if (action === 'wish' && settings.default_wish_id) {
+    if (dim !== 'day') {
+      // 月/年维度：当日结余回流父池（由 C 重平自动重分配），不入结余池、不滚存次日
+      allocItems = [{ target_type: 'rollover_pool', amount: settlement.surplus }]
+    } else if (action === 'wish' && settings.default_wish_id) {
       allocItems = [{ target_type: 'wish', amount: settlement.surplus, wish_id: settings.default_wish_id }]
     } else if (action === 'savings_pool') {
       allocItems = [{ target_type: 'savings_pool', amount: settlement.surplus }]
     } else {
       allocItems = [{ target_type: 'roll_over', amount: settlement.surplus }]
     }
+  } else if (dim !== 'day') {
+    // 月/年维度下，即便前端显式指定去向，结余也必须回流父池（避免与 C 重平双重计数）
+    allocItems = [{ target_type: 'rollover_pool', amount: settlement.surplus }]
   }
 
   const total = allocItems.reduce((s, i) => s + i.amount, 0)
@@ -419,7 +579,10 @@ async function allocateSurplus(userId, dateKey, items, isAuto = false) {
   }
 
   for (const item of allocItems) {
-    if (item.target_type === 'roll_over') {
+    if (item.target_type === 'rollover_pool') {
+      // 月/年维度：结余回流父池，不进结余池、不打 roll_over 标签（C 重平已自动重分配）
+      continue
+    } else if (item.target_type === 'roll_over') {
       // 滚入次日：日结盈余先作为 daily_surplus 进池，再补记 roll_over 标签（不改动池余额 B）
       await pool.applySurplusPoolChange(userId, 'in', item.amount, 'daily_surplus', {
         ref_type: 'allocation',
@@ -500,6 +663,11 @@ async function allocateSurplus(userId, dateKey, items, isAuto = false) {
 async function confirmSurplusRollover(userId, decision, opts = {}) {
   const db = getDb()
   const settings = await getDocByUser('user_settings', userId)
+  const dim = settings ? (settings.limit_dim || 'day') : 'day'
+  if (dim !== 'day') {
+    // 月/年维度无日级滚存，无需确认/转走（结余已回流父池）
+    return { ok: true, skipped: true }
+  }
   if (!settings) throw new Error('user settings not found')
   const poolDoc = await getDocByUser('surplus_pools', userId)
   const poolBalance = poolDoc ? (poolDoc.balance || 0) : 0
@@ -700,7 +868,7 @@ async function createTransaction(userId, data) {
   }
 
   // 新增交易（含退款）需同步更新挑战进度；挑战口径消费退款始终冲减
-  await updateChallengeForDate(userId, dateKey, settlement.challenge_consumed != null ? settlement.challenge_consumed : settlement.consumed, settlement.base_limit, settlement.prev_challenge_consumed || 0)
+  await updateChallengeForDate(userId, dateKey, settlement.challenge_consumed != null ? settlement.challenge_consumed : settlement.consumed, settlement.base_limit, settlement.prev_challenge_consumed || 0, { dim: settlement.dim, monthBreached: settlement.monthBreached })
 
   // 超额提醒订阅消息（频控在 sendSubscribeMessage 内；配置缺失时静默跳过）
   if (settlement && settlement.consumed > settlement.base_limit) {
@@ -1091,4 +1259,5 @@ module.exports = {
   getTransaction,
   listTransactions,
   listAccountBalanceLogs,
+  getLimitPreviewSpend,
 }

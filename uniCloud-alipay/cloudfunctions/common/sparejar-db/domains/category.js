@@ -7,10 +7,10 @@ const money = require('../utils/money')
 const ids = require('../utils/id')
 const { MAX_CUSTOM_CATEGORIES } = require('../core/constants')
 
-async function getEffectiveBaseLimit(userId, dateKey) {
+async function getEffectiveBaseLimit(userId, dateKey, opts) {
   const settings = await getDocByUser('user_settings', userId)
   if (!settings) return 10000
-  return computeDayBaseLimit(settings, dateKey)
+  return computeDayBaseLimit(settings, dateKey, opts)
 }
 
 /**
@@ -24,11 +24,11 @@ async function getEffectiveBaseLimit(userId, dateKey) {
  * @returns {number} 当日 base_limit（分）
  */
 
-function computeDayBaseLimit(settings, dateKey) {
+function computeDayBaseLimit(settings, dateKey, opts = {}) {
   const dim = settings.limit_dim || 'day'
   const overrides = Array.isArray(settings.overrides) ? settings.overrides : []
 
-  // day 维度：原逻辑
+  // day 维度：原逻辑（保持不变）
   if (dim === 'day') {
     if (settings.pending_base_limit != null && settings.limit_effective_date && settings.limit_effective_date <= dateKey) {
       return settings.pending_base_limit
@@ -37,57 +37,54 @@ function computeDayBaseLimit(settings, dateKey) {
   }
 
   const monthKey = dateKey.slice(0, 7)
-  const yearKey = dateKey.slice(0, 4)
   const dayOverride = overrides.find(o => o.type === 'day' && o.key === dateKey)
   if (dayOverride) return dayOverride.amount_fen // 硬覆盖优先
 
-  // 是否次日生效（pending）
+  const monthPool = resolveMonthPool(settings, dateKey, opts)
+  const pendingActive = settings.pending_limit_dim && settings.limit_effective_date && settings.limit_effective_date <= dateKey
+  // rollover → 预算感知重平（C）：月池剩余 = 月池 − 本月已实际花费(截至今日之前) − 硬覆盖预扣
+  const daysInMonth = daysInMonthOf(dateKey)
+  const dayNum = parseInt(dateKey.slice(8, 10), 10)
+  const remainingDays = daysInMonth - dayNum + 1
+  const preDeduct = sumDayOverridesInMonth(overrides, monthKey, dateKey)
+  // 传入真实已花费则用它（预算感知重平）；未传入则回退旧近似（预览/目标求和场景）
+  const actualSpend = Number.isFinite(opts && opts.actualSpendThisMonthFen)
+    ? opts.actualSpendThisMonthFen
+    : preDeduct
+  const poolRemain = Math.max(0, monthPool - actualSpend)
+  return Math.max(0, Math.floor(poolRemain / Math.max(1, remainingDays)))
+}
+
+/**
+ * 解析某日期所属月份的"月池"（分），含 override 与 pending 生效逻辑。
+ * dim=day 返回 0（日维度无月池）。与前端 limitEngine.resolveMonthPool 保持一致。
+ */
+function resolveMonthPool(settings, dateKey, opts = {}) {
+  const dim = settings.limit_dim || 'day'
+  if (dim === 'day') return 0
+  const overrides = Array.isArray(settings.overrides) ? settings.overrides : []
+  const monthKey = dateKey.slice(0, 7)
   const pendingActive = settings.pending_limit_dim && settings.limit_effective_date && settings.limit_effective_date <= dateKey
   const effDim = pendingActive ? settings.pending_limit_dim : dim
-  const effAmount = pendingActive ? (settings.pending_amount_fen != null ? settings.pending_amount_fen : settings.limit_amount_fen) : settings.limit_amount_fen
-  const effYearStrat = pendingActive ? settings.pending_year_strategy : settings.year_strategy
-  const effMonthStrat = pendingActive ? settings.pending_month_strategy : settings.month_strategy
-
-  // 取某月 override（硬覆盖该月，并从年池预扣）
+  const effAmount = pendingActive
+    ? (settings.pending_amount_fen != null ? settings.pending_amount_fen : settings.limit_amount_fen)
+    : settings.limit_amount_fen
   const monthOverride = overrides.find(o => o.type === 'month' && o.key === monthKey)
   const monthPoolFromOverride = monthOverride ? monthOverride.amount_fen : null
 
-  // —— 年维度：先拆月 ——
-  let monthPool
   if (effDim === 'year') {
-    if (monthPoolFromOverride != null) {
-      monthPool = monthPoolFromOverride
-    } else {
-      const monthsInYear = 12
-      if (effYearStrat === 'equal') {
-        monthPool = Math.floor((effAmount || 0) / monthsInYear)
-      } else {
-        // rollover：年池剩余 / 剩余月
-        const monthNum = parseInt(monthKey.slice(5, 7), 10)
-        const remainingMonths = 13 - monthNum // 含本月
-        monthPool = Math.floor((effAmount || 0) / Math.max(1, remainingMonths))
-      }
-    }
-  } else {
-    // month 维度：月池 = 月度 override 或 limit_amount_fen
-    monthPool = monthPoolFromOverride != null ? monthPoolFromOverride : (effAmount || 0)
+    if (monthPoolFromOverride != null) return monthPoolFromOverride
+    // rollover → 预算感知重平（C）：年池剩余 = 年总额 − 年内截至上月已实际花费
+    const monthNum = parseInt(monthKey.slice(5, 7), 10)
+    const remainingMonths = 13 - monthNum // 含本月
+    const priorSpend = Number.isFinite(opts && opts.actualSpendPriorMonthsThisYearFen)
+      ? opts.actualSpendPriorMonthsThisYearFen
+      : 0
+    const poolRemain = Math.max(0, (effAmount || 0) - priorSpend)
+    return Math.floor(poolRemain / Math.max(1, remainingMonths))
   }
-
-  // —— 月 → 日 ——
-  if (effMonthStrat === 'equal') {
-    const daysInMonth = daysInMonthOf(dateKey)
-    const base = Math.floor(monthPool / daysInMonth)
-    return Math.max(0, base)
-  } else {
-    // rollover：月池剩余 / 剩余天（含今日）。由于结算时无法实时知"已花"，
-    // 这里用"月池 − 本月已硬覆盖日额预扣"近似；精确重算在 runDailySettlement 内完成。
-    const daysInMonth = daysInMonthOf(dateKey)
-    const dayNum = parseInt(dateKey.slice(8, 10), 10)
-    const remainingDays = daysInMonth - dayNum + 1
-    const preDeduct = sumDayOverridesInMonth(overrides, monthKey, dateKey)
-    const poolRemain = Math.max(0, monthPool - preDeduct)
-    return Math.max(0, Math.floor(poolRemain / Math.max(1, remainingDays)))
-  }
+  // month 维度：月池 = 月度 override 或 limit_amount_fen
+  return monthPoolFromOverride != null ? monthPoolFromOverride : (effAmount || 0)
 }
 
 /** 当月天数 */
@@ -532,6 +529,7 @@ async function reorderCategories(userId, type, orderedIds = []) {
 module.exports = {
   getEffectiveBaseLimit,
   computeDayBaseLimit,
+  resolveMonthPool,
   daysInMonthOf,
   sumDayOverridesInMonth,
   updateUserSettings,

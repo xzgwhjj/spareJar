@@ -1,15 +1,6 @@
 <template>
   <view class="asset-page">
-    <view class="topbar" :style="{ paddingTop: pagePaddingTop }">
-      <image
-        :src="cdn('/app_static/images/icon_left.png')"
-        class="back-icon"
-        mode="aspectFit"
-        @click="goBack"
-      ></image>
-      <text class="topbar-title">资产账户</text>
-      <view style="width: 72rpx" />
-    </view>
+    <PageHeader title="资产账户" @back="goBack" />
 
     <scroll-view
       class="page-scroll"
@@ -293,11 +284,12 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from "vue";
 import { useUserStore } from "@/stores/user.js";
-import { requireLogin } from '@/utils/guard.js';
+import { requireLogin } from "@/utils/guard.js";
 import { formatFen, safeYuanToFen, fenToYuanString } from "@/utils/money.js";
 import { useNumberKeyboard } from "@/stores/numberKeyboard.js";
 import { recognizeAsset as apiRecognizeAsset } from "@/api/sparejar.js";
 import { cdn, getCloudTempUrl, getCloudTempUrls } from "@/utils/cdn.js";
+import PageHeader from "@/components/PageHeader.vue";
 import { uploadAssetIcon } from "@/utils/cloudFile.js";
 import { onLoad } from "@dcloudio/uni-app";
 
@@ -725,30 +717,14 @@ function goBack() {
   uni.navigateBack();
 }
 
-/* 顶部安全区 */
-function resolveTop() {
-  try {
-    const rect = uni.getMenuButtonBoundingClientRect();
-    if (rect && rect.top > 0 && rect.height > 0) {
-      return { padTop: `${rect.top + 4}px`, barH: `${rect.height}px` };
-    }
-  } catch (e) {}
-  const { statusBarHeight = 20 } = uni.getSystemInfoSync();
-  return { padTop: `${statusBarHeight + 48}px`, barH: "32px" };
-}
-const top = resolveTop();
-const pagePaddingTop = ref(top.padTop);
-
 onLoad((q) => {
-  if (!requireLogin('/pages/asset-mgr/asset-mgr')) return
+  if (!requireLogin("/pages/asset-mgr/asset-mgr")) return;
   if (q && q.action === "add") {
     nextTick(() => openAdd());
   }
 });
 
 onMounted(() => {
-  const t = resolveTop();
-  pagePaddingTop.value = t.padTop;
   userStore.loadAssetAccounts().catch(() => {});
 });
 </script>
@@ -766,10 +742,6 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 0 32rpx 20rpx;
-}
-.back-icon {
-  width: 60rpx;
-  height: 60rpx;
 }
 .topbar-title {
   font-size: 34rpx;

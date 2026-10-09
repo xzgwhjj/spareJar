@@ -52,7 +52,7 @@
         <!-- Bento：余钱罐主视觉卡 + 心愿进度迷你卡（右格） -->
         <view class="bento">
           <view class="bento-jar">
-            <BudgetGaugeCard :is-over="isOver" />
+            <BudgetGaugeCard :is-over="isOver" :over-kind="overLimitKind" />
           </view>
         </view>
 
@@ -154,6 +154,7 @@ const {
   spentTodayFen,
   leftTodayFen,
   isOverLimit,
+  overLimitKind,
   savingsPoolBalanceFen,
   saveStreak,
   loadSaveStreakAction,

@@ -1,0 +1,46 @@
+[
+  {
+    "IndexName": "uk_member_ledger",
+    "MgoKeySchema": {
+      "MgoIndexKeys": [
+        {
+          "Name": "member_id",
+          "Direction": "1",
+          "Type": "varchar"
+        },
+        {
+          "Name": "ledger_id",
+          "Direction": "1",
+          "Type": "varchar"
+        }
+      ],
+      "MgoIsUnique": true
+    }
+  },
+  {
+    "IndexName": "idx_ledger",
+    "MgoKeySchema": {
+      "MgoIndexKeys": [
+        {
+          "Name": "ledger_id",
+          "Direction": "1",
+          "Type": "varchar"
+        }
+      ],
+      "MgoIsUnique": false
+    }
+  },
+  {
+    "IndexName": "idx_user",
+    "MgoKeySchema": {
+      "MgoIndexKeys": [
+        {
+          "Name": "user_id",
+          "Direction": "1",
+          "Type": "varchar"
+        }
+      ],
+      "MgoIsUnique": false
+    }
+  }
+]

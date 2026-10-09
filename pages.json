@@ -78,6 +78,13 @@
       }
     },
     {
+      "path": "pages/devtools/devtools",
+      "style": {
+        "navigationBarTitleText": "数据维护",
+        "navigationStyle": "custom"
+      }
+    },
+    {
       "path": "pages/surplus-alloc/surplus-alloc",
       "style": {
         "navigationBarTitleText": "盈余分配",

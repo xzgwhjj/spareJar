@@ -22,7 +22,7 @@
     },
     "date_key": {
       "bsonType": "string",
-      "description": "本地日期 YYYY-MM-DD",
+      "description": "本地日期",
       "maxLength": 10
     },
     "day_limit_fen": {
@@ -31,16 +31,20 @@
     },
     "month_limit_fen": {
       "bsonType": "int",
-      "description": "当月实际月池(分，含override)"
+      "description": "当月实际月池(分)"
     },
     "year_limit_fen": {
       "bsonType": "int",
-      "description": "当年实际年池(分，含override)"
+      "description": "当年实际年池(分)"
     },
     "source": {
       "bsonType": "string",
-      "enum": ["auto", "override"],
-      "description": "当日额度来源"
+      "enum": [
+        "auto",
+        "override"
+      ],
+      "description": "额度来源",
+      "defaultValue": "auto"
     },
     "spent_fen": {
       "bsonType": "int",
@@ -52,8 +56,19 @@
     },
     "surplus_dest": {
       "bsonType": "string",
-      "enum": ["rollover_tomorrow", "rollover_pool", "wish", "savings", "none"],
-      "description": "结余去向：顺延明日/滚回月池/心愿/存款池/无"
+      "enum": [
+        "rollover_tomorrow",
+        "rollover_pool",
+        "wish",
+        "savings",
+        "none"
+      ],
+      "description": "结余去向"
+    },
+    "purge_archived": {
+      "bsonType": "bool",
+      "description": "已归档进 limit_history_yearly，待清理",
+      "defaultValue": false
     },
     "created_at": {
       "bsonType": "string",

@@ -30,6 +30,11 @@
       ],
       "description": "一级大类：支出/收入"
     },
+    "group": {
+      "bsonType": "string",
+      "description": "二级分组码(中层)，按 type 隔离，如 fixed/variable 或 active/passive",
+      "maxLength": 32
+    },
     "name": {
       "bsonType": "string",
       "description": "分类名",
@@ -37,27 +42,9 @@
     },
     "icon": {
       "bsonType": "string",
-      "description": "图标（emoji，icon_type=emoji 时展示）",
+      "description": "图标",
       "maxLength": 64,
       "defaultValue": "📦"
-    },
-    "icon_type": {
-      "bsonType": "string",
-      "enum": ["emoji", "image"],
-      "description": "图标类型：emoji 系统图标 / image 用户自定义上传",
-      "defaultValue": "emoji"
-    },
-    "icon_url": {
-      "bsonType": "string",
-      "description": "自定义图标地址（icon_type=image 时有效）",
-      "maxLength": 512,
-      "defaultValue": ""
-    },
-    "desc": {
-      "bsonType": "string",
-      "description": "分类简介/备注",
-      "maxLength": 100,
-      "defaultValue": ""
     },
     "is_system": {
       "bsonType": "bool",
@@ -82,16 +69,6 @@
     "created_at": {
       "bsonType": "string",
       "description": "创建时间",
-      "maxLength": 19
-    },
-    "updated_at": {
-      "bsonType": "string",
-      "description": "更新时间",
-      "maxLength": 19
-    },
-    "deleted_at": {
-      "bsonType": "string",
-      "description": "软删时间（保留账单时账目仍引用该分类）",
       "maxLength": 19
     }
   }
