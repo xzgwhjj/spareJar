@@ -83,6 +83,11 @@
       "description": "待生效总池(分)",
       "minimum": 100
     },
+    "pending_deduct": {
+      "bsonType": "bool",
+      "description": "待生效切换是否扣除旧模式已用额度（生效时按实际已用重算）",
+      "defaultValue": false
+    },
     "pending_year_strategy": {
       "bsonType": "string",
       "enum": [

@@ -148,6 +148,19 @@ export const spentTodayFen = computed(() => {
   )
 })
 export const leftTodayFen = computed(() => Math.max(0, totalDailyLimitFen.value - spentTodayFen.value))
+// 月/年池进度（供首页仪表盘次级进度条）：取自日结 settlement 透传的月/年池与已花费
+export const monthPoolFen = computed(
+  () => (state.dashboard.settlement && state.dashboard.settlement.month_pool_fen) || 0
+)
+export const monthConsumedFen = computed(
+  () => (state.dashboard.settlement && state.dashboard.settlement.month_consumed_fen) || 0
+)
+export const yearPoolFen = computed(
+  () => (state.dashboard.settlement && state.dashboard.settlement.year_pool_fen) || 0
+)
+export const yearConsumedFen = computed(
+  () => (state.dashboard.settlement && state.dashboard.settlement.year_consumed_fen) || 0
+)
 // 超额判定口径与后端 recalculateDailySettlement 对齐：
 // 日维度 = 当日花费 > 当日 base_limit+滚存；
 // 月/年维度 = 父池(月/年)是否突破（由后端日结统一判定，单日超节奏不记失败）。
@@ -216,7 +229,10 @@ export async function confirmSurplusRolloverAction(decision, opts = {}) {
   if (!state.uid) return
   await confirmSurplusRollover(decision, opts)
   await auth.loadSettings()
-  await dashboard.refreshTodayDashboard()
+  // force：跳过 30s 看板缓存，确保分配后 yesterdaySettlement 等立即更新
+  await dashboard.refreshTodayDashboard(true)
+  // 刷新共享的待分配结余（分配后通常为 null），使 Banner 与盈余分配页金额即时一致
+  await loadPendingAllocationAction()
   await auth.loadSurplusPool()
   await auth.loadSavingsPool()
 }
@@ -242,14 +258,21 @@ export async function loadSurplusAllocationsAction() {
 }
 
 export async function loadPendingAllocationAction() {
-  if (!state.uid) return null
+  if (!state.uid) { state.pendingAllocation = null; return null }
   try {
-    return await getPendingAllocation()
+    state.pendingAllocation = await getPendingAllocation()
+    return state.pendingAllocation
   } catch (err) {
     console.error('[store] 读取待分配结余失败', err)
+    state.pendingAllocation = null
     return null
   }
 }
+
+/** 待分配结余金额（分）：Banner 与盈余分配页共用，保证两处一致 */
+export const pendingSurplusFen = computed(() => state.pendingAllocation?.surplus ?? 0)
+/** 是否存在待分配结余 */
+export const hasPendingAllocation = computed(() => !!state.pendingAllocation)
 
 /**
  * 统一入口：返回整个 store（state + 全部 action + computed）
@@ -296,6 +319,8 @@ export function useUserStore() {
     confirmSurplusRolloverAction,
     loadSurplusAllocationsAction,
     loadPendingAllocationAction,
+    pendingSurplusFen,
+    hasPendingAllocation,
 
     // wish
     loadWishes: wish.loadWishes,
@@ -312,6 +337,10 @@ export function useUserStore() {
     // pool
     depositWishFromAccountAction: pool.depositWishFromAccountAction,
     depositWishFromSurplusAction: pool.depositWishFromSurplusAction,
+    depositSavingsFromSurplusAction: pool.depositSavingsFromSurplusAction,
+    depositAccountFromSurplusAction: pool.depositAccountFromSurplusAction,
+    transferBudgetOutAction: pool.transferBudgetOutAction,
+    transferBudgetInAction: pool.transferBudgetInAction,
     depositWishFromSavingsAction: pool.depositWishFromSavingsAction,
     withdrawWishToSurplusAction: pool.withdrawWishToSurplusAction,
     withdrawWishToAccountAction: pool.withdrawWishToAccountAction,
@@ -383,6 +412,10 @@ export function useUserStore() {
     hasLimit,
     spentTodayFen,
     leftTodayFen,
+    monthPoolFen,
+    monthConsumedFen,
+    yearPoolFen,
+    yearConsumedFen,
     isOverLimit,
     onboardingDone,
     onboardingStep,

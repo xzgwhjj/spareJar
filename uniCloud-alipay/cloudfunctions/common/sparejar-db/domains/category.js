@@ -42,6 +42,7 @@ function computeDayBaseLimit(settings, dateKey, opts = {}) {
 
   const monthPool = resolveMonthPool(settings, dateKey, opts)
   const pendingActive = settings.pending_limit_dim && settings.limit_effective_date && settings.limit_effective_date <= dateKey
+  const effDim = pendingActive ? settings.pending_limit_dim : dim
   // rollover → 预算感知重平（C）：月池剩余 = 月池 − 本月已实际花费(截至今日之前) − 硬覆盖预扣
   const daysInMonth = daysInMonthOf(dateKey)
   const dayNum = parseInt(dateKey.slice(8, 10), 10)
@@ -51,7 +52,11 @@ function computeDayBaseLimit(settings, dateKey, opts = {}) {
   const actualSpend = Number.isFinite(opts && opts.actualSpendThisMonthFen)
     ? opts.actualSpendThisMonthFen
     : preDeduct
-  const poolRemain = Math.max(0, monthPool - actualSpend)
+  // 月维度：再扣“本期已转出”（离开预算）；年维度的 movedOut 已在 resolveMonthPool 从年池扣除
+  const movedOut = effDim !== 'year' && Number.isFinite(opts && opts.movedOutFen)
+    ? Math.max(0, opts.movedOutFen)
+    : 0
+  const poolRemain = Math.max(0, monthPool - actualSpend - movedOut)
   return Math.max(0, Math.floor(poolRemain / Math.max(1, remainingDays)))
 }
 
@@ -71,20 +76,25 @@ function resolveMonthPool(settings, dateKey, opts = {}) {
     : settings.limit_amount_fen
   const monthOverride = overrides.find(o => o.type === 'month' && o.key === monthKey)
   const monthPoolFromOverride = monthOverride ? monthOverride.amount_fen : null
+  // 上期结转（不重置累积）：由 recalc 传入；缺失为 0（预览/挑战场景）
+  const carryIn = Number.isFinite(opts && opts.carryInFen) ? Math.max(0, opts.carryInFen) : 0
+  // 已转出（离开预算）：年维度在分月前从年池扣除；月维度在 computeDayBaseLimit 扣除
+  const movedOut = Number.isFinite(opts && opts.movedOutFen) ? Math.max(0, opts.movedOutFen) : 0
 
   if (effDim === 'year') {
     if (monthPoolFromOverride != null) return monthPoolFromOverride
-    // rollover → 预算感知重平（C）：年池剩余 = 年总额 − 年内截至上月已实际花费
+    // 年池 = 年额 + 上年结转 − 年内截至上月已花 − 年内已转出，再按剩余月份分摊到本月
     const monthNum = parseInt(monthKey.slice(5, 7), 10)
     const remainingMonths = 13 - monthNum // 含本月
     const priorSpend = Number.isFinite(opts && opts.actualSpendPriorMonthsThisYearFen)
       ? opts.actualSpendPriorMonthsThisYearFen
       : 0
-    const poolRemain = Math.max(0, (effAmount || 0) - priorSpend)
-    return Math.floor(poolRemain / Math.max(1, remainingMonths))
+    const yearRemaining = Math.max(0, (effAmount || 0) + carryIn - priorSpend - movedOut)
+    return Math.floor(yearRemaining / Math.max(1, remainingMonths))
   }
-  // month 维度：月池 = 月度 override 或 limit_amount_fen
-  return monthPoolFromOverride != null ? monthPoolFromOverride : (effAmount || 0)
+  // month 维度：月池 = 月度 override 或 limit_amount_fen，加上期结转（movedOut 在 computeDayBaseLimit 扣）
+  const base = monthPoolFromOverride != null ? monthPoolFromOverride : (effAmount || 0)
+  return base + carryIn
 }
 
 /** 当月天数 */

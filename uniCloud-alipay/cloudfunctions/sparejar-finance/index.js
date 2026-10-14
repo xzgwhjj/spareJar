@@ -280,6 +280,32 @@ exports.main = async (event, context) => {
         if (!data.decision) return fail('decision is required')
         return ok(await dbApi.confirmSurplusRollover(userId, data.decision, data.opts || {}))
 
+      case 'transferBudgetOut':
+        if (!data.period_type || !data.period_key || !data.target_type || !data.amount) {
+          return fail('period_type, period_key, target_type and amount are required')
+        }
+        return ok(await dbApi.transferBudgetOut(userId, {
+          period_type: data.period_type,
+          period_key: data.period_key,
+          target_type: data.target_type,
+          target_id: data.target_id,
+          amount: data.amount,
+          note: data.note
+        }))
+
+      case 'transferBudgetIn':
+        if (!data.period_type || !data.period_key || !data.source_type || !data.amount) {
+          return fail('period_type, period_key, source_type and amount are required')
+        }
+        return ok(await dbApi.transferBudgetIn(userId, {
+          period_type: data.period_type,
+          period_key: data.period_key,
+          source_type: data.source_type,
+          source_id: data.source_id,
+          amount: data.amount,
+          note: data.note
+        }))
+
       case 'applySurplusPoolChange':
         return ok({
           balance: await dbApi.applySurplusPoolChange(
@@ -322,6 +348,14 @@ exports.main = async (event, context) => {
       case 'depositWishFromSurplus':
         if (!data.wish_id || !data.amount) return fail('wish_id and amount are required')
         return ok({ saved_after: await dbApi.depositWishFromSurplus(userId, data.wish_id, data.amount, data.note) })
+
+      case 'depositSavingsFromSurplus':
+        if (!data.amount) return fail('amount is required')
+        return ok({ balance_after: await dbApi.depositSavingsFromSurplus(userId, data.amount, data.note) })
+
+      case 'depositAccountFromSurplus':
+        if (!data.account_id || !data.amount) return fail('account_id and amount are required')
+        return ok({ balance_after: await dbApi.depositAccountFromSurplus(userId, data.account_id, data.amount, data.note) })
 
       case 'depositWishFromSavings':
         if (!data.wish_id || !data.amount) return fail('wish_id and amount are required')

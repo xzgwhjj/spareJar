@@ -84,7 +84,7 @@ async function markFailed(entries, reason, ts) {
  * @returns {{ effect: 'immediate'|'deferred'|'none', effective_date: ?string, defer_to: ?string, beyond: boolean, cap: ?number, used: number, remaining: ?number }}
  */
 async function saveBudgetPlan(userId, opts = {}) {
-  const { dim, amount_fen, year_strategy, month_strategy, overrides, effective_timing } = opts || {}
+  const { dim, amount_fen, year_strategy, month_strategy, overrides, effective_timing, deduct } = opts || {}
   if (!['day', 'month', 'year'].includes(dim)) throw new Error('dim 非法')
   if (!Number.isInteger(amount_fen) || amount_fen < 0) throw new Error('金额非法')
 
@@ -130,6 +130,7 @@ async function saveBudgetPlan(userId, opts = {}) {
     patch.pending_limit_dim = null
     patch.pending_year_strategy = null
     patch.pending_month_strategy = null
+    patch.pending_deduct = null
     patch.limit_effective_date = null
 
     if (dimChanging) {
@@ -147,6 +148,7 @@ async function saveBudgetPlan(userId, opts = {}) {
         // 维度切换（切到月/年）：旧维度维持到生效日，新维度在生效日经日结提升为正式设定
         patch.pending_limit_dim = dim
         patch.pending_amount_fen = amount_fen
+        patch.pending_deduct = deduct ? true : null
         if (dim === 'year' && year_strategy != null) patch.pending_year_strategy = year_strategy
         if (month_strategy != null) patch.pending_month_strategy = month_strategy
         effectiveDate = resolveEffectiveDate(effective_timing, dim)

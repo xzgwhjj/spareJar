@@ -66,6 +66,28 @@
         <text class="seg-tip">仅可配置一种维度，系统会自动折算为每日额度</text>
       </view>
 
+      <!-- 待生效提示（全局状态条：置于顶部维度区下方，始终可见） -->
+      <view v-if="hasPending" class="pending-tip pending-tip-top">
+        <template v-if="pendingKind === 'switch'">
+          <text class="pending-tip-text"
+            >已预约于「{{ pendingEffectiveLabel }}」切换到{{
+              dimLabelText(state.settings.pending_limit_dim)
+            }}，取消则维持当前{{ dimLabelText(state.settings.limit_dim) }}。</text
+          >
+          <view class="terminate-btn" @click="terminatePending"
+            ><text>取消切换</text></view
+          >
+        </template>
+        <template v-else>
+          <text class="pending-tip-text"
+            >已有一条「{{ pendingEffectiveLabel }}」的放宽待执行，可终止后重设。</text
+          >
+          <view class="terminate-btn" @click="terminatePending"
+            ><text>终止待生效调整</text></view
+          >
+        </template>
+      </view>
+
       <!-- 拆分策略 -->
       <view
         v-if="dim !== 'day'"
@@ -279,26 +301,6 @@
             }}生效（下调不受限）</text
           >
         </view>
-        <view v-if="hasPending" class="pending-tip">
-          <template v-if="pendingKind === 'switch'">
-            <text class="pending-tip-text"
-              >已预约于「{{ pendingEffectiveLabel }}」切换到{{
-                dimLabelText(state.settings.pending_limit_dim)
-              }}，取消则维持当前{{ dimLabelText(state.settings.limit_dim) }}。</text
-            >
-            <view class="terminate-btn" @click="terminatePending"
-              ><text>取消切换</text></view
-            >
-          </template>
-          <template v-else>
-            <text class="pending-tip-text"
-              >已有一条「{{ pendingEffectiveLabel }}」的放宽待执行，可终止后重设。</text
-            >
-            <view class="terminate-btn" @click="terminatePending"
-              ><text>终止待生效调整</text></view
-            >
-          </template>
-        </view>
         <view class="save-btn" @click="saveSettings">
           <text>保存设置</text>
         </view>
@@ -481,7 +483,7 @@
           ¥{{ (rollRestoreFen / 100).toFixed(2) }}）</view
         >
 
-        <view v-if="switchPlan.toDim !== 'day'" class="switch-section">
+        <view class="switch-section">
           <view class="switch-label">生效时间</view>
           <view class="switch-radios">
             <view
@@ -491,12 +493,14 @@
               >次日生效</view
             >
             <view
+              v-if="switchPlan.toDim === 'month'"
               class="switch-radio"
               :class="{ active: switchTiming === 'next_month' }"
               @click="switchTiming = 'next_month'"
               >次月生效</view
             >
             <view
+              v-if="switchPlan.toDim === 'year'"
               class="switch-radio"
               :class="{ active: switchTiming === 'next_year' }"
               @click="switchTiming = 'next_year'"
@@ -515,9 +519,9 @@
             <text>扣除旧模式下本月已使用额度</text>
           </view>
           <view v-if="switchDeduct" class="switch-deduct-info">
-            本月已使用 ¥{{ (switchUsedFen / 100).toFixed(2) }}，生效额度 = ¥{{
+            本月已使用 ¥{{ (switchUsedFen / 100).toFixed(2) }}（当前），预计生效额度 ¥{{
               (effectiveFen / 100).toFixed(2)
-            }}
+            }}（生效时按实际已用重算）
           </view>
         </view>
 
@@ -580,7 +584,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
+import { onHide } from "@dcloudio/uni-app";
 import { useUserStore } from "@/stores/user.js";
 import {
   getLimitPreviewSpend,
@@ -951,6 +956,7 @@ onMounted(async () => {
   if (!state.settings) await loadSettings();
   syncFromSettings();
   captureSnapshot();
+  restoreOverrideDraft(); // 回填本地暂存的延迟月覆盖（误退恢复）
   loadChangeLog();
   // 初始化各维度草稿金额（来自已保存设置），切维度时按维度记忆，不互相覆盖
   dimDrafts.value = {
@@ -958,12 +964,16 @@ onMounted(async () => {
     month: savedYuanForDim(state.settings, "month"),
     year: savedYuanForDim(state.settings, "year"),
   };
+  restoreSwitchDraft(); // 回填未确认切换的月/年额度（误退恢复）
   try {
     previewSpend.value = await getLimitPreviewSpend(todayDateKey());
   } catch (e) {
     // 取数失败不影响设置页其它功能，回落到"未花"计划值
   }
 });
+
+// 离开页面时暂存"未确认切换"的月/年额度草稿（误退可回填）
+onHide(() => saveSwitchDraftOnLeave());
 
 /* ---- 交互 ---- */
 // 取某维度已保存的金额（元）：用于初始化各维度草稿，切换维度时回填该维度的上次值
@@ -1079,7 +1089,7 @@ function copyDown(i) {
     else break; // 遇到已填值停止，避免覆盖用户手动输入
   }
 }
-function confirmBatch() {
+async function confirmBatch() {
   let changed = 0;
   batchRows.value.forEach((row) => {
     const raw = row.value.trim();
@@ -1100,8 +1110,14 @@ function confirmBatch() {
     changed++;
   });
   batchVisible.value = false;
-  if (changed > 0) uni.showToast({ title: `已应用 ${changed} 天`, icon: "none" });
-  else uni.showToast({ title: "未做修改", icon: "none" });
+  if (changed > 0) {
+    try {
+      await persistOverrides();
+      uni.showToast({ title: `已保存 ${changed} 天覆盖`, icon: "none" });
+    } catch (e) {
+      uni.showToast({ title: (e && e.message) || "保存失败", icon: "none" });
+    }
+  } else uni.showToast({ title: "未做修改", icon: "none" });
 }
 
 /* ---- 批量覆盖未来 1~3 个月 ---- */
@@ -1149,7 +1165,7 @@ function copyMonthDown(i) {
     else break;
   }
 }
-function confirmMonthBatch() {
+async function confirmMonthBatch() {
   let changed = 0;
   monthBatchRows.value.forEach((row) => {
     const raw = row.value.trim();
@@ -1170,8 +1186,162 @@ function confirmMonthBatch() {
     changed++;
   });
   monthBatchVisible.value = false;
-  if (changed > 0) uni.showToast({ title: `已应用 ${changed} 个月`, icon: "none" });
-  else uni.showToast({ title: "未做修改", icon: "none" });
+  if (changed > 0) {
+    const curDim = (state.settings && state.settings.limit_dim) || "day";
+    if (curDim === "day") {
+      // 日维度下设置的月覆盖目前为"休眠"态（日维度不读取月覆盖），暂不落库；
+      // 先存本地草稿防误退丢失，待确认切到月/年后由 confirmSwitch 一并落库
+      saveOverrideDraft(overrides.value.filter((o) => o.type === "month"));
+      uni.showToast({
+        title: `已暂存 ${changed} 个月覆盖，确认切换后保存`,
+        icon: "none",
+      });
+    } else {
+      try {
+        await persistOverrides();
+        clearOverrideDraft();
+        uni.showToast({ title: `已保存 ${changed} 个月覆盖`, icon: "none" });
+      } catch (e) {
+        uni.showToast({ title: (e && e.message) || "保存失败", icon: "none" });
+      }
+    }
+  } else uni.showToast({ title: "未做修改", icon: "none" });
+}
+
+// 批量覆盖确认后立即落库（与维度切换解耦）：以「当前真实维度」保存，避免误触发维度切换；
+// 即便用户未确认维度切换，已设覆盖也不丢失，提示名副其实。
+async function persistOverrides() {
+  const s = state.settings || {};
+  const curDim = s.limit_dim || "day";
+  const amountFen = curDim === "day" ? s.daily_base_limit || 0 : s.limit_amount_fen || 0;
+  await saveBudgetPlan({
+    dim: curDim,
+    amount_fen: amountFen,
+    overrides: overrides.value,
+  });
+}
+
+// 本地草稿：日维度下延迟落库的月覆盖先暂存于本地（非云端），防误退丢失；
+// 再次进入页面时回填到 overrides，确认切换时随 confirmSwitch 落库后清除。
+function draftKey() {
+  return `sparejar_override_draft_${state.uid || "guest"}`;
+}
+function saveOverrideDraft(list) {
+  try {
+    uni.setStorageSync(draftKey(), JSON.stringify(list || []));
+  } catch (e) {}
+}
+function loadOverrideDraft() {
+  try {
+    const raw = uni.getStorageSync(draftKey());
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+function clearOverrideDraft() {
+  try {
+    uni.removeStorageSync(draftKey());
+  } catch (e) {}
+}
+// 进入页面时把本地草稿中的月覆盖回填（去重 by type+key），恢复误退前暂存内容
+function restoreOverrideDraft() {
+  const draft = loadOverrideDraft();
+  if (!draft || !Array.isArray(draft) || draft.length === 0) return;
+  const merged = (overrides.value || []).slice();
+  draft.forEach((o) => {
+    if (!merged.some((m) => m.type === o.type && m.key === o.key)) merged.push(o);
+  });
+  overrides.value = merged;
+}
+
+// 本地草稿：日→月/年 等"维度切换"途中，用户已填好目标维度额度/策略但尚未确认切换时，
+// 暂存于本地（非云端），防误退丢失；再次进入且切换仍未确认时回填。
+function switchDraftKey() {
+  return `sparejar_switch_draft_${state.uid || "guest"}`;
+}
+function saveSwitchDraft(obj) {
+  try {
+    uni.setStorageSync(switchDraftKey(), JSON.stringify(obj || null));
+  } catch (e) {}
+}
+function loadSwitchDraft() {
+  try {
+    const raw = uni.getStorageSync(switchDraftKey());
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+function clearSwitchDraft() {
+  try {
+    uni.removeStorageSync(switchDraftKey());
+  } catch (e) {}
+}
+// 编辑中实时暂存（不清除）：存在"待确认切换"时，把所有"非当前维度中有改动"的额度/策略写入本地草稿
+function persistSwitchDraftIfPending() {
+  const s = state.settings || {};
+  const curDim = s.limit_dim || "day";
+  if (dim.value === curDim) return; // 无待确认切换，不写
+  // 已处于待生效(pending)切换：云端已记录，不写本地草稿
+  if (s.pending_limit_dim && s.limit_effective_date && s.pending_limit_dim === dim.value)
+    return;
+  const dims = {};
+  ["month", "year"].forEach((d2) => {
+    if (d2 === curDim) return; // 当前维度不入草稿（即时保存在 saveSettings）
+    const amt = Math.floor(Number(dimDrafts.value[d2]) || 0) * 100;
+    const committedAmt = d2 === "day" ? s.daily_base_limit || 0 : s.limit_amount_fen || 0;
+    const committedStrat =
+      d2 === "year" ? s.year_strategy || "rollover" : s.month_strategy || "rollover";
+    const curStrat = d2 === "year" ? yearStrategy.value : monthStrategy.value;
+    if (amt === committedAmt && curStrat === committedStrat) return; // 该维度无改动
+    dims[d2] = { amountFen: amt, strategy: curStrat };
+  });
+  if (Object.keys(dims).length === 0) return; // 无任何改动不写
+  saveSwitchDraft({
+    fromDim: curDim,
+    toDim: dim.value, // 最近一次选中的目标维度，仅用于来源校验
+    dims,
+    timing: switchTiming.value,
+    deduct: switchDeduct.value,
+  });
+}
+// 离开页面时：无待确认切换或已云端 pending 则清除本地草稿；否则实时暂存（兜底）
+function saveSwitchDraftOnLeave() {
+  const s = state.settings || {};
+  const curDim = s.limit_dim || "day";
+  if (
+    dim.value === curDim ||
+    (s.pending_limit_dim && s.limit_effective_date && s.pending_limit_dim === dim.value)
+  ) {
+    clearSwitchDraft();
+    return;
+  }
+  persistSwitchDraftIfPending();
+}
+// 进入页面时：若切换仍未确认（来源维度未变、目标维度未生效），回填各维度额度/策略/生效时间
+function restoreSwitchDraft() {
+  const d = loadSwitchDraft();
+  if (!d || !d.dims || Object.keys(d.dims).length === 0) {
+    clearSwitchDraft(); // 旧 schema 或空草稿，清掉避免滞留
+    return;
+  }
+  const curDim = (state.settings && state.settings.limit_dim) || "day";
+  if (curDim === d.toDim || curDim !== d.fromDim) {
+    clearSwitchDraft();
+    return;
+  }
+  // 回填到对应维度草稿：点击该 tab 时显示，但不自动跳转，停留在用户当前的方案维度
+  if (d.dims.month) {
+    dimDrafts.value.month = Math.floor(d.dims.month.amountFen / 100);
+    if (d.dims.month.strategy) monthStrategy.value = d.dims.month.strategy;
+  }
+  if (d.dims.year) {
+    dimDrafts.value.year = Math.floor(d.dims.year.amountFen / 100);
+    if (d.dims.year.strategy) yearStrategy.value = d.dims.year.strategy;
+  }
+  switchTiming.value = d.timing || "next_day";
+  switchDeduct.value = !!d.deduct;
 }
 
 /* ---- 保存（M3：收紧即时、放宽次日生效；含限次与记录） ---- */
@@ -1224,6 +1394,31 @@ const switchConfirmVisible = ref(false);
 const switchPlan = ref({ fromDim: "day", toDim: "day", inputFen: 0 });
 const switchTiming = ref("next_day");
 const switchDeduct = ref(false);
+// 编辑途中（额度/策略/生效时间变化）实时暂存本地草稿，避免离开时漏存导致回填失败。
+// 放在 switchTiming/switchDeduct 声明之后，确保 watch 创建时这些 ref 已初始化（否则 setup 收集依赖即抛错）。
+watch(
+  () => [
+    poolYuan.value,
+    monthStrategy.value,
+    yearStrategy.value,
+    switchTiming.value,
+    switchDeduct.value,
+  ],
+  () => persistSwitchDraftIfPending()
+);
+// 目标维度变化时，若当前生效时间不在该维度可选范围则回退到次日，保证选项约束一致
+watch(
+  () => switchPlan.value.toDim,
+  (toDim) => {
+    const valid =
+      toDim === "month"
+        ? ["next_day", "next_month"]
+        : toDim === "year"
+        ? ["next_day", "next_year"]
+        : ["next_day"];
+    if (!valid.includes(switchTiming.value)) switchTiming.value = "next_day";
+  }
+);
 const switchMonthUsedFen = ref(0);
 const switchYearUsedFen = ref(0);
 const switchUsedFen = computed(() =>
@@ -1287,17 +1482,20 @@ async function confirmSwitch() {
     );
     const res = await saveBudgetPlan({
       dim: switchPlan.value.toDim,
-      amount_fen: effectiveFen.value,
+      amount_fen: switchPlan.value.inputFen, // 基准额度；若开启扣除，由后端在生效时按实际已用重算
       year_strategy: yearStrategy.value,
       month_strategy: monthStrategy.value,
       overrides: keptOverrides,
       effective_timing: switchTiming.value,
+      deduct: switchDeduct.value,
     });
     await loadSettings();
     syncFromSettings();
     captureSnapshot(); // 保存并重新同步后再拍快照，使"恢复上次"反映当前生效态（pending 期间仍为旧维度）
     await refreshTodayDashboard({ force: true });
     await loadChangeLog();
+    clearOverrideDraft(); // 随切换确认已落库，清除本地暂存草稿
+    clearSwitchDraft(); // 切换已确认，清除未确认切换的额度草稿
     uni.showToast({
       title: `将于${timingLabel(switchTiming.value)}生效`,
       icon: "none",
@@ -1897,7 +2095,7 @@ const goHistory = () => uni.navigateTo({ url: "/pages/limit-history/limit-histor
   padding: 26rpx;
   border-radius: 28rpx;
   text-align: center;
-  background: var(--g1);
+  background: var(--g0);
   color: var(--ink3);
   font-size: 28rpx;
   font-weight: 700;
@@ -1932,6 +2130,9 @@ const goHistory = () => uni.navigateTo({ url: "/pages/limit-history/limit-histor
   margin-bottom: 18rpx;
   background: rgba(255, 107, 107, 0.08);
   border-radius: 16rpx;
+}
+.pending-tip-top {
+  margin: 0 32rpx 24rpx;
 }
 .pending-tip-text {
   font-size: 22rpx;
@@ -2059,7 +2260,7 @@ const goHistory = () => uni.navigateTo({ url: "/pages/limit-history/limit-histor
 }
 .switch-label {
   font-size: 26rpx;
-  color: #888;
+  color: var(--ink);
   margin-bottom: 16rpx;
 }
 .switch-radios {
@@ -2072,28 +2273,28 @@ const goHistory = () => uni.navigateTo({ url: "/pages/limit-history/limit-histor
   padding: 18rpx 0;
   font-size: 26rpx;
   border-radius: 14rpx;
-  background: #f4f4f5;
-  color: #555;
+  background: var(--g1);
+  color: var(--g8);
   border: 1rpx solid transparent;
 }
 .switch-radio.active {
-  background: #e8f1ff;
-  color: #2b7cff;
-  border-color: #2b7cff;
+  background: var(--g2);
+  color: var(--g7);
+  border-color: var(--g5);
 }
 .switch-check {
   display: flex;
   align-items: center;
   gap: 12rpx;
   font-size: 26rpx;
-  color: #555;
+  color: var(--ink2);
   padding: 16rpx 0;
 }
 .switch-check-box {
   width: 36rpx;
   height: 36rpx;
   border-radius: 8rpx;
-  border: 1rpx solid #ccc;
+  border: 1rpx solid var(--g4);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2101,12 +2302,12 @@ const goHistory = () => uni.navigateTo({ url: "/pages/limit-history/limit-histor
   color: #fff;
 }
 .switch-check.active .switch-check-box {
-  background: #2b7cff;
-  border-color: #2b7cff;
+  background: var(--g5);
+  border-color: var(--g5);
 }
 .switch-deduct-info {
   margin-top: 8rpx;
   font-size: 24rpx;
-  color: #999;
+  color: var(--g7);
 }
 </style>

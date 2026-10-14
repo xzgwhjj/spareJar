@@ -1,7 +1,10 @@
 <template>
   <view class="budget-gauge-card card-in-1" :class="cardClass" data-cmp="BudgetGaugeCard">
     <!-- 背景光晕 -->
-    <view class="bg-glow" :class="{ 'over-glow': isOver && !isYearOver, 'year-glow': isYearOver }" />
+    <view
+      class="bg-glow"
+      :class="{ 'over-glow': isOver && !isYearOver, 'year-glow': isYearOver }"
+    />
 
     <!-- 标题行 -->
     <view class="gauge-header">
@@ -26,7 +29,11 @@
         <text class="limit-btn-text">未设置</text>
         <text class="limit-btn-arrow">›</text>
       </view>
-      <view v-if="over" class="over-badge" :class="{ 'over-badge--year': isYearOver, 'over-badge--month': isMonthOver }">
+      <view
+        v-if="over"
+        class="over-badge"
+        :class="{ 'over-badge--year': isYearOver, 'over-badge--month': isMonthOver }"
+      >
         <text class="over-badge-icon">{{ badgeIcon }}</text>
         <text class="over-badge-text">{{ badgeText }}</text>
       </view>
@@ -105,6 +112,33 @@
               }"
             />
           </view>
+          <!-- 月/年维度次级池进度（日维度不显示）：日条之下叠一层月/年池进度 -->
+          <view
+            v-if="poolBar.show"
+            class="hud-bar pool-bar"
+            :class="{ 'over-bar': poolBar.breached }"
+          >
+            <view
+              class="bar-grow-inner"
+              :style="{
+                width: poolBar.pct * 100 + '%',
+                background: poolBar.breached
+                  ? 'linear-gradient(90deg,#ffb3b3,#ff6b6b)'
+                  : poolBar.gradient,
+              }"
+            />
+          </view>
+          <view
+            v-if="poolBar.show"
+            class="pool-bar-label"
+            :style="{ color: poolBar.breached ? '#ff6b6b' : poolBar.color }"
+          >
+            <text
+              >{{ poolBar.label }} 已用 ¥{{ poolBar.consumedText }} / ¥{{
+                poolBar.poolText
+              }}</text
+            >
+          </view>
         </view>
       </view>
     </view>
@@ -136,12 +170,12 @@ import { computed, ref } from "vue";
 import { onHide, onUnload } from "@dcloudio/uni-app";
 import SavingsJar from "./SavingsJar.vue";
 import { useUserStore } from "@/stores/user.js";
-import { formatFen, formatFenCompact } from "@/utils/money.js";
+import { formatFen } from "@/utils/money.js";
 
 const props = defineProps({
   isOver: { type: Boolean, default: false },
   /** 超限类型：none/day/month/year，年池突破时做更醒目的专属提示 */
-  overKind: { type: String, default: 'none' },
+  overKind: { type: String, default: "none" },
 });
 
 const {
@@ -152,6 +186,10 @@ const {
   totalDailyLimitFen,
   spentTodayFen,
   leftTodayFen,
+  monthPoolFen,
+  monthConsumedFen,
+  yearPoolFen,
+  yearConsumedFen,
   isOverLimit,
   checkLoggedIn,
 } = useUserStore();
@@ -180,13 +218,13 @@ const TOTAL_BILLS = computed(
 );
 
 const over = computed(() => props.isOver || isOverLimit.value);
-const isYearOver = computed(() => props.overKind === 'year');
-const isMonthOver = computed(() => props.overKind === 'month');
-const badgeIcon = computed(() => (isYearOver.value ? '🚨' : '⚠️'));
+const isYearOver = computed(() => props.overKind === "year");
+const isMonthOver = computed(() => props.overKind === "month");
+const badgeIcon = computed(() => (isYearOver.value ? "🚨" : "⚠️"));
 const badgeText = computed(() => {
-  if (isYearOver.value) return '年度预算已超';
-  if (isMonthOver.value) return '月池已超';
-  return '已超支';
+  if (isYearOver.value) return "年度预算已超";
+  if (isMonthOver.value) return "月池已超";
+  return "已超支";
 });
 const dailyLimitText = computed(() => formatFen(dailyLimitFen.value));
 const totalDailyLimitText = computed(() => formatFen(totalDailyLimitFen.value));
@@ -199,7 +237,7 @@ const hudLabel = computed(() => (hasLimit.value ? "还可花" : "已用"));
 // 主显示：已设限额（还可花）用紧凑格式避免过长；未设限额（已用）用标准两位小数格式
 // 完整金额用于点击气泡（hudAmountFull 始终为标准格式）
 const hudAmount = computed(() =>
-  hasLimit.value ? formatFenCompact(leftTodayFen.value) : formatFen(spentTodayFen.value)
+  hasLimit.value ? formatFen(leftTodayFen.value) : formatFen(spentTodayFen.value)
 );
 const hudAmountFull = computed(() => (hasLimit.value ? leftText.value : spentText.value));
 // 仅当显示值被缩写（≠完整值）时才允许点击查看完整金额
@@ -238,12 +276,54 @@ const spentPct = computed(() => {
   if (!limit || limit <= 0) return 0;
   return Math.min(spentTodayFen.value / limit, 1);
 });
+// 月/年维度次级池进度条：日维度不显示；月维度展示本月池，年维度展示本年池
+// 维度配色：日=绿(主条)，月=青绿(teal)，年=青蓝(cyan)——同属冷色相邻色系，和谐且可快速区分
+const DIM_BAR_GRADIENT = {
+  month: "linear-gradient(90deg,#8fe9da,#16c0ad)",
+  year: "linear-gradient(90deg,#8fd9ee,#199ed1)",
+};
+const DIM_LABEL_COLOR = {
+  month: "#12a894",
+  year: "#1789b8",
+};
+const poolBar = computed(() => {
+  const dim = (state.settings && state.settings.limit_dim) || "day";
+  let poolFen = 0;
+  let consumedFen = 0;
+  let label = "";
+  // 优先用云函数回传的池（含 override/预算感知重平）；缺失时兜底用前端已有的 settings.limit_amount_fen，
+  // 避免本地云函数未重新部署时池子一直显示 0（consumed 仍依赖云函数回传，部署后才会增长）。
+  const settingsPoolFen = (state.settings && state.settings.limit_amount_fen) || 0;
+  if (dim === "month") {
+    poolFen = monthPoolFen.value || settingsPoolFen;
+    consumedFen = monthConsumedFen.value;
+    label = "本月额度";
+  } else if (dim === "year") {
+    poolFen = yearPoolFen.value || settingsPoolFen;
+    consumedFen = yearConsumedFen.value;
+    label = "本年额度";
+  } else {
+    return { show: false };
+  }
+  const pct = poolFen > 0 ? Math.min(consumedFen / poolFen, 1) : 0;
+  const breached = poolFen > 0 && consumedFen > poolFen;
+  return {
+    show: true,
+    label,
+    pct,
+    breached,
+    poolText: formatFen(poolFen),
+    consumedText: formatFen(consumedFen),
+    gradient: DIM_BAR_GRADIENT[dim],
+    color: DIM_LABEL_COLOR[dim],
+  };
+});
 const cardClass = computed(() =>
   !over.value
     ? "glass-hero"
     : isYearOver.value
-      ? "glass-hero-alert alert-flash alert-year"
-      : "glass-hero-alert alert-flash"
+    ? "glass-hero-alert alert-flash alert-year"
+    : "glass-hero-alert alert-flash"
 );
 
 const goLogin = (redirect) =>
@@ -302,8 +382,7 @@ const goLimitSetting = () => {
 
   // 年池突破：整卡加一圈红色描边光晕，比月维度更醒目
   &.alert-year {
-    box-shadow: 0 0 0 2rpx rgba(255, 59, 59, 0.28),
-      0 18rpx 60rpx rgba(255, 59, 59, 0.2);
+    box-shadow: 0 0 0 2rpx rgba(255, 59, 59, 0.28), 0 18rpx 60rpx rgba(255, 59, 59, 0.2);
   }
 
   .gauge-header {
@@ -660,7 +739,17 @@ const goLimitSetting = () => {
           transition: width 0.8s cubic-bezier(0.34, 1.2, 0.64, 1);
         }
       }
-
+      // 月/年维度次级池进度条：复用 hud-bar 轨道，仅加间距与文字说明
+      .pool-bar {
+        margin-top: 12rpx;
+      }
+      .pool-bar-label {
+        margin-top: 8rpx;
+        font-size: 24rpx;
+        color: $ink-sub;
+        font-weight: 500;
+        display: block;
+      }
       // 连续顺滑流动：单条缓动 0%→100%，无分段停顿
       @keyframes bar-loop-kf {
         0% {

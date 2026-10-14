@@ -93,6 +93,135 @@ async function getLimitPreviewSpend(userId, dateKey) {
   return { actualSpendThisMonthFen, actualSpendPriorMonthsThisYearFen }
 }
 
+// ===== 预算期间池：跨期结转(carry) + 转出(movedOut)，月/年不重置累积 =====
+// 模型：pool = base + carryIn；poolRemaining = pool − 已花 − 已转出；carryOut = pool − 已花 − 已转出
+//       carryIn = 上一期间 carryOut；转出/取回落 budget_transfer_logs
+function prevPeriodKey(periodType, periodKey) {
+  if (periodType === 'year') {
+    return String(Math.max(1, parseInt(periodKey.slice(0, 4), 10) - 1))
+  }
+  let y = parseInt(periodKey.slice(0, 4), 10)
+  let m = parseInt(periodKey.slice(5, 7), 10) - 1
+  if (m < 1) { m = 12; y -= 1 }
+  return `${y}-${(m < 10 ? '0' : '') + m}`
+}
+
+/** 读取某期间最近一条日结（用于取上期结转） */
+async function getLatestSettlementInPeriod(userId, periodType, periodKey) {
+  const d = getDb()
+  const gte = periodType === 'year' ? `${periodKey}-01-01` : `${periodKey}-01`
+  const lte = periodType === 'year' ? `${periodKey}-12-31` : `${periodKey}-31`
+  const res = await d.collection('daily_settlements')
+    .where({
+      user_id: userId,
+      date_key: d.command.and(d.command.gte(gte), d.command.lte(lte))
+    })
+    .orderBy('date_key', 'desc')
+    .limit(1)
+    .get()
+  return res.data && res.data[0]
+}
+
+/** 上期结余转入本期（不重置累积）；无上期则为 0 */
+async function getPeriodCarryIn(userId, periodType, currentPeriodKey) {
+  const prevKey = prevPeriodKey(periodType, currentPeriodKey)
+  const s = await getLatestSettlementInPeriod(userId, periodType, prevKey)
+  if (!s) return 0
+  const pool = periodType === 'year' ? (s.year_pool_fen || 0) : (s.month_pool_fen || 0)
+  const consumed = periodType === 'year' ? (s.year_consumed_fen || 0) : (s.month_consumed_fen || 0)
+  const movedOut = periodType === 'year' ? (s.year_moved_out_fen || 0) : (s.month_moved_out_fen || 0)
+  return Math.max(0, pool - consumed - movedOut)
+}
+
+/** 本期已转出净额 = Σ出 − Σ入（离开预算的钱） */
+async function getPeriodMovedOut(userId, periodType, periodKey) {
+  const d = getDb()
+  const res = await d.collection('budget_transfer_logs')
+    .where({ user_id: userId, period_type: periodType, period_key: periodKey })
+    .get()
+  let net = 0
+  for (const l of res.data || []) {
+    net += l.direction === 'out' ? (Number(l.amount) || 0) : -(Number(l.amount) || 0)
+  }
+  return Math.max(0, net)
+}
+
+/** 读本期池状态 {pool, consumed, movedOut, remaining}（优先最近日结，无则用 settings 基池+上期结转） */
+async function readPeriodPoolState(userId, periodType, periodKey) {
+  const s = await getLatestSettlementInPeriod(userId, periodType, periodKey)
+  if (s) {
+    const pool = periodType === 'year' ? (s.year_pool_fen || 0) : (s.month_pool_fen || 0)
+    const consumed = periodType === 'year' ? (s.year_consumed_fen || 0) : (s.month_consumed_fen || 0)
+    const movedOut = periodType === 'year' ? (s.year_moved_out_fen || 0) : (s.month_moved_out_fen || 0)
+    return { pool, consumed, movedOut, remaining: Math.max(0, pool - consumed - movedOut) }
+  }
+  const settings = await getDocByUser('user_settings', userId)
+  const carryIn = await getPeriodCarryIn(userId, periodType, periodKey)
+  const base = Number(settings && settings.limit_amount_fen) || 0
+  const pool = base + carryIn
+  return { pool, consumed: 0, movedOut: 0, remaining: Math.max(0, pool) }
+}
+
+/**
+ * 预算转出：把本期池内资金转入存款池/心愿/账户（月/年维度不走结余池）。
+ * 上限=本期池剩余，保证 carryOut 不变负。
+ */
+async function transferBudgetOut(userId, opts = {}) {
+  const { period_type, period_key, target_type, target_id, amount, note = '' } = opts
+  const amt = Number(amount)
+  if (!(amt > 0)) throw new Error('转出金额必须大于 0')
+  const d = getDb()
+  const st = await readPeriodPoolState(userId, period_type, period_key)
+  if (amt > st.remaining) throw new Error('转出金额超过本期池剩余')
+  await d.collection('budget_transfer_logs').add({
+    user_id: userId, period_type, period_key, direction: 'out',
+    target_type: target_type || null, target_id: target_id || null,
+    amount: amt, note, created_at: nowTs()
+  })
+  if (target_type === 'savings_pool') {
+    await pool.applySavingsPoolChange(userId, 'in', amt, 'from_budget', { note })
+  } else if (target_type === 'wish') {
+    if (!target_id) throw new Error('wish_id required')
+    await wish.applyWishFundChange(userId, target_id, 'in', amt, 'from_budget', { note })
+  } else if (target_type === 'account') {
+    if (!target_id) throw new Error('account_id required')
+    await pool.applyAccountBalanceChange(userId, target_id, amt, 'from_budget', { note })
+  } else {
+    throw new Error('未知转出目标')
+  }
+  return { remaining_after: st.remaining - amt, moved_out_after: st.movedOut + amt }
+}
+
+/**
+ * 预算取回：把之前转出的钱从存款池/心愿/账户取回预算（movedOut 减少，池剩余恢复）。
+ * 上限=本期已转出净额。
+ */
+async function transferBudgetIn(userId, opts = {}) {
+  const { period_type, period_key, source_type, source_id, amount, note = '' } = opts
+  const amt = Number(amount)
+  if (!(amt > 0)) throw new Error('取回金额必须大于 0')
+  const d = getDb()
+  const movedOut = await getPeriodMovedOut(userId, period_type, period_key)
+  if (amt > movedOut) throw new Error('取回金额超过本期已转出')
+  await d.collection('budget_transfer_logs').add({
+    user_id: userId, period_type, period_key, direction: 'in',
+    target_type: source_type || null, target_id: source_id || null,
+    amount: amt, note, created_at: nowTs()
+  })
+  if (source_type === 'savings_pool') {
+    await pool.applySavingsPoolChange(userId, 'out', amt, 'to_budget', { note })
+  } else if (source_type === 'wish') {
+    if (!source_id) throw new Error('wish_id required')
+    await wish.applyWishFundChange(userId, source_id, 'out', amt, 'to_budget', { note })
+  } else if (source_type === 'account') {
+    if (!source_id) throw new Error('account_id required')
+    await pool.applyAccountBalanceChange(userId, source_id, -amt, 'to_budget', { note })
+  } else {
+    throw new Error('未知取回来源')
+  }
+  return { moved_out_after: Math.max(0, movedOut - amt) }
+}
+
 async function recalculateDailySettlement(userId, dateKey) {
   const db = getDb()
   // —— 防越界补录：禁止为「早于账号新建日」的日期创建/重算结算 ——
@@ -108,6 +237,14 @@ async function recalculateDailySettlement(userId, dateKey) {
   }
   const settings = await getDocByUser('user_settings', userId)
   let dim = settings ? (settings.limit_dim || 'day') : 'day'
+  console.log('[debug recalc] user_settings 读取:', {
+    user_id: userId,
+    limit_dim: settings && settings.limit_dim,
+    limit_amount_fen: settings && settings.limit_amount_fen,
+    limit_effective_date: settings && settings.limit_effective_date,
+    pending_limit_dim: settings && settings.pending_limit_dim,
+    pending_amount_fen: settings && settings.pending_amount_fen,
+  })
 
   // —— pending 生效提升：limit_effective_date 已到时，将 pending_* 固化为主字段并清空 pending ——
   // 修复「同周期内二次编辑回落旧值」：pending 一旦生效即成为主预算，避免后续编辑覆盖 pending 后失效。
@@ -120,7 +257,21 @@ async function recalculateDailySettlement(userId, dateKey) {
     if (_promotedDim === 'day') {
       if (settings.pending_base_limit != null) patch.daily_base_limit = settings.pending_base_limit
     } else if (settings.pending_amount_fen != null) {
-      patch.limit_amount_fen = settings.pending_amount_fen
+      let finalFen = settings.pending_amount_fen
+      // 扣除旧模式已用额度：在生效最后一刻前（生效日之前）按旧维度实际已花费重算，而非确认时快照
+      if (settings.pending_deduct) {
+        try {
+          const prev = await getLimitPreviewSpend(userId, _effDate)
+          const usedFen =
+            _promotedDim === 'year'
+              ? prev.actualSpendPriorMonthsThisYearFen + prev.actualSpendThisMonthFen
+              : prev.actualSpendThisMonthFen
+          finalFen = Math.max(0, finalFen - usedFen)
+        } catch (e) {
+          console.error('[promote] 计算扣除旧模式已用额度失败，保留基准额度', e && (e.stack || e.message || e))
+        }
+      }
+      patch.limit_amount_fen = finalFen
     }
     if (settings.pending_year_strategy != null) patch.year_strategy = settings.pending_year_strategy
     if (settings.pending_month_strategy != null) patch.month_strategy = settings.pending_month_strategy
@@ -155,6 +306,10 @@ async function recalculateDailySettlement(userId, dateKey) {
   let actualSpendPriorMonthsThisYearFen = 0
   let monthBreached = false
   let yearBreached = false
+  let monthPool = 0
+  let monthConsumedSoFar = 0
+  let yearPool = 0
+  let yearConsumedSoFar = 0
   if (dim !== 'day') {
     actualSpendThisMonthFen = await sumMonthConsumedBefore(userId, dateKey)
   }
@@ -162,7 +317,18 @@ async function recalculateDailySettlement(userId, dateKey) {
     actualSpendPriorMonthsThisYearFen = await sumYearPriorMonthsConsumedBefore(userId, dateKey)
   }
 
-  const baseLimit = await category.getEffectiveBaseLimit(userId, dateKey, { actualSpendThisMonthFen, actualSpendPriorMonthsThisYearFen })
+  // 月/年维度：跨期结转 + 已转出（不重置累积模型）
+  let periodCarryIn = 0
+  let periodMovedOut = 0
+  let periodType = null
+  let periodKey = null
+  if (dim !== 'day') {
+    periodType = dim === 'year' ? 'year' : 'month'
+    periodKey = dim === 'year' ? dateKey.slice(0, 4) : dateKey.slice(0, 7)
+    periodCarryIn = await getPeriodCarryIn(userId, periodType, periodKey)
+    periodMovedOut = await getPeriodMovedOut(userId, periodType, periodKey)
+  }
+  const baseLimit = await category.getEffectiveBaseLimit(userId, dateKey, { actualSpendThisMonthFen, actualSpendPriorMonthsThisYearFen, carryInFen: periodCarryIn, movedOutFen: periodMovedOut })
   const surplusPoolDoc = await getDocByUser('surplus_pools', userId)
   const surplusPoolBalance = surplusPoolDoc ? surplusPoolDoc.balance || 0 : 0
   // 滚入次日可用额度 P：由流水推导（in:roll_over 之和 - out:roll_over_used 之和），恒 ≤ 池余额
@@ -188,13 +354,20 @@ async function recalculateDailySettlement(userId, dateKey) {
     overAmount = Math.max(0, consumed - baseLimit - pendingRollover)
     isOverLimit = overAmount > 0 || consumed > baseLimit + pendingRollover
   } else {
-    const monthPool = category.resolveMonthPool(settings, dateKey, { actualSpendPriorMonthsThisYearFen })
-    const monthConsumedSoFar = actualSpendThisMonthFen + consumed
+    monthPool = category.resolveMonthPool(settings, dateKey, { actualSpendPriorMonthsThisYearFen, carryInFen: periodCarryIn, movedOutFen: periodMovedOut })
+    monthConsumedSoFar = actualSpendThisMonthFen + consumed
     monthBreached = monthPool > 0 && monthConsumedSoFar > monthPool
+    console.log('[debug recalc] monthPool 计算结果:', {
+      dim,
+      limit_amount_fen: settings.limit_amount_fen,
+      monthPool,
+      monthConsumedSoFar,
+      month_pool_fen_out: monthPool,
+    })
     // 年维度：超额闸门只看"年池"是否突破，单月超支由重平在后续月份自动收紧，不记失败
     if (dim === 'year') {
-      const yearPool = Number(settings.limit_amount_fen) || 0
-      const yearConsumedSoFar = (actualSpendPriorMonthsThisYearFen || 0) + monthConsumedSoFar
+      yearPool = (Number(settings.limit_amount_fen) || 0) + periodCarryIn
+      yearConsumedSoFar = (actualSpendPriorMonthsThisYearFen || 0) + monthConsumedSoFar
       yearBreached = yearPool > 0 && yearConsumedSoFar > yearPool
     }
     isOverLimit = dim === 'year' ? yearBreached : monthBreached
@@ -215,7 +388,16 @@ async function recalculateDailySettlement(userId, dateKey) {
     over_amount: overAmount,
     available_start: availableStart,
     available_end: availableEnd,
-    is_over_limit: isOverLimit
+    is_over_limit: isOverLimit,
+    // 月/年维度池进度：供首页仪表盘次级进度条展示（dim==='day' 时为 0）
+    month_pool_fen: monthPool,
+    month_consumed_fen: monthConsumedSoFar,
+    month_moved_out_fen: periodType === 'month' ? periodMovedOut : 0,
+    month_pool_remaining_fen: periodType === 'month' ? Math.max(0, monthPool - monthConsumedSoFar - periodMovedOut) : 0,
+    year_pool_fen: yearPool,
+    year_consumed_fen: yearConsumedSoFar,
+    year_moved_out_fen: periodType === 'year' ? periodMovedOut : 0,
+    year_pool_remaining_fen: periodType === 'year' ? Math.max(0, yearPool - yearConsumedSoFar - periodMovedOut) : 0
   }
 
   // 读旧文档，获取本次重算前的挑战口径消费，作为月/年挑战增量累加的基准（delta = 新 - 旧）
@@ -1251,6 +1433,8 @@ module.exports = {
   archiveLimitHistory,
   allocateSurplus,
   confirmSurplusRollover,
+  transferBudgetOut,
+  transferBudgetIn,
   applyOverLimitPenalty,
   createTransaction,
   softDeleteTransaction,

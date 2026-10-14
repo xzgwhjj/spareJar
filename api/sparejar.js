@@ -137,6 +137,10 @@ export const ACTIONS = Object.freeze({
   DEPOSIT_WISH_FROM_ACCOUNT: 'depositWishFromAccount',
   DEPOSIT_WISH_FROM_SURPLUS: 'depositWishFromSurplus',
   DEPOSIT_WISH_FROM_SAVINGS: 'depositWishFromSavings',
+  DEPOSIT_SAVINGS_FROM_SURPLUS: 'depositSavingsFromSurplus',
+  DEPOSIT_ACCOUNT_FROM_SURPLUS: 'depositAccountFromSurplus',
+  TRANSFER_BUDGET_OUT: 'transferBudgetOut',
+  TRANSFER_BUDGET_IN: 'transferBudgetIn',
   WITHDRAW_WISH_TO_SURPLUS: 'withdrawWishToSurplus',
   WITHDRAW_WISH_TO_ACCOUNT: 'withdrawWishToAccount',
   WITHDRAW_WISH_TO_SAVINGS: 'withdrawWishToSavings',
@@ -959,6 +963,26 @@ export function depositWishFromAccount(wishId, amount, accountId, note = '') {
 /** 从累计结余池转入心愿。amount 为「分」。 */
 export function depositWishFromSurplus(wishId, amount, note = '') {
   return callSparejar(ACTIONS.DEPOSIT_WISH_FROM_SURPLUS, { wish_id: wishId, amount, note })
+}
+
+/** 从累计结余池存入通用存款池。amount 为「分」。 */
+export function depositSavingsFromSurplus(amount, note = '') {
+  return callSparejar(ACTIONS.DEPOSIT_SAVINGS_FROM_SURPLUS, { amount, note })
+}
+
+/** 从累计结余池存入指定资产账户。amount 为「分」。 */
+export function depositAccountFromSurplus(accountId, amount, note = '') {
+  return callSparejar(ACTIONS.DEPOSIT_ACCOUNT_FROM_SURPLUS, { account_id: accountId, amount, note })
+}
+
+/** 月/年维度：把期间池预算转出到存款池/心愿/账户。payload: {period_type,period_key,target_type,target_id,amount,note} */
+export function transferBudgetOut(payload) {
+  return callSparejar(ACTIONS.TRANSFER_BUDGET_OUT, payload)
+}
+
+/** 月/年维度：把转出去的钱从存款池/心愿/账户取回预算。payload: {period_type,period_key,source_type,source_id,amount,note} */
+export function transferBudgetIn(payload) {
+  return callSparejar(ACTIONS.TRANSFER_BUDGET_IN, payload)
 }
 
 /** 从通用存款池转入心愿。amount 为「分」。 */

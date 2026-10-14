@@ -79,6 +79,8 @@ function createInitialState() {
       transactions: [],
       loadedAt: 0
     },
+    /** 待分配结余（Banner 与盈余分配页共用的单一数据源）：最近一条 pending 且 surplus>0 的日结；无则 null */
+    pendingAllocation: null,
     loading: {
       login: false,
       bootstrap: false,

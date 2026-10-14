@@ -5,7 +5,7 @@
 import { computed } from 'vue'
 import { todayDateKey } from '@/utils/date.js'
 import { state, pickDbRows, DASHBOARD_CACHE_TTL_MS, UserStoreError } from './core/state.js'
-import { runDailySettlement, recalculateSettlement, getDashboard, listCategories } from './core/api.js'
+import { runDailySettlement, recalculateSettlement, getDashboard, listCategories, ensureUserSettings } from './core/api.js'
 
 /**
  * 分类 id → 分类名映射。
@@ -101,6 +101,13 @@ export async function refreshTodayDashboard(force = false) {
     state.dashboard.yesterdaySettlement = rows[0]?.yesterday_settlement || null
     state.dashboard.transactions = Array.isArray(rows[0]?.transactions) ? rows[0].transactions : []
     state.dashboard.loadedAt = Date.now()
+    // 日结可能触发 pending 提升（limit_dim / 限额变更）：促销在云函数 recalculateDailySettlement 内完成，
+    // 但只改库、不回推前端。这里顺带重载 settings，使顶部待生效提示、维度显示等立即反映生效结果。
+    try {
+      state.settings = await ensureUserSettings()
+    } catch (e) {
+      console.warn('[dashboard] 刷新 settings 失败（不影响看板数据）', e)
+    }
     return settlement
   } catch (err) {
     console.error('[dashboard] 刷新失败', err)

@@ -252,6 +252,29 @@ async function depositSavingsPool(userId, amount, reason = 'manual') {
 }
 
 /**
+ * 从累计结余池存入通用存款池（支持指定金额，剩余留在结余池）。
+ * @param {string} userId
+ * @param {number} amount 分
+ * @param {string} [note] 备注
+ */
+async function depositSavingsFromSurplus(userId, amount, note = '') {
+  await applySurplusPoolChange(userId, 'out', amount, 'to_savings', { ref_type: 'savings_pool' })
+  return await applySavingsPoolChange(userId, 'in', amount, 'from_surplus', { ref_type: 'surplus_pool', note })
+}
+
+/**
+ * 从累计结余池存入指定资产账户（支持指定金额，剩余留在结余池）。
+ * @param {string} userId
+ * @param {string} accountId 资产账户 id
+ * @param {number} amount 分
+ * @param {string} [note] 备注
+ */
+async function depositAccountFromSurplus(userId, accountId, amount, note = '') {
+  await applySurplusPoolChange(userId, 'out', amount, 'to_account', { ref_type: 'account', ref_id: accountId })
+  return await applyAccountBalanceChange(userId, accountId, amount, 'from_surplus', { ref_type: 'surplus_pool', note })
+}
+
+/**
  * 通用存款池取出（回累计结余池由调用方决定；此处仅扣减存款池）。
  * 含 P2 每月比例限制：本月已取 + 本次 ≤ 余额 × savings_withdraw_ratio（默认 1）。
  * @param {string} userId
@@ -339,6 +362,8 @@ module.exports = {
   applySurplusPoolChange,
   applySavingsPoolChange,
   depositSavingsPool,
+  depositSavingsFromSurplus,
+  depositAccountFromSurplus,
   withdrawSavingsPool,
   applyAccountBalanceChange,
   markRollOverLog,

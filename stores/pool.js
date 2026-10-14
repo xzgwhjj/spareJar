@@ -6,6 +6,10 @@ import { state, UserStoreError } from './core/state.js'
 import {
   depositWishFromAccount,
   depositWishFromSurplus,
+  depositSavingsFromSurplus,
+  depositAccountFromSurplus,
+  transferBudgetOut,
+  transferBudgetIn,
   depositWishFromSavings,
   withdrawWishToSurplus,
   withdrawWishToAccount,
@@ -66,6 +70,78 @@ export async function depositWishFromSavingsAction(wishId, amountYuan, note = ''
     return res
   } catch (err) {
     state.lastError = err?.message || 'deposit failed'
+    throw err
+  }
+}
+
+/** 从累计结余池存入通用存款池（支持部分金额，剩余留在结余池） */
+export async function depositSavingsFromSurplusAction(amountYuan, note = '') {
+  ENSURE_LOGGED_IN()
+  try {
+    const amountFen = yuanToFen(amountYuan)
+    const res = await depositSavingsFromSurplus(amountFen, note)
+    // 结余池出账 + 存款池入账 → 两个池都刷新
+    await Promise.all([loadSurplusPoolAfter(res), loadSavingsPoolAfter(res)])
+    return res
+  } catch (err) {
+    state.lastError = err?.message || 'deposit savings failed'
+    throw err
+  }
+}
+
+/** 从累计结余池存入指定资产账户（支持部分金额，剩余留在结余池） */
+export async function depositAccountFromSurplusAction(accountId, amountYuan, note = '') {
+  ENSURE_LOGGED_IN()
+  try {
+    const amountFen = yuanToFen(amountYuan)
+    const res = await depositAccountFromSurplus(accountId, amountFen, note)
+    // 结余池出账 + 账户入账 → 刷新结余池与资产账户
+    await Promise.all([loadSurplusPoolAfter(res), loadAssetAccounts()])
+    return res
+  } catch (err) {
+    state.lastError = err?.message || 'deposit account failed'
+    throw err
+  }
+}
+
+/**
+ * 月/年维度：把期间池预算转出到存款池/心愿/账户（扣期间池剩余、加目标）。
+ * amountYuan 为「元」；上限=期间池剩余（后端校验）。返回 { remaining_after, moved_out_after }。
+ */
+export async function transferBudgetOutAction(periodType, periodKey, targetType, targetId, amountYuan, note = '') {
+  ENSURE_LOGGED_IN()
+  try {
+    const amountFen = yuanToFen(amountYuan)
+    const res = await transferBudgetOut({
+      period_type: periodType, period_key: periodKey,
+      target_type: targetType, target_id: targetId || null,
+      amount: amountFen, note
+    })
+    await Promise.all([loadSavingsPoolAfter(res), loadAssetAccounts()])
+    return res
+  } catch (err) {
+    state.lastError = err?.message || 'transfer budget failed'
+    throw err
+  }
+}
+
+/**
+ * 月/年维度：把转出去的钱从存款池/心愿/账户取回预算（movedOut 减少、池剩余恢复）。
+ * 上限=本期已转出净额（后端校验）。
+ */
+export async function transferBudgetInAction(periodType, periodKey, sourceType, sourceId, amountYuan, note = '') {
+  ENSURE_LOGGED_IN()
+  try {
+    const amountFen = yuanToFen(amountYuan)
+    const res = await transferBudgetIn({
+      period_type: periodType, period_key: periodKey,
+      source_type: sourceType, source_id: sourceId || null,
+      amount: amountFen, note
+    })
+    await Promise.all([loadSavingsPoolAfter(res), loadAssetAccounts()])
+    return res
+  } catch (err) {
+    state.lastError = err?.message || 'transfer budget failed'
     throw err
   }
 }

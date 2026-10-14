@@ -128,6 +128,7 @@ writeSchema('user_settings', {
     month_strategy: { ...enumField(['equal', 'rollover'], '月→日策略'), defaultValue: 'rollover' },
     pending_limit_dim: { ...enumField(['day', 'month', 'year'], '待生效维度') },
     pending_amount_fen: { ...intField('待生效总池(分)'), minimum: 100 },
+    pending_deduct: { bsonType: 'bool', description: '待生效切换是否扣除旧模式已用额度', defaultValue: false },
     pending_year_strategy: { ...enumField(['equal', 'rollover'], '待生效年策略') },
     pending_month_strategy: { ...enumField(['equal', 'rollover'], '待生效月策略') },
     overrides: {

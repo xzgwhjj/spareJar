@@ -17,16 +17,16 @@
           <view class="alloc-tab-spacer"> </view>
           <view class="alloc-tabs">
             <view
-              v-for="(c, i) in QUICK_ALLOC"
+              v-for="(c, i) in visibleAlloc"
               :key="c.id"
               class="alloc-tab"
-              :class="{ chosen: applied === c.id, loading: applying }"
+              :class="{ chosen: applied === c.id, loading: applying, disabled: chipDisabled(c.id) }"
               @tap="handleChip(c.id)"
               :style="{
                 borderRadius:
                   i === 0
                     ? '20rpx 8rpx 0 20rpx'
-                    : i === QUICK_ALLOC.length - 1
+                    : i === visibleAlloc.length - 1
                     ? '8rpx 20rpx 0 8rpx'
                     : '8rpx 8rpx 0 8rpx',
               }"
@@ -43,15 +43,17 @@
             <view class="surplus-main">
               <view class="surplus-title-row">
                 <view class="surplus-dot" />
-                <text class="surplus-title-text">{{
-                  yesterdaySurplusFen > 0
-                    ? "昨日结余待确认（24h内选择）"
-                    : "昨日结余已分配"
-                }}</text>
+                <text class="surplus-title-text">{{ poolTitle }}</text>
               </view>
               <view class="surplus-amount-row">
-                <text class="surplus-plus">待滚入次日限额 ＋¥</text>
-                <text class="surplus-num">{{ yesterdaySurplusText }}</text>
+                <text class="surplus-plus">{{ poolPlusLabel }}</text>
+                <text class="surplus-num">{{ poolMainText }}</text>
+              </view>
+              <view class="surplus-sub-row">
+                <text class="surplus-sub-text">{{ poolSubText }}</text>
+              </view>
+              <view class="surplus-yesterday-row">
+                <text class="surplus-yesterday-text">{{ yesterdayLine }}</text>
               </view>
             </view>
             <view class="surplus-actions">
@@ -83,10 +85,87 @@
 import { useUserStore } from "@/stores/user.js";
 import { cdn } from "@/utils/cdn.js";
 import { formatFen } from "@/utils/money.js";
-import { computed, ref } from "vue";
+import { todayDateKey } from "@/utils/date.js";
+import { computed, ref, onMounted } from "vue";
 
-const { yesterdaySurplusFen, state, confirmSurplusRolloverAction, checkLoggedIn } = useUserStore();
-const yesterdaySurplusText = computed(() => formatFen(yesterdaySurplusFen.value));
+const { pendingSurplusFen, monthPoolFen, monthConsumedFen, yearPoolFen, yearConsumedFen, pendingRolloverFen, dailyLimitFen, state, confirmSurplusRolloverAction, loadPendingAllocationAction, refreshTodayDashboard, transferBudgetOutAction, checkLoggedIn } = useUserStore();
+const yesterdaySurplusText = computed(() => formatFen(pendingSurplusFen.value));
+
+// 与盈余分配页共用同一数据源：进入首页时拉取一次待分配结余
+onMounted(() => {
+  if (checkLoggedIn()) loadPendingAllocationAction();
+});
+
+// 维度感知
+const dim = computed(() => (state.settings && state.settings.limit_dim) || "day");
+const isDayDim = computed(() => dim.value === "day");
+const periodType = computed(() => (dim.value === "year" ? "year" : dim.value === "month" ? "month" : null));
+const periodKey = computed(() => {
+  const dk = todayDateKey();
+  return dim.value === "year" ? dk.slice(0, 4) : dim.value === "month" ? dk.slice(0, 7) : null;
+});
+
+// —— 资金池展示（按视图）：月/年显示池剩余，日显示滚存累积 ——
+const monthRemainingFen = computed(() => Math.max(0, (monthPoolFen.value || 0) - (monthConsumedFen.value || 0)));
+const yearRemainingFen = computed(() => Math.max(0, (yearPoolFen.value || 0) - (yearConsumedFen.value || 0)));
+const rollFen = computed(() => pendingRolloverFen.value || 0);
+
+const poolTitle = computed(() =>
+  dim.value === "month" ? "本月池剩余" : dim.value === "year" ? "本年池剩余" : "滚存累积"
+);
+const poolMainText = computed(() =>
+  dim.value === "month"
+    ? formatFen(monthRemainingFen.value)
+    : dim.value === "year"
+    ? formatFen(yearRemainingFen.value)
+    : formatFen(rollFen.value)
+);
+const poolPlusLabel = computed(() => (isDayDim.value ? "累计 ¥" : "剩余 ¥"));
+
+// 本月剩余天数 → 日节奏
+const remainingDaysInMonth = computed(() => {
+  const dk = todayDateKey();
+  const y = parseInt(dk.slice(0, 4), 10);
+  const m = parseInt(dk.slice(5, 7), 10);
+  const dayNum = parseInt(dk.slice(8, 10), 10);
+  const days = new Date(y, m, 0).getDate();
+  return Math.max(1, days - dayNum + 1);
+});
+const monthPaceFen = computed(() => Math.floor(monthRemainingFen.value / remainingDaysInMonth.value));
+
+// 副信息：月/年给“已花·剩余天数·日节奏”；日给“今日可用=日限额+滚存”
+const poolSubText = computed(() => {
+  if (dim.value === "month") {
+    return `已花 ¥${formatFen(monthConsumedFen.value)} · 剩 ${remainingDaysInMonth.value} 天 ≈ ¥${formatFen(monthPaceFen.value)}/天`;
+  }
+  if (dim.value === "year") {
+    return `已花 ¥${formatFen(yearConsumedFen.value)} / 池 ¥${formatFen(yearPoolFen.value)}`;
+  }
+  return `今日可用 ¥${formatFen((dailyLimitFen.value || 0) + rollFen.value)} = 日限额 ¥${formatFen(dailyLimitFen.value)} + 滚存 ¥${formatFen(rollFen.value)}`;
+});
+
+// 昨日待处理结余行（快捷芯片的操作对象）
+const yesterdayLine = computed(() =>
+  pendingSurplusFen.value > 0
+    ? `昨日结余 ¥${yesterdaySurplusText.value} 待处理`
+    : "昨日无待处理结余"
+);
+
+// 三个快捷操作始终展示；月/年维度“次日”不可操作（结余归入月池/年池，不滚入次日）
+const visibleAlloc = computed(() => QUICK_ALLOC);
+
+// 无昨日结余时禁用全部；月/年维度禁用“次日”滚入（保留展示，点击给提示）
+const hasSurplus = computed(() => pendingSurplusFen.value > 0);
+const chipDisabled = (id) => {
+  if (!hasSurplus.value) return true;
+  if (id === "carry" && !isDayDim.value) return true;
+  return false;
+};
+const chipHint = (id) => {
+  if (!hasSurplus.value) return "暂无昨日结余可转入";
+  if (id === "carry" && !isDayDim.value) return "月/年维度不滚入次日，结余已归入月池/年池";
+  return "";
+};
 
 /** 单个 tab 动画占全周期的 1/3，12s 一轮 */
 const TAB_CYCLE_S = 12;
@@ -135,14 +214,25 @@ const handleChip = async (id) => {
     return;
   }
   if (applying.value) return;
-  if (yesterdaySurplusFen.value <= 0) {
-    applied.value = id;
+  // 禁用态（无结余 / 月年维度无次日滚入）：仅提示，不执行任何转账
+  if (chipDisabled(id)) {
+    const hint = chipHint(id);
+    if (hint) uni.showToast({ title: hint, icon: "none" });
     return;
   }
   applying.value = true;
   try {
+    const surplusYuan = pendingSurplusFen.value / 100;
     if (id === "carry") {
+      // 日维度：确认滚入次日限额
       await confirmSurplusRolloverAction("confirm");
+    } else if (!isDayDim.value) {
+      // 月/年：把昨日结余从期间池转出到存款池/心愿（离开预算，重算日节奏/结转）
+      const targetType = id === "pool" ? "savings_pool" : "wish";
+      const tid = id === "wish" ? ((state.wishes || [])[0] ? state.wishes[0]._id : null) : null;
+      if (id === "wish" && !tid) throw new Error("请先创建心愿");
+      await transferBudgetOutAction(periodType.value, periodKey.value, targetType, tid, surplusYuan, "盈余分配");
+      await refreshTodayDashboard(true);
     } else if (id === "pool") {
       await confirmSurplusRolloverAction("other", { target_type: "savings_pool" });
     } else if (id === "wish") {
@@ -153,6 +243,8 @@ const handleChip = async (id) => {
       });
     }
     applied.value = id;
+  } catch (e) {
+    uni.showToast({ title: (e && e.message) || "操作失败", icon: "none" });
   } finally {
     applying.value = false;
   }
@@ -289,6 +381,11 @@ $radius-card: 48rpx;
     }
   }
 
+  &.disabled {
+    opacity: 0.4;
+    filter: grayscale(0.5);
+  }
+
   &-label {
     font-size: 24rpx;
     font-weight: 600;
@@ -422,6 +519,24 @@ $radius-card: 48rpx;
       line-height: 1.05;
       word-break: break-all;
       overflow-wrap: anywhere;
+    }
+    .surplus-sub-row {
+      margin-top: 10rpx;
+    }
+    .surplus-sub-text {
+      font-size: 20rpx;
+      color: var(--ink3);
+      font-weight: 600;
+    }
+    .surplus-yesterday-row {
+      margin-top: 12rpx;
+      padding-top: 12rpx;
+      border-top: 1rpx solid rgba(15, 28, 20, 0.06);
+    }
+    .surplus-yesterday-text {
+      font-size: 22rpx;
+      color: var(--g5);
+      font-weight: 700;
     }
   }
 }
